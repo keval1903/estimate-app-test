@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 
-export function useVoiceSearch({ onResult, language = 'hi-IN' }) {
+export function useVoiceSearch({ onResult, language = 'en-IN' }) {
   const [isListening, setIsListening] = useState(false)
   const [error, setError] = useState(null)
   const recognitionRef = useRef(null)
