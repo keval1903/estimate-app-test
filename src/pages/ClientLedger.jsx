@@ -14,9 +14,11 @@ export default function ClientLedger() {
   const [profile, setProfile] = useState(null)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+  const [selectedRefs, setSelectedRefs] = useState(new Set())
 
   // Payment Modal
   const [showModal, setShowModal] = useState(false)
+  const [editPaymentId, setEditPaymentId] = useState(null)
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0])
   const [payAmount, setPayAmount] = useState('')
   const [payMode, setPayMode] = useState('Cash')
@@ -80,14 +82,25 @@ export default function ClientLedger() {
       }
 
       for (const p of (payData || [])) {
-        entries.push({
-          date: p.payment_date,
-          description: p.description + (p.payment_mode ? ` (${p.payment_mode})` : ''),
-          debit: 0,
-          credit: p.amount,
-          type: 'PAYMENT',
-          ref: p.id
-        });
+        if (Number(p.amount) < 0) {
+          entries.push({
+            date: p.payment_date,
+            description: p.description,
+            debit: Math.abs(Number(p.amount)),
+            credit: 0,
+            type: 'MANUAL_DEBIT',
+            ref: p.id
+          });
+        } else {
+          entries.push({
+            date: p.payment_date,
+            description: p.description + (p.payment_mode ? ` (${p.payment_mode})` : ''),
+            debit: 0,
+            credit: p.amount,
+            type: 'PAYMENT',
+            ref: p.id
+          });
+        }
       }
       
       // Sort chronologically
@@ -162,25 +175,109 @@ export default function ClientLedger() {
 
   useEffect(() => { loadData() }, [id])
 
+  async function handleDeletePayment(paymentId) {
+    if (!window.confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) return
+    try {
+      const { error } = await supabase.from('payments').delete().eq('id', paymentId)
+      if (error) throw error
+      loadData()
+    } catch (e) {
+      alert("Failed to delete payment: " + e.message)
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedRefs.size === 0) return
+    if (!window.confirm(`Are you sure you want to delete ${selectedRefs.size} selected entries?\n\nWARNING: Deleting Bills from the ledger will permanently delete them from the entire system.`)) return
+    
+    const paymentIds = []
+    const billIds = []
+    
+    for (const l of filteredLedger) {
+      if (selectedRefs.has(l.ref)) {
+        if (l.type === 'BILL' || l.type === 'QUOTE') {
+          billIds.push(l.ref)
+        } else if (l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') {
+          paymentIds.push(l.ref)
+        }
+      }
+    }
+    
+    let hasError = false
+    try {
+      if (paymentIds.length > 0) {
+        const { error } = await supabase.from('payments').delete().in('id', paymentIds)
+        if (error) throw error
+      }
+      if (billIds.length > 0) {
+        const { error } = await supabase.from('estimates').delete().in('id', billIds)
+        if (error) throw error
+      }
+    } catch (e) {
+      alert("Error deleting: " + e.message)
+      hasError = true
+    }
+    
+    if (!hasError) {
+      setSelectedRefs(new Set())
+      loadData()
+    }
+  }
+
+  function handleSelectAll(e) {
+    if (e.target.checked) {
+      const allRefs = filteredLedger.filter(l => l.type !== 'OPENING').map(l => l.ref)
+      setSelectedRefs(new Set([...selectedRefs, ...allRefs]))
+    } else {
+      const visibleRefs = new Set(filteredLedger.map(l => l.ref))
+      const newSet = new Set([...selectedRefs].filter(ref => !visibleRefs.has(ref)))
+      setSelectedRefs(newSet)
+    }
+  }
+
   async function handleAddPayment(e) {
     e.preventDefault()
     if (!payAmount) return
-    const { error } = await supabase.from('payments').insert([{
+    const payload = {
       client_id: id,
       payment_date: payDate,
       amount: payAmount,
       payment_mode: payMode,
       reference_number: payRef,
       description: payDesc
-    }])
+    }
+    
+    let error;
+    if (editPaymentId) {
+      const { error: err } = await supabase.from('payments').update(payload).eq('id', editPaymentId)
+      error = err;
+    } else {
+      const { error: err } = await supabase.from('payments').insert([payload])
+      error = err;
+    }
+
     if (!error) {
       setShowModal(false)
       setPayAmount('')
       setPayRef('')
       setPayDesc('Payment Received')
+      setEditPaymentId(null)
       loadData()
     } else {
       alert(error.message)
+    }
+  }
+
+  async function handleEditClick(paymentId) {
+    const { data } = await supabase.from('payments').select('*').eq('id', paymentId).single()
+    if (data) {
+      setEditPaymentId(data.id)
+      setPayDate(data.payment_date)
+      setPayAmount(data.amount)
+      setPayMode(data.payment_mode || 'Cash')
+      setPayRef(data.reference_number || '')
+      setPayDesc(data.description || '')
+      setShowModal(true)
     }
   }
 
@@ -260,7 +357,7 @@ export default function ClientLedger() {
 
     autoTable(doc, {
       startY: yPos + 30,
-      head: [['Date', 'Description', 'Debit (Bill)', 'Credit (Paid)', 'Balance']],
+      head: [['Date', 'Description', 'Debit (Material Delivered)', 'Credit (Payment Received)', 'Balance']],
       body: tableData,
       theme: 'grid',
       headStyles: { 
@@ -356,7 +453,13 @@ export default function ClientLedger() {
                   <button className="btn btn-secondary btn-sm" onClick={handleShareWhatsApp} disabled={exporting} style={{ background: '#25D366', color: 'white', border: 'none' }}>
                     💬 WhatsApp
                   </button>
-                  <button className="primary-btn" style={{ padding: '6px 12px', margin: 0 }} onClick={() => setShowModal(true)}>
+                  <button className="primary-btn" style={{ padding: '6px 12px', margin: 0 }} onClick={() => {
+                    setEditPaymentId(null)
+                    setPayAmount('')
+                    setPayDesc('Payment Received')
+                    setPayDate(new Date().toISOString().split('T')[0])
+                    setShowModal(true)
+                  }}>
                     + Add Payment
                   </button>
                 </div>
@@ -386,20 +489,48 @@ export default function ClientLedger() {
                )}
             </div>
 
+            {selectedRefs.size > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fee2e2', padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
+                <span style={{ fontWeight: 600, color: '#991b1b' }}>{selectedRefs.size} entries selected</span>
+                <button className="btn btn-danger btn-sm" style={{ margin: 0 }} onClick={handleDeleteSelected}>🗑️ Delete Selected</button>
+              </div>
+            )}
+
             <div className="card" style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                    <th style={{ padding: '10px 12px', width: 40, textAlign: 'center' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={filteredLedger.filter(l => l.type !== 'OPENING').length > 0 && filteredLedger.filter(l => l.type !== 'OPENING').every(l => selectedRefs.has(l.ref))} 
+                        onChange={handleSelectAll} 
+                      />
+                    </th>
                     <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date</th>
                     <th style={{ padding: '10px 12px', textAlign: 'left' }}>Description</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Debit (Bill)</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Credit (Paid)</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Debit (Material Dispatched)</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Credit (Payment Received)</th>
                     <th style={{ padding: '10px 12px', textAlign: 'right' }}>Balance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLedger.map((l, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: l.type === 'OPENING' ? '#fffbeb' : (l.type === 'QUOTE' ? '#f8fafc' : 'transparent') }}>
+                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: l.type === 'OPENING' ? '#fffbeb' : (selectedRefs.has(l.ref) ? '#f0f9ff' : (l.type === 'QUOTE' ? '#f8fafc' : 'transparent')) }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        {l.type !== 'OPENING' && (
+                          <input 
+                            type="checkbox" 
+                            checked={selectedRefs.has(l.ref)} 
+                            onChange={() => {
+                              const newSet = new Set(selectedRefs)
+                              if (newSet.has(l.ref)) newSet.delete(l.ref)
+                              else newSet.add(l.ref)
+                              setSelectedRefs(newSet)
+                            }} 
+                          />
+                        )}
+                      </td>
                       <td style={{ padding: '10px 12px' }}>
                         {(() => {
                           const d = new Date(l.date)
@@ -412,7 +543,29 @@ export default function ClientLedger() {
                         })()}
                       </td>
                       <td style={{ padding: '10px 12px', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
-                        {l.description}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{l.description}</span>
+                          {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button 
+                                className="btn btn-ghost btn-sm" 
+                                style={{ padding: '2px 6px', margin: 0, color: '#3b82f6' }} 
+                                title="Edit"
+                                onClick={() => handleEditClick(l.ref)}
+                              >
+                                ✏️
+                              </button>
+                              <button 
+                                className="btn btn-ghost btn-sm" 
+                                style={{ padding: '2px 6px', margin: 0, color: '#ef4444' }} 
+                                title={l.type === 'MANUAL_DEBIT' ? 'Delete Record' : 'Delete Payment'}
+                                onClick={() => handleDeletePayment(l.ref)}
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: '#ef4444' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right', color: '#10b981' }}>{l.credit > 0 ? l.credit.toFixed(2) : '-'}</td>
@@ -422,7 +575,7 @@ export default function ClientLedger() {
                     </tr>
                   ))}
                   {filteredLedger.length === 0 && (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: 20 }}>No transactions found.</td></tr>
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20 }}>No transactions found.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -431,7 +584,7 @@ export default function ClientLedger() {
             {showModal && (
               <div className="modal-overlay">
                 <div className="modal-content">
-                  <h3 style={{ marginTop: 0 }}>Add Payment</h3>
+                  <h3 style={{ marginTop: 0 }}>{editPaymentId ? 'Edit Payment' : 'Add Payment'}</h3>
                   <form onSubmit={handleAddPayment} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600 }}>Date</label>

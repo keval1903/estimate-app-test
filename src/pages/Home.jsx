@@ -65,6 +65,14 @@ export default function Home() {
           </div>
         </button>
 
+        <button className="home-btn" onClick={() => navigate('/clients')}>
+          <div className="home-btn-icon" style={{ background: '#e0e7ff' }}>👥</div>
+          <div>
+            <div className="home-btn-text">CLIENTS & LEDGER</div>
+            <div className="home-btn-sub">Manage client profiles, payments & balances</div>
+          </div>
+        </button>
+
         <button className="home-btn" onClick={() => navigate('/stock-report?tab=reorder')}>
           <div className="home-btn-icon" style={{ background: '#fee2e2' }}>⚠️</div>
           <div>

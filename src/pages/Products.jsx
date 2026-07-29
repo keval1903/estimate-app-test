@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
 
 import { getMergedUnits } from '../constants/units.js'
+import { isFuzzyMatch } from '../lib/searchUtils'
+import { normalizeSearchQuery } from '../lib/synonyms.js'
+import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
 
 const EMPTY_FORM = {
   product_name: '', keyword: '', length: '', width: '',
@@ -31,6 +34,14 @@ export default function Products() {
   const [importDiscrepancies, setImportDiscrepancies] = useState([])
   const [selectedIds, setSelectedIds] = useState(new Set())
   const fileRef = useRef()
+  const searchInputRef = useRef()
+
+  const { isListening, startListening, error: voiceError } = useVoiceSearch({
+    onResult: (text) => {
+      setSearch(text)
+      if (searchInputRef.current) searchInputRef.current.focus()
+    }
+  })
 
   useEffect(() => { fetchProducts() }, [])
 
@@ -59,17 +70,23 @@ export default function Products() {
     }
   
 
-  const s = search.trim().toLowerCase()
+  let s = search.trim().toLowerCase()
+  s = normalizeSearchQuery(s)
+  
   const sNoSpace = s.replace(/\s+/g, '')
   const searchTerms = s.split(/\s+/)
+  const smartTerms = s.match(/[a-z]+|[0-9]+/g) || []
 
   const filtered = products.filter(p => {
     const pName = p.product_name.toLowerCase()
     const matchesAllTerms = searchTerms.every(term => pName.includes(term))
+    const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
     return pName.includes(s) ||
            pName.replace(/\s+/g, '').includes(sNoSpace) ||
            p.unit.toLowerCase().includes(s) ||
-           matchesAllTerms
+           matchesAllTerms ||
+           matchesSmartTerms ||
+           isFuzzyMatch(sNoSpace, pName)
   })
 
   function openAdd() { setForm(EMPTY_FORM); setEditingId(null); setStockMode('SET'); setShowCustomUnit(false); setShowModal(true) }
@@ -522,11 +539,30 @@ export default function Products() {
       </div>
 
       <div className="page">
-        <div className="search-bar">
+        <div className="search-bar" style={{ position: 'relative' }}>
           <span>🔍</span>
-          <input placeholder="Search product name or unit..."
-            value={search} onChange={e => setSearch(e.target.value)} />
-          {search && <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')}>✕</button>}
+          <input 
+            ref={searchInputRef}
+            placeholder="Search or tap mic..."
+            value={search} onChange={e => setSearch(e.target.value)} 
+            style={{ paddingRight: search ? 60 : 40 }}
+          />
+          <div style={{ position: 'absolute', right: 4, display: 'flex', gap: 4, alignItems: 'center' }}>
+            {search && <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')}>✕</button>}
+            <button 
+              type="button"
+              className={`btn btn-ghost btn-sm ${isListening ? 'listening' : ''}`}
+              style={{ color: isListening ? 'var(--danger-color)' : 'var(--text-muted)' }}
+              onPointerDown={(e) => { 
+                e.preventDefault();
+                e.stopPropagation();
+                if (isListening) stopListening(); else startListening(); 
+              }}
+              title={voiceError || 'Voice Search'}
+            >
+              {isListening ? '🛑' : '🎤'}
+            </button>
+          </div>
         </div>
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>

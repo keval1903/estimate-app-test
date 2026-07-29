@@ -1,38 +1,60 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { isFuzzyMatch } from '../lib/searchUtils'
 
 export default function Clients() {
   const navigate = useNavigate()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [selectedClients, setSelectedClients] = useState(new Set())
 
   // Add Client Modal State
   const [showModal, setShowModal] = useState(false)
   const [newName, setNewName] = useState('')
   const [newMobile, setNewMobile] = useState('')
   const [newBalance, setNewBalance] = useState('')
+  const [editClientId, setEditClientId] = useState(null)
 
   async function handleAddClient(e) {
     e.preventDefault()
     if (!newName.trim()) return
     
-    const { data, error } = await supabase.from('clients').insert([{
+    const payload = {
       name: newName.trim().toUpperCase(),
       mobile: newMobile.trim(),
       opening_balance: Number(newBalance) || 0
-    }]).select('id').single()
+    }
+
+    let error;
+    if (editClientId) {
+      const { error: err } = await supabase.from('clients').update(payload).eq('id', editClientId)
+      error = err;
+    } else {
+      const { error: err } = await supabase.from('clients').insert([payload])
+      error = err;
+    }
 
     if (error) {
-      alert("Failed to add client: " + error.message)
+      alert("Error saving client: " + error.message)
     } else {
       setShowModal(false)
       setNewName('')
       setNewMobile('')
       setNewBalance('')
+      setEditClientId(null)
       loadClients()
     }
+  }
+
+  async function handleEditClick(c, e) {
+    e.stopPropagation()
+    setEditClientId(c.id)
+    setNewName(c.name)
+    setNewMobile(c.mobile || '')
+    setNewBalance(c.opening_balance || '')
+    setShowModal(true)
   }
 
   async function loadClients() {
@@ -57,6 +79,67 @@ export default function Clients() {
   }
 
   useEffect(() => { loadClients() }, [])
+
+  async function handleDeleteClient(id, name) {
+    if (!window.confirm(`Are you sure you want to delete ${name}?\n\nThis will permanently delete all their payment records. Their estimates will NOT be deleted, but they will no longer be linked to a client account.`)) return
+    
+    try {
+      const { error } = await supabase.from('clients').delete().eq('id', id)
+      if (error) throw error
+      loadClients()
+    } catch (e) {
+      alert("Failed to delete client: " + e.message)
+    }
+  }
+
+  async function handleDeleteAllClients() {
+    if (!window.confirm('WARNING: Are you absolutely sure you want to delete ALL clients?\n\nThis will permanently delete EVERY ledger account and EVERY payment record in the system. This cannot be undone!')) return
+    
+    const verify = window.prompt("Type 'DELETE' to confirm wiping all ledgers.")
+    if (verify !== 'DELETE') {
+      if (verify !== null) alert("Deletion cancelled.")
+      return
+    }
+    
+    try {
+      const { error } = await supabase.from('clients').delete().not('id', 'is', null)
+      if (error) throw error
+      loadClients()
+      alert("All clients and ledgers have been successfully deleted.")
+    } catch (e) {
+      alert("Failed to delete all clients: " + e.message)
+    }
+  }
+
+  function handleSelectAll(filtered) {
+    if (selectedClients.size === filtered.length && filtered.length > 0) {
+      setSelectedClients(new Set())
+    } else {
+      setSelectedClients(new Set(filtered.map(c => c.id)))
+    }
+  }
+
+  function handleSelectRow(id, e) {
+    e.stopPropagation()
+    const next = new Set(selectedClients)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedClients(next)
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedClients.size === 0) return
+    if (!window.confirm(`Are you sure you want to delete ${selectedClients.size} selected clients?\n\nThis will permanently delete all their payment records.`)) return
+    
+    try {
+      const { error } = await supabase.from('clients').delete().in('id', Array.from(selectedClients))
+      if (error) throw error
+      setSelectedClients(new Set())
+      loadClients()
+    } catch (e) {
+      alert("Failed to delete selected clients: " + e.message)
+    }
+  }
 
   return (
     <div className="app-container">
@@ -83,35 +166,105 @@ export default function Clients() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')}>✕</button>
                 )}
               </div>
-              <button className="btn btn-primary" style={{ margin: 0, whiteSpace: 'nowrap' }} onClick={() => setShowModal(true)}>
-                ➕ Add Client
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {selectedClients.size > 0 && (
+                  <button className="btn btn-danger" style={{ margin: 0, whiteSpace: 'nowrap', backgroundColor: '#dc2626' }} onClick={handleDeleteSelected}>
+                    🗑️ Delete Selected ({selectedClients.size})
+                  </button>
+                )}
+                {clients.length > 0 && (
+                  <button className="btn btn-danger" style={{ margin: 0, whiteSpace: 'nowrap' }} onClick={handleDeleteAllClients}>
+                    🗑️ Delete All
+                  </button>
+                )}
+                <button className="btn btn-primary" style={{ margin: 0, whiteSpace: 'nowrap' }} onClick={() => {
+                  setEditClientId(null)
+                  setNewName('')
+                  setNewMobile('')
+                  setNewBalance('')
+                  setShowModal(true)
+                }}>
+                  ➕ Add Client
+                </button>
+              </div>
             </div>
             
-            {clients.filter(c => {
-              if (!search.trim()) return true;
-              const searchTerms = search.toLowerCase().trim().split(/\s+/);
-              const targetStr = `${c.name || ''} ${c.mobile || ''}`.toLowerCase();
-              return searchTerms.every(term => targetStr.includes(term));
-            }).map(c => (
-              <div key={c.id} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={() => navigate(`/clients/${c.id}`)}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 16 }}>{c.name}</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{c.mobile || 'No Mobile'}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Outstanding Balance</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: c.balance > 0 ? '#ef4444' : (c.balance < 0 ? '#10b981' : '#000') }}>
-                    ₹ {Math.abs(c.balance).toFixed(2)} {c.balance > 0 ? 'Dr' : (c.balance < 0 ? 'Cr' : '')}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {clients.length === 0 && (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
-                No clients found.
-              </div>
-            )}
+            {(() => {
+              const filteredClients = clients.filter(c => {
+                const s = search.trim().toLowerCase()
+                if (!s) return true;
+                const searchTerms = s.split(/\s+/);
+                const smartTerms = s.match(/[a-z]+|[0-9]+/g) || []
+                const targetStr = `${c.name || ''} ${c.mobile || ''}`.toLowerCase();
+                
+                const matchesAllTerms = searchTerms.every(term => targetStr.includes(term));
+                const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => targetStr.includes(term));
+                const sNoSpace = s.replace(/\s+/g, '');
+                
+                return targetStr.includes(s) || 
+                       targetStr.replace(/\s+/g, '').includes(sNoSpace) ||
+                       matchesAllTerms || 
+                       matchesSmartTerms || 
+                       isFuzzyMatch(sNoSpace, c.name.toLowerCase()) ||
+                       isFuzzyMatch(sNoSpace, (c.mobile || '').toLowerCase())
+              });
+
+              return (
+                <>
+                  {filteredClients.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px 8px', gap: 12 }}>
+                      <input 
+                        type="checkbox"
+                        style={{ width: 18, height: 18, cursor: 'pointer' }}
+                        checked={selectedClients.size === filteredClients.length && filteredClients.length > 0}
+                        onChange={() => handleSelectAll(filteredClients)}
+                      />
+                      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-muted)' }}>
+                        Select All
+                      </span>
+                    </div>
+                  )}
+
+                  {filteredClients.map(c => (
+                    <div key={c.id} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: selectedClients.has(c.id) ? '#f0f9ff' : 'white' }} onClick={() => navigate(`/clients/${c.id}`)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <input
+                          type="checkbox"
+                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                          checked={selectedClients.has(c.id)}
+                          onChange={(e) => handleSelectRow(c.id, e)}
+                          onClick={e => e.stopPropagation()}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 16 }}>{c.name}</div>
+                          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{c.mobile || 'No Mobile'}</div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Outstanding Balance</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: c.balance > 0 ? '#ef4444' : (c.balance < 0 ? '#10b981' : '#000') }}>
+                            ₹ {Math.abs(c.balance).toFixed(2)} {c.balance > 0 ? 'Dr' : (c.balance < 0 ? 'Cr' : '')}
+                          </div>
+                        </div>
+                        <button className="btn btn-ghost btn-sm" style={{ color: '#3b82f6', padding: '6px' }} title="Edit Client" onClick={(e) => handleEditClick(c, e)}>
+                          ✏️
+                        </button>
+                        <button className="btn btn-ghost btn-sm" style={{ color: '#ef4444', padding: '6px' }} title="Delete Client" onClick={(e) => { e.stopPropagation(); handleDeleteClient(c.id, c.name); }}>
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {filteredClients.length === 0 && (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
+                      No clients found.
+                    </div>
+                  )}
+                </>
+              )
+            })()}
           </div>
         )}
       </div>
@@ -119,7 +272,7 @@ export default function Clients() {
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3 style={{ marginTop: 0 }}>Add New Client</h3>
+            <h3 style={{ marginTop: 0 }}>{editClientId ? 'Edit Client' : 'Add New Client'}</h3>
             <form onSubmit={handleAddClient} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600 }}>Client Name <span style={{color: 'red'}}>*</span></label>

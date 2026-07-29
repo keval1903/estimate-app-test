@@ -2,16 +2,17 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
+import { isFuzzyMatch } from '../lib/searchUtils'
 
 export default function EstimateList() {
-  const navigate = useNavigate()
   const { showToast, ToastEl } = useToast()
-  const [estimates, setEstimates] = useState([])
+  const navigate = useNavigate()
+  const [allEstimates, setAllEstimates] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [deleteConfirm, setDeleteConfirm] = useState(null)
-  const [deleting, setDeleting] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [deleting, setDeleting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [collapsedDates, setCollapsedDates] = useState(new Set())
   const [activeTab, setActiveTab] = useState(() => {
     const p = new URLSearchParams(window.location.search).get('tab')
@@ -20,32 +21,42 @@ export default function EstimateList() {
 
   const fetchEstimates = useCallback(async () => {
     setLoading(true)
-    let query = supabase
-      .from('estimates')
-      .select('*')
-      .order('bill_number', { ascending: false })
+    try {
+      let from = 0
+      let to = 999
+      let allData = []
+      
+      while (true) {
+        let query = supabase
+          .from('estimates')
+          .select('*')
+          .order('bill_number', { ascending: false })
+          .range(from, to)
 
-    if (search.trim()) {
-      const s = search.trim()
-      // search by bill number or site name
-      if (!isNaN(s)) {
-        query = query.eq('bill_number', parseInt(s))
-      } else {
-        query = query.ilike('site_name', `%${s}%`)
+        if (activeTab === 'QUOTATION') {
+          query = query.eq('type', 'QUOTATION')
+        } else {
+          query = query.or('type.eq.ESTIMATE,type.is.null')
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        
+        if (data && data.length > 0) {
+          allData = allData.concat(data)
+        }
+        if (!data || data.length < 1000) break
+        
+        from += 1000
+        to += 1000
       }
+      setAllEstimates(allData || [])
+    } catch (error) {
+      showToast('Failed to load records', 'error')
+    } finally {
+      setLoading(false)
     }
-
-    if (activeTab === 'QUOTATION') {
-      query = query.eq('type', 'QUOTATION')
-    } else {
-      query = query.or('type.eq.ESTIMATE,type.is.null')
-    }
-
-    const { data, error } = await query
-    if (error) showToast('Failed to load records', 'error')
-    else setEstimates(data || [])
-    setLoading(false)
-  }, [search, activeTab])
+  }, [activeTab])
 
   useEffect(() => {
     const t = setTimeout(fetchEstimates, 300)
@@ -54,6 +65,17 @@ export default function EstimateList() {
 
   async function handleDelete(est) {
     setDeleting(true)
+    
+    if (est.type === 'ESTIMATE' && est.client_id) {
+      await supabase.from('payments').insert({
+        client_id: est.client_id,
+        payment_date: est.bill_date,
+        amount: -Math.abs(est.grand_total || 0),
+        description: `Bill #${est.bill_number} (Preserved Balance)`,
+        payment_mode: ''
+      })
+    }
+
     // items cascade-delete via FK
     const { error } = await supabase.from('estimates').delete().eq('id', est.id)
     if (error) showToast('Delete failed: ' + error.message, 'error')
@@ -68,11 +90,28 @@ export default function EstimateList() {
   async function handleDeleteSelected() {
     if (selectedIds.size === 0) return
     if (!window.confirm(`Delete ${selectedIds.size} selected estimates?`)) return
+    
     setDeleting(true)
-    const { error } = await supabase.from('estimates').delete().in('id', Array.from(selectedIds))
-    if (error) showToast('Delete failed: ' + error.message, 'error')
+    const arr = Array.from(selectedIds)
+    
+    // get full estimates for these IDs to preserve ledger
+    const { data: estsToPreserve } = await supabase.from('estimates').select('*').in('id', arr).eq('type', 'ESTIMATE').not('client_id', 'is', null)
+    
+    if (estsToPreserve && estsToPreserve.length > 0) {
+      const inserts = estsToPreserve.map(e => ({
+        client_id: e.client_id,
+        payment_date: e.bill_date,
+        amount: -Math.abs(e.grand_total || 0),
+        description: `Bill #${e.bill_number} (Preserved Balance)`,
+        payment_mode: ''
+      }))
+      await supabase.from('payments').insert(inserts)
+    }
+
+    const { error } = await supabase.from('estimates').delete().in('id', arr)
+    if (error) showToast('Batch delete failed: ' + error.message, 'error')
     else {
-      showToast(`Deleted ${selectedIds.size} estimates`)
+      showToast(`${arr.length} estimates deleted`)
       setSelectedIds(new Set())
       fetchEstimates()
     }
@@ -82,6 +121,33 @@ export default function EstimateList() {
   function formatTotal(val) {
     return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2 })
   }
+
+  const s = search.trim().toLowerCase()
+  const sNoSpace = s.replace(/\s+/g, '')
+  const searchTerms = s.split(/\s+/)
+  const smartTerms = s.match(/[a-z]+|[0-9]+/g) || []
+
+  const estimates = allEstimates.filter(est => {
+    if (!s) return true
+    const client = (est.client_name || '').toLowerCase()
+    const site = (est.site_name || '').toLowerCase()
+    const transport = (est.transport || '').toLowerCase()
+    const bNum = est.bill_number?.toString() || ''
+    
+    const targetStr = `${client} ${site} ${transport} ${bNum}`
+    const targetNoSpace = targetStr.replace(/\s+/g, '')
+
+    const matchesAllTerms = searchTerms.every(term => targetStr.includes(term))
+    const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => targetStr.includes(term))
+    
+    return targetStr.includes(s) ||
+           targetNoSpace.includes(sNoSpace) ||
+           matchesAllTerms ||
+           matchesSmartTerms ||
+           isFuzzyMatch(sNoSpace, client) ||
+           isFuzzyMatch(sNoSpace, site) ||
+           isFuzzyMatch(sNoSpace, bNum)
+  })
 
   const groupedEstimates = {}
   for (const est of estimates) {
@@ -146,14 +212,20 @@ export default function EstimateList() {
           <button
             className={`btn btn-sm ${activeTab === 'ESTIMATE' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ flex: 1 }}
-            onClick={() => setActiveTab('ESTIMATE')}
+            onClick={() => {
+              setActiveTab('ESTIMATE')
+              window.history.replaceState(null, '', '?tab=estimates')
+            }}
           >
             📄 Estimates ({activeTab === 'ESTIMATE' ? estimates.length : 'Bills'})
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'QUOTATION' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ flex: 1 }}
-            onClick={() => setActiveTab('QUOTATION')}
+            onClick={() => {
+              setActiveTab('QUOTATION')
+              window.history.replaceState(null, '', '?tab=quotations')
+            }}
           >
             📜 Quotations ({activeTab === 'QUOTATION' ? estimates.length : 'Quotes'})
           </button>
@@ -163,7 +235,7 @@ export default function EstimateList() {
         <div className="search-bar">
           <span>🔍</span>
           <input
-            placeholder={`Search ${activeTab === 'QUOTATION' ? 'quotations' : 'estimates'} by number or site...`}
+            placeholder={`Search ${activeTab === 'QUOTATION' ? 'quotations' : 'estimates'} by number, site or client...`}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -225,8 +297,8 @@ export default function EstimateList() {
                               {est.bill_date.replace(/-/g, '/')}
                             </span>
                           </div>
-                          <div className="est-meta">
-                            {est.transport ? `🚛 ${est.transport}` : ''}
+                          <div className="est-meta" style={{ color: 'var(--text-color)', fontWeight: 500 }}>
+                            {(est.client_name || est.transport) ? `👤 ${est.client_name || est.transport}` : ''}
                           </div>
                           <div style={{ fontWeight: 600, fontSize: 15 }}>📍 {est.site_name}</div>
                         </div>

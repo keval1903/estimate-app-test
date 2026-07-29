@@ -3,6 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
 import { getMergedUnits } from '../constants/units.js'
+import { isFuzzyMatch } from '../lib/searchUtils'
+import { normalizeSearchQuery } from '../lib/synonyms.js'
+import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function todayIST() {
@@ -43,7 +46,8 @@ function calcTotals(items) {
   for (const it of items) {
     const fresh = calcItem(it)
     const amt = fresh.amount ?? parseFloat(it.amount) ?? 0
-    total_nos      += parseFloat(it.nos) || 0
+    const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+    total_nos      += isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
     total_quantity += parseFloat(it.quantity) || 0
     grand_total    += amt
   }
@@ -112,13 +116,27 @@ export default function CreateEstimate() {
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM)
   const [showProductCustomUnit, setShowProductCustomUnit] = useState(false)
   const [savingProduct, setSavingProduct] = useState(false)
+  
+  const { isListening, startListening, error: voiceError } = useVoiceSearch({
+    onResult: (text) => {
+      setProductSearch(text)
+      setShowSuggestions(true)
+      if (productInputRef.current) productInputRef.current.focus()
+    }
+  })
 
-  // site autocomplete
+  // ── Clients Data ──
+  const [allClients, setAllClients] = useState([])
+
+  // ── Form State ──autocomplete
+  const [clientSuggestions, setClientSuggestions] = useState([])
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false)
   const [siteSuggestions, setSiteSuggestions] = useState([])
   const [showSiteSuggestions, setShowSiteSuggestions] = useState(false)
   const [allSites, setAllSites] = useState([])
 
   const productInputRef = useRef()
+  const clientInputRef = useRef()
   const siteInputRef = useRef()
   const nosInputRef = useRef()
   const qtyInputRef = useRef()
@@ -207,6 +225,25 @@ export default function CreateEstimate() {
       }
     }
     load()
+
+    // Load clients for autocomplete
+    async function loadClientNames() {
+      const { data: cData } = await supabase.from('clients').select('name, mobile')
+      const { data: eData } = await supabase.from('estimates').select('client_name, client_mobile')
+      const cmap = new Map()
+      if (cData) cData.forEach(c => {
+        if (c.name) cmap.set(c.name.trim().toUpperCase(), c.mobile || '')
+      })
+      if (eData) eData.forEach(e => {
+        if (e.client_name) {
+           const n = e.client_name.trim().toUpperCase()
+           if (!cmap.has(n)) cmap.set(n, e.client_mobile || '')
+        }
+      })
+      const merged = Array.from(cmap.keys()).map(name => ({ name, mobile: cmap.get(name) })).sort((a,b) => a.name.localeCompare(b.name))
+      setAllClients(merged)
+    }
+    loadClientNames()
   }, [id])
 
   // ── Auto-save draft ──
@@ -277,34 +314,79 @@ export default function CreateEstimate() {
 
   // ── Product search ──
   useEffect(() => {
-    const q = productSearch.trim().toLowerCase()
+    let q = productSearch.trim().toLowerCase()
+    q = normalizeSearchQuery(q)
+    
     if (!q) { 
       setProductSuggestions(allProducts)
       setSuggestionIdx(-1)
       return 
     }
     const searchTerms = q.split(/\s+/)
+    const smartTerms = q.match(/[a-z]+|[0-9]+/g) || []
+    
     const results = allProducts.filter(p => {
       const pName = p.product_name.toLowerCase()
       const matchesAllTerms = searchTerms.every(term => pName.includes(term))
+      const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
+      
       return pName.includes(q) || 
              pName.replace(/\s+/g, '').includes(q.replace(/\s+/g, '')) ||
-             matchesAllTerms
+             matchesAllTerms ||
+             matchesSmartTerms ||
+             isFuzzyMatch(q.replace(/\s+/g, ''), pName)
     })
     setProductSuggestions(results)
     setSuggestionIdx(-1)
   }, [productSearch, allProducts])
 
+  // ── Client search ──
+  useEffect(() => {
+    const qRaw = clientName.trim().toLowerCase()
+    const q = qRaw.replace(/\s+/g, '')
+    if (!q) { 
+      setClientSuggestions([])
+      setShowClientSuggestions(false)
+      return 
+    }
+    const searchTerms = qRaw.split(/\s+/)
+    const smartTerms = qRaw.match(/[a-z]+|[0-9]+/g) || []
+
+    const results = allClients.filter(c => {
+      const cName = c.name.toLowerCase()
+      const matchesAllTerms = searchTerms.every(term => cName.includes(term))
+      const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => cName.includes(term))
+      return cName.includes(qRaw) || 
+             cName.replace(/\s+/g, '').includes(q) ||
+             matchesAllTerms || matchesSmartTerms ||
+             isFuzzyMatch(q, cName)
+    }).slice(0, 8)
+    setClientSuggestions(results)
+    if (document.activeElement === clientInputRef.current) {
+      setShowClientSuggestions(results.length > 0)
+    }
+  }, [clientName, allClients])
+
   // ── Site search ──
   useEffect(() => {
-    const q = siteName.trim().toLowerCase()
-    if (!q) { 
+    const qRaw = siteName.trim().toLowerCase()
+    const q = qRaw.replace(/\s+/g, '')
+    if (!qRaw) { 
       setSiteSuggestions(allSites.slice(0, 8))
       return 
     }
-    const results = allSites.filter(s =>
-      s.site_name.toLowerCase().includes(q)
-    ).slice(0, 8)
+    const searchTerms = qRaw.split(/\s+/)
+    const smartTerms = qRaw.match(/[a-z]+|[0-9]+/g) || []
+
+    const results = allSites.filter(s => {
+      const sName = s.site_name.toLowerCase()
+      const matchesAllTerms = searchTerms.every(term => sName.includes(term))
+      const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => sName.includes(term))
+      return sName.includes(qRaw) || 
+             sName.replace(/\s+/g, '').includes(q) ||
+             matchesAllTerms || matchesSmartTerms ||
+             isFuzzyMatch(q, sName)
+    }).slice(0, 8)
     setSiteSuggestions(results)
   }, [siteName, allSites])
 
@@ -569,12 +651,22 @@ export default function CreateEstimate() {
 
   // ── Generate / Save Estimate ──
   async function handleGenerate() {
-    if (!siteName.trim()) { showToast('Enter a site name', 'error'); return }
+    if (!clientName.trim()) { showToast('Enter a Client Name (mandatory)', 'error'); return }
     if (!preparedBy.trim()) { showToast('Enter Prepared By name (mandatory)', 'error'); return }
     if (items.length === 0) { showToast('Add at least one product', 'error'); return }
     setSaving(true)
     try {
       const t = calcTotals(items)
+
+      // Resolve client_id
+      let finalClientId = null;
+      if (clientName.trim()) {
+        const cName = clientName.trim().toUpperCase()
+        const found = allClients.find(c => c.name === cName)
+        if (found) {
+          finalClientId = found.id
+        }
+      }
 
       if (isEdit) {
         // UPDATE existing estimate
@@ -583,6 +675,7 @@ export default function CreateEstimate() {
           transport: clientName.trim().toUpperCase(),
           client_name: clientName.trim().toUpperCase(),
           client_mobile: clientMobile.trim(),
+          client_id: finalClientId,
           prepared_by: preparedBy.trim().toUpperCase(),
           site_name: siteName.trim().toUpperCase(),
           type: docType,
@@ -669,6 +762,7 @@ export default function CreateEstimate() {
           transport: clientName.trim().toUpperCase(),
           client_name: clientName.trim().toUpperCase(),
           client_mobile: clientMobile.trim(),
+          client_id: finalClientId,
           prepared_by: preparedBy.trim().toUpperCase(),
           site_name: siteName.trim().toUpperCase(),
           type: docType,
@@ -837,8 +931,36 @@ export default function CreateEstimate() {
           <div className="field-row">
             <div className="field">
               <label>Client Name</label>
-              <input value={clientName} onChange={e => setClientName(e.target.value)}
-                placeholder="Client name (optional)" />
+              <div className="autocomplete-wrap">
+                <input
+                  ref={clientInputRef}
+                  value={clientName}
+                  onChange={e => {
+                    const val = e.target.value.toUpperCase()
+                    setClientName(val)
+                    const found = allClients.find(c => c.name.toUpperCase() === val.trim())
+                    if (found && found.mobile && !clientMobile) setClientMobile(found.mobile)
+                  }}
+                  onFocus={() => clientName && setShowClientSuggestions(clientSuggestions.length > 0)}
+                  onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+                  placeholder="Client name (optional)"
+                  style={{ textTransform: 'uppercase' }}
+                />
+                {showClientSuggestions && (
+                  <div className="autocomplete-list">
+                    {clientSuggestions.map((s, idx) => (
+                      <div key={idx} className="autocomplete-item"
+                        onMouseDown={() => { 
+                          setClientName(s.name)
+                          if (s.mobile && !clientMobile) setClientMobile(s.mobile)
+                          setShowClientSuggestions(false)
+                        }}>
+                        {s.name} {s.mobile ? `(${s.mobile})` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="field">
               <label>Mobile (M.)</label>
@@ -964,16 +1086,32 @@ export default function CreateEstimate() {
               <label>Product *</label>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                 <div className="autocomplete-wrap" style={{ flex: 1 }}>
-                  <input
-                    ref={productInputRef}
-                    value={productSearch}
-                    onChange={e => { setProductSearch(e.target.value); setShowSuggestions(true) }}
-                    onKeyDown={handleProductKeyDown}
-                    onFocus={() => setShowSuggestions(productSuggestions.length > 0)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                    placeholder="Type product name to search..."
-                    autoComplete="off"
-                  />
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      ref={productInputRef}
+                      value={productSearch}
+                      onChange={e => { setProductSearch(e.target.value); setShowSuggestions(true) }}
+                      onKeyDown={handleProductKeyDown}
+                      onFocus={() => setShowSuggestions(productSuggestions.length > 0)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      placeholder="Type or tap mic to search..."
+                      autoComplete="off"
+                      style={{ paddingRight: 40 }}
+                    />
+                    <button 
+                      type="button" 
+                      className={`btn btn-ghost btn-sm ${isListening ? 'listening' : ''}`}
+                      style={{ position: 'absolute', right: 4, padding: '4px 8px', color: isListening ? 'var(--danger-color)' : 'var(--text-muted)' }}
+                      onPointerDown={(e) => { 
+                        e.preventDefault(); 
+                        e.stopPropagation();
+                        if (isListening) stopListening(); else startListening(); 
+                      }}
+                      title={voiceError || 'Voice Search'}
+                    >
+                      {isListening ? '🛑' : '🎤'}
+                    </button>
+                  </div>
                   {showSuggestions && productSuggestions.length > 0 && (
                     <div className="autocomplete-list">
                       {productSuggestions.map((p, i) => (

@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
+import { isFuzzyMatch } from '../lib/searchUtils'
 
 export default function StockReport() {
   const navigate = useNavigate()
   const { showToast, ToastEl } = useToast()
   const [products, setProducts] = useState([])
   const [history, setHistory] = useState([])
+  const [salesItems, setSalesItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedProductId, setSelectedProductId] = useState('ALL')
@@ -26,20 +28,34 @@ export default function StockReport() {
   async function loadData() {
     setLoading(true)
     try {
-      const { data: prods, error: pErr } = await supabase
-        .from('products')
-        .select('*')
-        .order('product_name')
-      if (pErr) throw pErr
+      async function fetchAll(table, select, applyModifiers = q => q) {
+        let allData = []
+        let from = 0
+        let to = 999
+        while (true) {
+          let query = supabase.from(table).select(select).range(from, to)
+          query = applyModifiers(query)
+          const { data, error } = await query
+          if (error) throw error
+          if (data && data.length > 0) {
+            allData = allData.concat(data)
+          }
+          if (!data || data.length < 1000) break
+          from += 1000
+          to += 1000
+        }
+        return allData
+      }
 
-      const { data: hist, error: hErr } = await supabase
-        .from('stock_history')
-        .select('*, products(product_name, unit), estimates(bill_number, site_name, type)')
-        .order('created_at', { ascending: false })
-      if (hErr) throw hErr
+      const prods = await fetchAll('products', '*', q => q.order('product_name'))
+      
+      const hist = await fetchAll('stock_history', '*, products(product_name, unit), estimates(bill_number, site_name, type)', q => q.order('created_at', { ascending: false }))
+      
+      const sales = await fetchAll('estimate_items', 'product_id, quantity, estimates!inner(created_at, type)', q => q.eq('estimates.type', 'ESTIMATE'))
 
       setProducts(prods || [])
       setHistory(hist || [])
+      setSalesItems(sales || [])
     } catch (e) {
       showToast('Failed to load report data: ' + e.message, 'error')
     } finally {
@@ -97,7 +113,7 @@ export default function StockReport() {
   }
 
   // Filtered products with stock tracking enabled
-  const trackedProducts = products.filter(p => p.has_stock)
+  const trackedProducts = products
 
   // Calculate per-product statistics filtered by date range
   const productStats = {}
@@ -106,18 +122,20 @@ export default function StockReport() {
   let outOfStockCount = 0
 
   const allLowStockProducts = trackedProducts.filter(p => {
+    if (!p.has_stock) return false
     const stock = Number(p.stock || 0)
     const minReq = Number(p.min_stock ?? 5)
     return stock < minReq
   })
 
   for (const p of trackedProducts) {
-    const stock = Number(p.stock || 0)
-    const minReq = Number(p.min_stock ?? 5)
-    if (stock <= 0) outOfStockCount++
-    else if (stock < minReq) lowStockCount++
-    else inStockCount++
-
+    if (p.has_stock) {
+      const stock = Number(p.stock || 0)
+      const minReq = Number(p.min_stock ?? 5)
+      if (stock <= 0) outOfStockCount++
+      else if (stock < minReq) lowStockCount++
+      else inStockCount++
+    }
     productStats[p.id] = { added: 0, sold: 0 }
   }
 
@@ -130,7 +148,22 @@ export default function StockReport() {
       if (qty > 0) {
         productStats[h.product_id].added += qty
       } else if (qty < 0) {
-        productStats[h.product_id].sold += Math.abs(qty)
+        const p = trackedProducts.find(x => x.id === h.product_id)
+        if (p && p.has_stock) {
+          productStats[h.product_id].sold += Math.abs(qty)
+        }
+      }
+    }
+  }
+
+  // Filter sales by date range
+  const dateFilteredSales = salesItems.filter(s => isWithinDateRange(s.estimates?.created_at))
+
+  for (const s of dateFilteredSales) {
+    if (productStats[s.product_id]) {
+      const p = trackedProducts.find(x => x.id === s.product_id)
+      if (p && !p.has_stock) {
+        productStats[s.product_id].sold += Number(s.quantity || 0)
       }
     }
   }
@@ -138,11 +171,14 @@ export default function StockReport() {
   // Filtered lists based on search & product dropdown
   const s = search.trim().toLowerCase()
   const searchTerms = s.split(/\s+/)
+  const smartTerms = s.match(/[a-z]+|[0-9]+/g) || []
 
   const filteredProducts = trackedProducts.filter(p => {
     const pName = p.product_name.toLowerCase()
     const matchesAllTerms = searchTerms.every(term => pName.includes(term))
-    const matchesSearch = pName.includes(s) || matchesAllTerms
+    const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
+    const sNoSpace = s.replace(/\s+/g, '')
+    const matchesSearch = pName.includes(s) || matchesAllTerms || matchesSmartTerms || pName.replace(/\s+/g, '').includes(sNoSpace) || isFuzzyMatch(sNoSpace, pName)
     const matchesSelect = selectedProductId === 'ALL' || p.id === selectedProductId
     return matchesSearch && matchesSelect
   })
@@ -150,7 +186,9 @@ export default function StockReport() {
   const filteredLowStockProducts = allLowStockProducts.filter(p => {
     const pName = p.product_name.toLowerCase()
     const matchesAllTerms = searchTerms.every(term => pName.includes(term))
-    const matchesSearch = pName.includes(s) || matchesAllTerms
+    const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
+    const sNoSpace = s.replace(/\s+/g, '')
+    const matchesSearch = pName.includes(s) || matchesAllTerms || matchesSmartTerms || pName.replace(/\s+/g, '').includes(sNoSpace) || isFuzzyMatch(sNoSpace, pName)
     const matchesSelect = selectedProductId === 'ALL' || p.id === selectedProductId
     return matchesSearch && matchesSelect
   })
@@ -160,8 +198,10 @@ export default function StockReport() {
     const pName = h.products?.product_name || ''
     const bNum = h.estimates?.bill_number?.toString() || ''
     const site = h.estimates?.site_name || ''
-    const matchesAllTerms = searchTerms.every(term => pName.toLowerCase().includes(term))
-    const matchesSearch = pName.toLowerCase().includes(s) || bNum.includes(s) || site.toLowerCase().includes(s) || matchesAllTerms
+    const matchesAllTerms = searchTerms.every(term => pName.toLowerCase().includes(term) || bNum.includes(term) || site.toLowerCase().includes(term))
+    const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.toLowerCase().includes(term) || bNum.includes(term) || site.toLowerCase().includes(term))
+    const sNoSpace = s.replace(/\s+/g, '')
+    const matchesSearch = pName.toLowerCase().includes(s) || bNum.includes(s) || site.toLowerCase().includes(s) || matchesAllTerms || matchesSmartTerms || pName.toLowerCase().replace(/\s+/g, '').includes(sNoSpace) || isFuzzyMatch(sNoSpace, pName) || isFuzzyMatch(sNoSpace, site)
     return matchesProduct && matchesSearch
   })
 
@@ -298,7 +338,7 @@ export default function StockReport() {
         {/* Date Range Selection Box */}
         <div className="card" style={{ padding: 14, marginBottom: 14 }}>
           <div className="section-label" style={{ marginBottom: 8 }}>📅 Filter by Date Range</div>
-          
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <button
               className={`btn btn-sm ${datePreset === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
@@ -419,7 +459,7 @@ export default function StockReport() {
           <div className="search-bar" style={{ margin: 0 }}>
             <span>🔍</span>
             <input
-              placeholder="Search product, bill #, or site..."
+              placeholder="Search product"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -473,20 +513,28 @@ export default function StockReport() {
                           -{stats.sold}
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <div style={{
-                            fontWeight: 700,
-                            fontSize: 14,
-                            color: isOut ? '#dc2626' : isLow ? '#d97706' : '#166534'
-                          }}>
-                            {stock} {p.unit}
-                          </div>
-                          <div style={{ fontSize: 10, color: '#666' }}>Min: {minReq}</div>
-                          {isOut ? (
-                            <span className="badge" style={{ background: '#fee2e2', color: '#dc2626', fontSize: 10 }}>OUT OF STOCK</span>
-                          ) : isLow ? (
-                            <span className="badge" style={{ background: '#fef3c7', color: '#d97706', fontSize: 10 }}>LOW STOCK</span>
+                          {!p.has_stock ? (
+                            <div style={{ color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic' }}>
+                              Not Tracked
+                            </div>
                           ) : (
-                            <span className="badge" style={{ background: '#d1fae5', color: '#047857', fontSize: 10 }}>IN STOCK</span>
+                            <>
+                              <div style={{
+                                fontWeight: 700,
+                                fontSize: 14,
+                                color: isOut ? '#dc2626' : isLow ? '#d97706' : '#166534'
+                              }}>
+                                {stock} {p.unit}
+                              </div>
+                              <div style={{ fontSize: 10, color: '#666' }}>Min: {minReq}</div>
+                              {isOut ? (
+                                <span className="badge" style={{ background: '#fee2e2', color: '#dc2626', fontSize: 10 }}>OUT OF STOCK</span>
+                              ) : isLow ? (
+                                <span className="badge" style={{ background: '#fef3c7', color: '#d97706', fontSize: 10 }}>LOW STOCK</span>
+                              ) : (
+                                <span className="badge" style={{ background: '#d1fae5', color: '#047857', fontSize: 10 }}>IN STOCK</span>
+                              )}
+                            </>
                           )}
                         </td>
                       </tr>

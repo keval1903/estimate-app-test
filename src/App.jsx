@@ -7,6 +7,8 @@ import EstimateList from './pages/EstimateList'
 import CreateEstimate from './pages/CreateEstimate'
 import EstimateView from './pages/EstimateView'
 import StockReport from './pages/StockReport'
+import Clients from './pages/Clients'
+import ClientLedger from './pages/ClientLedger'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -28,6 +30,8 @@ export default function App() {
           <Route path="/estimate/edit/:id" element={<ProtectedRoute><CreateEstimate /></ProtectedRoute>} />
           <Route path="/estimate/view/:id" element={<ProtectedRoute><EstimateView /></ProtectedRoute>} />
           <Route path="/stock-report" element={<ProtectedRoute><StockReport /></ProtectedRoute>} />
+          <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+          <Route path="/clients/:id" element={<ProtectedRoute><ClientLedger /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
