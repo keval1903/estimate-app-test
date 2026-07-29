@@ -19,8 +19,8 @@ export function useVoiceSearch({ onResult, language = 'hi-IN' }) {
       recognitionRef.current = recognition
       
       recognition.lang = language // 'en-IN' or 'hi-IN' works best for Indian English / Hindi mix
-      recognition.continuous = false
-      recognition.interimResults = false // Only get the final matched sentence
+      recognition.continuous = true
+      recognition.interimResults = true // Show real-time typing
 
       recognition.onstart = () => {
         setIsListening(true)
@@ -28,8 +28,19 @@ export function useVoiceSearch({ onResult, language = 'hi-IN' }) {
       }
 
       recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript
-        if (onResult) {
+        let finalTranscript = ''
+        let interimTranscript = ''
+        
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript
+          } else {
+            interimTranscript += event.results[i][0].transcript
+          }
+        }
+        
+        const transcript = finalTranscript || interimTranscript
+        if (transcript && onResult) {
           onResult(transcript)
         }
       }

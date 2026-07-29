@@ -10,19 +10,19 @@ export const SYNONYM_DICTIONARY = {
   'dedh': '1.5',
   'ded': '1.5',
   'dhai': '2.5',
-  
+
   // Materials / Variations
-  'lipping': 'lipping', // Enforces correct mapping for common misspellings if needed
-  'liping': 'lipping',
-  'leeping': 'lipping',
-  
+  'lipping': 'liping', // Enforces correct mapping for common misspellings if needed
+  'liping': 'liping',
+  'leeping': 'liping',
+
   'sut': 'mm', // Usually sut is 1/8 of an inch, sometimes referred in mm loosely, but keeping it as mm if requested, or leave out. Let's keep sut -> sut for now unless explicitly asked.
 }
 
 export function normalizeSearchQuery(query) {
   if (!query) return ''
   let normalized = query.toLowerCase()
-  
+
   // Replace each synonym
   for (const [key, value] of Object.entries(SYNONYM_DICTIONARY)) {
     // Replace whole word matches only using word boundaries,
@@ -32,6 +32,6 @@ export function normalizeSearchQuery(query) {
     const regex = new RegExp(`\\b${key}\\b`, 'g')
     normalized = normalized.replace(regex, value)
   }
-  
+
   return normalized
 }
