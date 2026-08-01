@@ -41,19 +41,25 @@ function calcItem(item) {
   }
 }
 
-function calcTotals(items) {
-  let total_nos = 0, total_quantity = 0, grand_total = 0
+function calcTotals(items, gstRate = 0) {
+  const roundedGstRate = Math.round(gstRate);
+  let total_nos = 0, total_quantity = 0, sub_total = 0
   for (const it of items) {
     const fresh = calcItem(it)
     const amt = fresh.amount ?? parseFloat(it.amount) ?? 0
     const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
     total_nos += isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
     total_quantity += parseFloat(it.quantity) || 0
-    grand_total += amt
+    sub_total += amt
   }
+  const gst_amount = Math.round(sub_total * (roundedGstRate / 100))
+  const grand_total = sub_total + gst_amount
   return {
     total_nos: +total_nos.toFixed(2),
     total_quantity: +total_quantity.toFixed(2),
+    sub_total: +sub_total.toFixed(2),
+    gst_percent: roundedGstRate,
+    gst_amount: gst_amount,
     grand_total: +grand_total.toFixed(2)
   }
 }
@@ -82,7 +88,7 @@ export default function CreateEstimate() {
 
   const [docType, setDocType] = useState(() => {
     const p = new URLSearchParams(window.location.search).get('type')
-    return p === 'ESTIMATE' ? 'ESTIMATE' : 'QUOTATION'
+    return p === 'RETURN' ? 'RETURN' : p === 'ESTIMATE' ? 'ESTIMATE' : 'QUOTATION'
   })
   const [billDate, setBillDate] = useState(todayIST())
   const [clientName, setClientName] = useState('')
@@ -91,7 +97,8 @@ export default function CreateEstimate() {
   const [siteName, setSiteName] = useState('')
   const [items, setItems] = useState([])
   const [originalItems, setOriginalItems] = useState([])
-  const [totals, setTotals] = useState({ total_nos: 0, total_quantity: 0, grand_total: 0 })
+  const [gstPercent, setGstPercent] = useState('')
+  const [totals, setTotals] = useState({ total_nos: 0, total_quantity: 0, sub_total: 0, gst_percent: 0, gst_amount: 0, grand_total: 0 })
   const [existingBillNumber, setExistingBillNumber] = useState(null)
 
   // UI state
@@ -179,6 +186,7 @@ export default function CreateEstimate() {
           setPreparedBy(parsedDraft.preparedBy || '')
           setSiteName(parsedDraft.siteName || '')
           setItems(parsedDraft.items || [])
+          setGstPercent(parsedDraft.gstPercent || '')
           setIsDraftRestored(true)
           setTimeout(() => showToast('Unsaved draft restored'), 500)
         } else {
@@ -188,6 +196,7 @@ export default function CreateEstimate() {
           setPreparedBy(est.prepared_by || '')
           setSiteName(est.site_name || '')
           setDocType(est.type || 'ESTIMATE')
+          setGstPercent(est.gst_percent ? String(est.gst_percent) : '')
           const { data: eitems } = await supabase
             .from('estimate_items').select('*')
             .eq('estimate_id', id).order('serial_number')
@@ -219,6 +228,7 @@ export default function CreateEstimate() {
           setPreparedBy(parsedDraft.preparedBy || '')
           setSiteName(parsedDraft.siteName || '')
           setItems(parsedDraft.items || [])
+          setGstPercent(parsedDraft.gstPercent || '')
           setIsDraftRestored(true)
           setTimeout(() => showToast('Unsaved draft restored'), 500)
         }
@@ -255,10 +265,10 @@ export default function CreateEstimate() {
         return
       }
       localStorage.setItem(draftKey, JSON.stringify({
-        billDate, clientName, clientMobile, preparedBy, siteName, items
+        billDate, clientName, clientMobile, preparedBy, siteName, items, gstPercent
       }))
     }
-  }, [billDate, clientName, clientMobile, preparedBy, siteName, items, draftKey, loading])
+  }, [docType, billDate, clientName, clientMobile, preparedBy, siteName, items, gstPercent, draftKey, loading])
 
   // ── Discard Draft & Reset ──
   const handleDiscardDraft = async () => {
@@ -277,6 +287,7 @@ export default function CreateEstimate() {
         setPreparedBy(est.prepared_by || '')
         setSiteName(est.site_name || '')
         setDocType(est.type || 'ESTIMATE')
+        setGstPercent(est.gst_percent ? String(est.gst_percent) : '')
         const { data: eitems } = await supabase
           .from('estimate_items').select('*')
           .eq('estimate_id', id).order('serial_number')
@@ -305,13 +316,14 @@ export default function CreateEstimate() {
       setPreparedBy('')
       setSiteName('')
       setItems([])
+      setGstPercent('')
     }
     localStorage.removeItem(draftKey)
     showToast('Unsaved draft discarded')
   }
 
   // ── Recalc totals when items change ──
-  useEffect(() => { setTotals(calcTotals(items)) }, [items])
+  useEffect(() => { setTotals(calcTotals(items, parseFloat(gstPercent) || 0)) }, [items, gstPercent])
 
   // ── Product search ──
   useEffect(() => {
@@ -676,7 +688,7 @@ export default function CreateEstimate() {
     if (items.length === 0) { showToast('Add at least one product', 'error'); return }
     setSaving(true)
     try {
-      const t = calcTotals(items)
+      const t = calcTotals(items, parseFloat(gstPercent) || 0)
 
       // Resolve client_id
       let finalClientId = null;
@@ -697,10 +709,13 @@ export default function CreateEstimate() {
           client_mobile: clientMobile.trim(),
           client_id: finalClientId,
           prepared_by: preparedBy.trim().toUpperCase(),
-          site_name: siteName.trim().toUpperCase(),
+          site_name: siteName.trim().toUpperCase() || null,
           type: docType,
           total_nos: t.total_nos,
           total_quantity: t.total_quantity,
+          sub_total: t.sub_total,
+          gst_percent: t.gst_percent,
+          gst_amount: t.gst_amount,
           grand_total: t.grand_total,
           updated_at: new Date().toISOString()
         }).eq('id', id)
@@ -727,17 +742,18 @@ export default function CreateEstimate() {
         const { error: itemErr } = await supabase.from('estimate_items').insert(newItems)
         if (itemErr) throw itemErr
 
-        // Calculate and apply stock adjustments ONLY if ESTIMATE
-        if (docType === 'ESTIMATE') {
+        // Calculate and apply stock adjustments ONLY if ESTIMATE or RETURN
+        if (docType === 'ESTIMATE' || docType === 'RETURN') {
+          const isReturn = docType === 'RETURN';
           const netUsage = {}
           for (const it of items) {
-            const qty = it.calculation_type_snapshot === 'SQFT' ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
+            const qty = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET' ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
             netUsage[it.product_id] = (netUsage[it.product_id] || 0) + qty
           }
           const origUsage = {}
           if (isEdit) {
             for (const oi of originalItems) {
-              const qty = oi.calculation_type_snapshot === 'SQFT' ? (parseFloat(oi.nos) || 0) : (parseFloat(oi.quantity) || 0)
+              const qty = oi.calculation_type_snapshot === 'SQFT' || oi.calculation_type_snapshot === 'INCH' || oi.calculation_type_snapshot === 'FEET' ? (parseFloat(oi.nos) || 0) : (parseFloat(oi.quantity) || 0)
               origUsage[oi.product_id] = (origUsage[oi.product_id] || 0) + qty
             }
           }
@@ -749,17 +765,43 @@ export default function CreateEstimate() {
               if (diff !== 0) {
                 const { data: pdata } = await supabase.from('products').select('stock').eq('id', p.id).single()
                 if (pdata) {
-                  const newStock = Number(pdata.stock) - diff
+                  const stockDelta = isReturn ? diff : -diff;
+                  const newStock = Number(pdata.stock) + stockDelta
                   await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
                   await supabase.from('stock_history').insert({
                     product_id: p.id,
-                    change_type: isEdit ? 'ESTIMATE_UPDATE' : 'ESTIMATE_DEDUCT',
-                    quantity_changed: -diff,
+                    change_type: isEdit ? (isReturn ? 'RETURN_UPDATE' : 'ESTIMATE_UPDATE') : (isReturn ? 'RETURN_ADD' : 'ESTIMATE_DEDUCT'),
+                    quantity_changed: stockDelta,
                     estimate_id: id
                   })
                 }
               }
             }
+          }
+        }
+
+        // --- NEW LOGIC: Record Partywise Stock History ---
+        if ((docType === 'ESTIMATE' || docType === 'RETURN') && finalClientId && existingBillNumber) {
+          const isReturn = docType === 'RETURN';
+          const purchaseRecords = items.map(it => {
+            const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+            const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
+            return {
+              client_id: finalClientId,
+              product_id: it.product_id || null,
+              product_name: it.product_name_snapshot || 'Manual Item',
+              quantity: isReturn ? -qty : qty,
+              unit: isPieceBased ? 'Nos.' : (it.unit_snapshot || ''),
+              rate: Number(it.rate) || 0,
+              amount: isReturn ? -Number(it.amount) : (Number(it.amount) || 0),
+              bill_number: existingBillNumber,
+              bill_date: billDate
+            };
+          }).filter(r => r.quantity !== 0 || r.amount !== 0);
+
+          if (purchaseRecords.length > 0) {
+            await supabase.from('client_purchases').delete().eq('bill_number', existingBillNumber);
+            await supabase.from('client_purchases').insert(purchaseRecords);
           }
         }
 
@@ -788,6 +830,9 @@ export default function CreateEstimate() {
           type: docType,
           total_nos: t.total_nos,
           total_quantity: t.total_quantity,
+          sub_total: t.sub_total,
+          gst_percent: t.gst_percent,
+          gst_amount: t.gst_amount,
           grand_total: t.grand_total
         }).select().single()
         if (estErr) throw estErr
@@ -812,10 +857,11 @@ export default function CreateEstimate() {
         if (itemErr) throw itemErr
 
         // Calculate and apply stock adjustments ONLY if ESTIMATE
-        if (docType === 'ESTIMATE') {
+        if (docType === 'ESTIMATE' || docType === 'RETURN') {
+          const isReturn = docType === 'RETURN';
           const netUsage = {}
           for (const it of items) {
-            const qty = it.calculation_type_snapshot === 'SQFT' ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
+            const qty = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET' ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
             netUsage[it.product_id] = (netUsage[it.product_id] || 0) + qty
           }
           for (const p of allProducts) {
@@ -824,12 +870,13 @@ export default function CreateEstimate() {
               if (curr !== 0) {
                 const { data: pdata } = await supabase.from('products').select('stock').eq('id', p.id).single()
                 if (pdata) {
-                  const newStock = Number(pdata.stock) - curr
+                  const stockDelta = isReturn ? curr : -curr;
+                  const newStock = Number(pdata.stock) + stockDelta
                   await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
                   await supabase.from('stock_history').insert({
                     product_id: p.id,
-                    change_type: 'ESTIMATE_DEDUCT',
-                    quantity_changed: -curr,
+                    change_type: isReturn ? 'RETURN_ADD' : 'ESTIMATE_DEDUCT',
+                    quantity_changed: stockDelta,
                     estimate_id: est.id
                   })
                 }
@@ -838,9 +885,34 @@ export default function CreateEstimate() {
           }
         }
 
+        // --- NEW LOGIC: Record Partywise Stock History ---
+        if ((docType === 'ESTIMATE' || docType === 'RETURN') && finalClientId) {
+          const isReturn = docType === 'RETURN';
+          const purchaseRecords = items.map(it => {
+            const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+            const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
+            return {
+              client_id: finalClientId,
+              product_id: it.product_id || null,
+              product_name: it.product_name_snapshot || 'Manual Item',
+              quantity: isReturn ? -qty : qty,
+              unit: isPieceBased ? 'Nos.' : (it.unit_snapshot || ''),
+              rate: Number(it.rate) || 0,
+              amount: isReturn ? -Number(it.amount) : (Number(it.amount) || 0),
+              bill_number: billNumber,
+              bill_date: billDate
+            };
+          }).filter(r => r.quantity !== 0 || r.amount !== 0);
+
+          if (purchaseRecords.length > 0) {
+            await supabase.from('client_purchases').delete().eq('bill_number', billNumber);
+            await supabase.from('client_purchases').insert(purchaseRecords);
+          }
+        }
+
         await saveSite(siteName.trim().toUpperCase())
         localStorage.removeItem(draftKey) // clear draft on success
-        showToast(`${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'} saved ✓`)
+        showToast(`${docType === 'QUOTATION' ? 'Quotation' : docType === 'RETURN' ? 'Sales Return' : 'Estimate'} saved ✓`)
         navigate(`/estimate/view/${est.id}`)
       }
     } catch (err) {
@@ -931,6 +1003,14 @@ export default function CreateEstimate() {
                   style={{ flex: 1 }}
                 >
                   📄 Estimate
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${docType === 'RETURN' ? 'btn-danger' : 'btn-secondary'}`}
+                  onClick={() => setDocType('RETURN')}
+                  style={{ flex: 1, background: docType === 'RETURN' ? '#dc2626' : undefined, color: docType === 'RETURN' ? '#fff' : undefined }}
+                >
+                  ↩️ Return
                 </button>
               </div>
             </div>
@@ -1071,6 +1151,29 @@ export default function CreateEstimate() {
               <span>Total Quantity</span>
               <span>{totals.total_quantity}</span>
             </div>
+            <div className="total-row" style={{ marginTop: 12, alignItems: 'flex-start' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                GST (%) 
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={gstPercent}
+                  onChange={e => setGstPercent(e.target.value)}
+                  placeholder="0"
+                  style={{ width: 60, padding: '4px 8px', fontSize: 14 }}
+                />
+              </span>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
+                  Sub Total: ₹{totals.sub_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </div>
+                {totals.gst_percent > 0 && (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Add GST ({totals.gst_percent}%): ₹{totals.gst_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="total-row grand">
               <span>Gr. Total</span>
               <span>₹{totals.grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
@@ -1090,7 +1193,7 @@ export default function CreateEstimate() {
               ? 'Saving...'
               : isEdit
                 ? '💾 SAVE CHANGES'
-                : (docType === 'QUOTATION' ? '📜 GENERATE QUOTATION' : '📄 GENERATE ESTIMATE')}
+                : (docType === 'QUOTATION' ? '📜 GENERATE QUOTATION' : docType === 'RETURN' ? '↩️ GENERATE SALES RETURN' : '📄 GENERATE ESTIMATE')}
           </button>
         </div>
       </div>

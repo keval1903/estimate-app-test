@@ -49,7 +49,7 @@ export default function StockReport() {
 
       const prods = await fetchAll('products', '*', q => q.order('product_name'))
       
-      const hist = await fetchAll('stock_history', '*, products(product_name, unit), estimates(bill_number, site_name, type)', q => q.order('created_at', { ascending: false }))
+      const hist = await fetchAll('stock_history', '*, products(product_name, unit, calculation_type), estimates(bill_number, site_name, type)', q => q.order('created_at', { ascending: false }))
       
       const sales = await fetchAll('estimate_items', 'product_id, quantity, estimates!inner(created_at, type)', q => q.eq('estimates.type', 'ESTIMATE'))
 
@@ -64,6 +64,13 @@ export default function StockReport() {
   }
 
   // Date filtering logic
+  const getDisplayUnit = (p) => {
+    if (!p) return '';
+    const calc = p.calculation_type;
+    if (calc === 'SQFT' || calc === 'INCH' || calc === 'FEET') return 'Nos.';
+    return p.unit || '';
+  }
+
   function isWithinDateRange(isoStr) {
     if (!isoStr) return false
     if (datePreset === 'ALL') return true
@@ -220,6 +227,8 @@ export default function StockReport() {
     if (type === 'ESTIMATE_DEDUCT') return `Estimate #${h.estimates?.bill_number || ''}`
     if (type === 'QUOTATION_CONVERT') return `Quote Converted #${h.estimates?.bill_number || ''}`
     if (type === 'ESTIMATE_UPDATE') return `Estimate Updated #${h.estimates?.bill_number || ''}`
+    if (type === 'RETURN_ADD') return `Sales Return #${h.estimates?.bill_number || ''}`
+    if (type === 'RETURN_UPDATE') return `Sales Return Updated #${h.estimates?.bill_number || ''}`
     return type
   }
 
@@ -245,7 +254,7 @@ export default function StockReport() {
         const stats = productStats[p.id] || { added: 0, sold: 0 }
         summaryRows.push([
           p.product_name,
-          p.unit,
+          getDisplayUnit(p),
           stats.added,
           stats.sold,
           p.stock || 0,
@@ -301,7 +310,7 @@ export default function StockReport() {
           getChangeLabel(h),
           h.estimates?.site_name || '',
           qty > 0 ? `+${qty}` : qty,
-          h.products?.unit || ''
+          getDisplayUnit(h.products)
         ])
       }
 
@@ -452,7 +461,7 @@ export default function StockReport() {
           >
             <option value="ALL">All Stock-Managed Products ({trackedProducts.length})</option>
             {trackedProducts.map(p => (
-              <option key={p.id} value={p.id}>{p.product_name} (Stock: {p.stock} / Min: {p.min_stock ?? 5} {p.unit})</option>
+              <option key={p.id} value={p.id}>{p.product_name} (Stock: {p.stock} / Min: {p.min_stock ?? 5} {getDisplayUnit(p)})</option>
             ))}
           </select>
 
@@ -504,7 +513,7 @@ export default function StockReport() {
                       <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ fontWeight: 700 }}>{p.product_name}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Unit: {p.unit}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Unit: {getDisplayUnit(p)}</div>
                         </td>
                         <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, color: '#047857' }}>
                           +{stats.added}
@@ -524,7 +533,7 @@ export default function StockReport() {
                                 fontSize: 14,
                                 color: isOut ? '#dc2626' : isLow ? '#d97706' : '#166534'
                               }}>
-                                {stock} {p.unit}
+                                {stock} {getDisplayUnit(p)}
                               </div>
                               <div style={{ fontSize: 10, color: '#666' }}>Min: {minReq}</div>
                               {isOut ? (
@@ -579,7 +588,7 @@ export default function StockReport() {
                       <tr key={p.id} style={{ borderBottom: '1px solid #fee2e2', background: isOut ? '#fff5f5' : '#fff' }}>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ fontWeight: 700, color: isOut ? '#dc2626' : '#111827' }}>{p.product_name}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Unit: {p.unit}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Unit: {getDisplayUnit(p)}</div>
                         </td>
                         <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600 }}>
                           {minReq}
@@ -588,7 +597,7 @@ export default function StockReport() {
                           {stock}
                         </td>
                         <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 700, color: '#991b1b' }}>
-                          +{deficit} {p.unit}
+                          +{deficit} {getDisplayUnit(p)}
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                           <button
@@ -643,7 +652,7 @@ export default function StockReport() {
                         fontWeight: 700,
                         color: isPositive ? '#047857' : '#b91c1c'
                       }}>
-                        {isPositive ? `+${qty}` : qty} {h.products?.unit || ''}
+                        {isPositive ? `+${qty}` : qty} {getDisplayUnit(h.products)}
                       </div>
                       {h.estimate_id && (
                         <button

@@ -17,6 +17,7 @@ export default function EstimateView() {
   const [layoutMode, setLayoutMode] = useState('full')
   const [converting, setConverting] = useState(false)
   const [isExportingSingleImage, setIsExportingSingleImage] = useState(false)
+  const [isChallanMode, setIsChallanMode] = useState(false)
   const previewRef = useRef()
 
   useEffect(() => {
@@ -26,7 +27,7 @@ export default function EstimateView() {
       const { data: eitems } = await supabase
         .from('estimate_items').select('*')
         .eq('estimate_id', id).order('serial_number')
-      
+
       setEstimate(est)
       setItems(eitems || [])
 
@@ -35,7 +36,7 @@ export default function EstimateView() {
         const { data: estData } = await supabase.from('estimates').select('grand_total').eq('client_id', est.client_id).eq('type', 'ESTIMATE')
         const { data: payData } = await supabase.from('payments').select('amount').eq('client_id', est.client_id)
         const { data: cData } = await supabase.from('clients').select('opening_balance').eq('id', est.client_id).single()
-        
+
         const estTotal = (estData || []).reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
         const payTotal = (payData || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
         setClientBalance(Number(cData?.opening_balance || 0) + estTotal - payTotal)
@@ -54,7 +55,7 @@ export default function EstimateView() {
   function getSummaryText() {
     const isQuote = estimate?.type === 'QUOTATION'
     const client = estimate?.client_name || estimate?.transport || ''
-    let text = `${isQuote ? 'Quotation' : 'Estimate'} No. ${estimate?.bill_number}\nDate: ${estimate?.bill_date}\nSite: ${estimate?.site_name}`
+    let text = `${isQuote ? 'Quotation' : estimate?.type === 'RETURN' ? 'Sales Return' : 'Estimate'} No. ${estimate?.bill_number}\nDate: ${estimate?.bill_date}\nSite: ${estimate?.site_name}`
     if (client) text += `\nClient: ${client}`
     if (estimate?.client_mobile) text += `\nM.: ${estimate.client_mobile}`
     if (estimate?.prepared_by) text += `\nPrep. By: ${estimate.prepared_by}`
@@ -102,22 +103,22 @@ export default function EstimateView() {
       const { default: jsPDF } = await import('jspdf')
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: paperSize })
       const pdfW = pdf.internal.pageSize.getWidth()
-      
+
       const pagesEls = document.querySelectorAll('.estimate-page')
       const targetWidth = paperSize === 'a5' ? '529px' : '763px'
-      
+
       for (let i = 0; i < pagesEls.length; i++) {
         if (i > 0) pdf.addPage()
         const canvas = await generateCanvas(pagesEls[i], 2, targetWidth)
         const imgData = canvas.toDataURL('image/png')
-        
+
         const margin = 8; // 8mm margin on all sides
         const drawWidth = pdfW - (margin * 2);
         const drawHeight = (canvas.height * drawWidth) / canvas.width;
-        
+
         pdf.addImage(imgData, 'PNG', margin, margin, drawWidth, drawHeight)
       }
-      
+
       pdf.save(getFilename('pdf'))
       showToast('PDF saved ✓')
     } catch (e) {
@@ -189,7 +190,7 @@ export default function EstimateView() {
             await navigator.share({ files, title: `Estimate #${estimate.bill_number}`, text })
             return // Success! Exit early.
           }
-        } catch { 
+        } catch {
           // Native share failed, fall through to fallback
         }
       }
@@ -208,6 +209,56 @@ export default function EstimateView() {
     } finally {
       setIsExportingSingleImage(false)
       setExporting('')
+    }
+  }
+
+  async function handleRevertToQuotation() {
+    if (!window.confirm('Revert this Estimate to a Quotation? Stock will be added back and ledger entries will be removed.')) return
+    setConverting(true)
+    try {
+      const { data: allProducts } = await supabase.from('products').select('*')
+      const prodMap = {}
+      for (const p of (allProducts || [])) prodMap[p.id] = p
+
+      // 1. Perform stock addition (Revert deduction)
+      for (const it of items) {
+        if (it.product_id && prodMap[it.product_id] && prodMap[it.product_id].has_stock) {
+          const qty = (it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET') ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
+          if (qty > 0) {
+            const p = prodMap[it.product_id]
+            const newStock = Number(p.stock) + qty
+            await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
+            await supabase.from('stock_history').insert({
+              product_id: p.id,
+              change_type: 'REVERT_TO_QUOTATION',
+              quantity_changed: qty, // positive to add stock back
+              estimate_id: id
+            })
+          }
+        }
+      }
+
+      // 2. Remove Partywise Stock History (Ledger entries)
+      await supabase.from('client_purchases').delete().eq('bill_number', estimate.bill_number);
+
+      // 3. Update the estimate record type
+      const { error } = await supabase.from('estimates').update({
+        type: 'QUOTATION',
+        updated_at: new Date().toISOString()
+      }).eq('id', id)
+
+      if (error) throw error
+
+      showToast('Reverted to Quotation & Stock Added Back ✓')
+
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
+
+    } catch (e) {
+      showToast('Revert failed: ' + e.message, 'error')
+    } finally {
+      setConverting(false)
     }
   }
 
@@ -271,13 +322,37 @@ export default function EstimateView() {
 
       if (error) throw error
 
+      // 4. Record Partywise Stock History
+      if (finalClientId) {
+        const purchaseRecords = items.map(it => {
+          const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+          const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
+          return {
+            client_id: finalClientId,
+            product_id: it.product_id || null,
+            product_name: it.product_name_snapshot || 'Manual Item',
+            quantity: qty,
+            unit: isPieceBased ? 'Nos.' : (it.unit_snapshot || ''),
+            rate: Number(it.rate) || 0,
+            amount: Number(it.amount) || 0,
+            bill_number: estimate.bill_number,
+            bill_date: estimate.bill_date
+          };
+        }).filter(r => r.quantity > 0 || r.amount > 0);
+
+        if (purchaseRecords.length > 0) {
+          await supabase.from('client_purchases').delete().eq('bill_number', estimate.bill_number);
+          await supabase.from('client_purchases').insert(purchaseRecords);
+        }
+      }
+
       showToast('Converted to Estimate & Stock Deducted ✓')
-      
+
       // Reload the page to ensure all balances and references are fetched correctly
       setTimeout(() => {
         window.location.reload()
       }, 500)
-      
+
     } catch (e) {
       showToast('Conversion failed: ' + e.message, 'error')
     } finally {
@@ -286,31 +361,34 @@ export default function EstimateView() {
   }
 
   // Smart Pagination Logic
-  const A5_ROWS = 24;
-  const A4_ROWS = 40;
+  const A5_ROWS = 23;
+  const A4_ROWS = 38;
   const SQUEEZE_LIMIT = 2;
-  
+
   const pages = useMemo(() => {
     if (!items || items.length === 0) return [{ items: [], carried: null, brought: null, isLast: true }];
-    
+
     const maxRows = isExportingSingleImage ? Infinity : (paperSize === 'a5' ? A5_ROWS : A4_ROWS);
-    
+
     const result = [];
     let currentNos = 0;
     let currentQty = 0;
     let currentAmt = 0;
-    
+
     for (let i = 0; i < items.length;) {
       const isFirst = result.length === 0;
       let availableRowsForItems = maxRows;
-      
+
       if (!isFirst) availableRowsForItems -= 1; // Room for Brought Forward
-      
+
       const remainingItems = items.length - i;
       let isLast = false;
-      
-      const extraRows = (estimate?.type === 'ESTIMATE' && estimate?.client_id) ? 4 : 2;
-      
+
+      let extraRows = (estimate?.type === 'ESTIMATE' && estimate?.client_id) ? 4 : 2;
+      if (Number(estimate?.gst_percent) > 0) {
+        extraRows += 2;
+      }
+
       // If remaining items + extra totals rows fits within the squeeze limit
       if (remainingItems + extraRows <= availableRowsForItems + (isExportingSingleImage ? 0 : SQUEEZE_LIMIT)) {
         isLast = true;
@@ -319,9 +397,9 @@ export default function EstimateView() {
         // Doesn't fit, we need room for Carried Forward
         availableRowsForItems -= 1;
       }
-      
+
       const chunk = items.slice(i, i + availableRowsForItems);
-      
+
       const brought = isFirst ? null : {
         nos: currentNos,
         qty: currentQty,
@@ -353,7 +431,7 @@ export default function EstimateView() {
       result.push({ items: chunk, carried, brought, isLast, emptyRowsCount });
       i += availableRowsForItems;
     }
-    
+
     return result;
   }, [items, paperSize, isExportingSingleImage]);
 
@@ -376,7 +454,7 @@ export default function EstimateView() {
       {/* Nav */}
       <div className="top-nav no-print">
         <button className="nav-back" onClick={() => navigate(-1)}>←</button>
-        <span className="nav-title">{estimate.type === 'QUOTATION' ? 'Quotation' : 'Estimate'} #{estimate.bill_number}</span>
+        <span className="nav-title">{estimate.type === 'QUOTATION' ? 'Quotation' : estimate.type === 'RETURN' ? 'Sales Return' : 'Estimate'} #{estimate.bill_number}</span>
       </div>
 
       {/* Action buttons */}
@@ -390,12 +468,22 @@ export default function EstimateView() {
             <option value="full">Layout: Full</option>
             <option value="compact">Layout: Compact</option>
           </select>
+          <select className="btn btn-secondary btn-sm" value={isChallanMode ? 'challan' : 'standard'} onChange={e => setIsChallanMode(e.target.value === 'challan')}>
+            <option value="standard">Mode: Standard</option>
+            <option value="challan">Mode: Challan</option>
+          </select>
         </div>
 
         {estimate.type === 'QUOTATION' && (
           <button className="btn btn-warning btn-sm"
             onClick={handleConvertToEstimate} disabled={converting}>
             {converting ? 'Converting...' : '⚡ Convert to Estimate'}
+          </button>
+        )}
+        {estimate.type === 'ESTIMATE' && (
+          <button className="btn btn-warning btn-sm" style={{ background: '#e07a5f', color: '#fff' }}
+            onClick={handleRevertToQuotation} disabled={converting}>
+            {converting ? 'Reverting...' : '⚡ Revert to Quotation'}
           </button>
         )}
         <button className="btn btn-secondary btn-sm"
@@ -429,69 +517,75 @@ export default function EstimateView() {
                   <col style={{ width: 'auto' }} /> {/* Description */}
                   <col style={{ width: 42 }} />     {/* Nos. */}
                   <col style={{ width: 68 }} />     {/* Quantity */}
-                  <col style={{ width: 72 }} />     {/* Rate */}
-                  <col style={{ width: 94 }} />     {/* Amount */}
+                  {!isChallanMode && <col style={{ width: 72 }} />}     {/* Rate */}
+                  {!isChallanMode && <col style={{ width: 94 }} />}     {/* Amount */}
                 </colgroup>
                 <tbody>
                   {/* Title row */}
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, letterSpacing: 2, padding: '6px 0', borderBottom: '1px solid #000' }}>
-                      {estimate.type === 'QUOTATION' ? 'Q U O T A T I O N' : 'E S T I M A T E'}
+                    <td colSpan={isChallanMode ? 4 : 6} style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, letterSpacing: 2, padding: '6px 0', borderBottom: '1px solid #000' }}>
+                      {isChallanMode ? 'DELIVERY CHALLAN' : estimate.type === 'QUOTATION' ? 'Q U O T A T I O N' : estimate.type === 'RETURN' ? 'S A L E S   R E T U R N' : 'E S T I M A T E'}
                       {pages.length > 1 && <span style={{ fontSize: 10, fontWeight: 400, position: 'absolute', right: 8, top: 8 }}>(Page {pageIndex + 1}/{pages.length})</span>}
                     </td>
                   </tr>
 
                   {/* Meta details */}
                   <tr>
-                    {/* Left side: Site, Client & Mobile */}
-                    <td colSpan={3} style={{ padding: '6px 10px', verticalAlign: 'top', borderBottom: '1px solid #000', borderRight: '1px solid #000' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <tbody>
-                          {[
-                            ['Site', estimate.site_name],
-                            ['Client', estimate.client_name || estimate.transport || ''],
-                            ['Mobile', estimate.client_mobile || ''],
-                          ].map(([label, val]) => (
-                            <tr key={label}>
-                              <td style={{ width: 52, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
-                              <td style={{ width: 10, paddingBottom: 2 }}>:</td>
-                              <td style={{ fontWeight: label === 'Site' ? 700 : 400, paddingBottom: 2 }}>{val}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                    {/* Right side: Date, No. & Prepared By */}
-                    <td colSpan={3} style={{ padding: '6px 10px', verticalAlign: 'top', borderBottom: '1px solid #000' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <tbody>
-                          {[
-                            ['Date', estimate.bill_date],
-                            ['No.', estimate.bill_number],
-                            ['Prep. By', estimate.prepared_by || ''],
-                          ].map(([label, val]) => (
-                            <tr key={label}>
-                              <td style={{ width: 68, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
-                              <td style={{ width: 10, paddingBottom: 2 }}>:</td>
-                              <td style={{ fontWeight: 400, paddingBottom: 2 }}>{val}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <td colSpan={isChallanMode ? 4 : 6} style={{ padding: 0, borderBottom: '1px solid #000' }}>
+                      <div style={{ display: 'flex', width: '100%' }}>
+                        {/* Left side: Site, Client & Mobile */}
+                        <div style={{ flex: 1, padding: '6px 10px', borderRight: '1px solid #000' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <tbody>
+                              {[
+                                ['Site', estimate.site_name],
+                                ['Client', estimate.client_name || estimate.transport || ''],
+                                ['Mobile', estimate.client_mobile || ''],
+                              ].map(([label, val]) => (
+                                <tr key={label}>
+                                  <td style={{ width: 52, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
+                                  <td style={{ width: 10, paddingBottom: 2 }}>:</td>
+                                  <td style={{ fontWeight: label === 'Site' ? 700 : 400, paddingBottom: 2 }}>{val}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {/* Right side: Date, No. & Prepared By */}
+                        <div style={{ width: '240px', padding: '6px 10px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <tbody>
+                              {[
+                                ['Date', estimate.bill_date],
+                                ['No.', estimate.bill_number],
+                                ['Prep. By', estimate.prepared_by || ''],
+                              ].map(([label, val]) => (
+                                <tr key={label}>
+                                  <td style={{ width: 68, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
+                                  <td style={{ width: 10, paddingBottom: 2 }}>:</td>
+                                  <td style={{ fontWeight: 400, paddingBottom: 2 }}>{val}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </td>
                   </tr>
 
                   {/* Table header */}
                   <tr style={{ background: '#f0f0f0' }}>
-                    {['Sr No', 'Description of Goods', 'Nos.', 'Quantity', 'Rate', 'Amount'].map((h, i) => (
-                      <td key={h} style={{
-                        border: '1px solid #000', padding: '6px 4px', fontWeight: 700,
-                        textAlign: i === 1 ? 'left' : 'center',
-                        fontSize: 12,
-                        whiteSpace: 'nowrap',
-                        width: i === 0 ? 42 : i === 1 ? 'auto' : i === 2 ? 42 : i === 3 ? 68 : i === 4 ? 72 : 94
-                      }}>{h}</td>
-                    ))}
+                    {['Sr No', 'Description of Goods', 'Nos.', 'Quantity', 'Rate', 'Amount']
+                      .filter(h => !isChallanMode || (h !== 'Rate' && h !== 'Amount'))
+                      .map((h, i) => (
+                        <td key={h} style={{
+                          border: '1px solid #000', padding: '6px 4px', fontWeight: 700,
+                          textAlign: h === 'Description of Goods' ? 'left' : 'center',
+                          fontSize: 12,
+                          whiteSpace: 'nowrap',
+                          width: h === 'Sr No' ? 42 : h === 'Description of Goods' ? 'auto' : h === 'Nos.' ? 42 : h === 'Quantity' ? 68 : h === 'Rate' ? 72 : 94
+                        }}>{h}</td>
+                      ))}
                   </tr>
 
                   {/* Brought Forward Row */}
@@ -504,9 +598,11 @@ export default function EstimateView() {
                       <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
                         {page.brought.qty % 1 === 0 ? page.brought.qty : page.brought.qty.toFixed(2)}
                       </td>
-                      <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
-                        {page.brought.amt.toFixed(2)}
-                      </td>
+                      {!isChallanMode && (
+                        <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
+                          {page.brought.amt.toFixed(2)}
+                        </td>
+                      )}
                     </tr>
                   )}
 
@@ -527,12 +623,16 @@ export default function EstimateView() {
                       <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
                         {it.quantity} {it.unit_snapshot}
                       </td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
-                        {Number(it.rate).toFixed(2)}
-                      </td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
-                        {Number(it.amount).toFixed(2)}
-                      </td>
+                      {!isChallanMode && (
+                        <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
+                          {Number(it.rate).toFixed(2)}
+                        </td>
+                      )}
+                      {!isChallanMode && (
+                        <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
+                          {Number(it.amount).toFixed(2)}
+                        </td>
+                      )}
                     </tr>
                   ))}
 
@@ -543,8 +643,8 @@ export default function EstimateView() {
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
+                      {!isChallanMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
+                      {!isChallanMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
                     </tr>
                   ))}
 
@@ -558,31 +658,80 @@ export default function EstimateView() {
                       <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
                         {page.carried.qty % 1 === 0 ? page.carried.qty : page.carried.qty.toFixed(2)}
                       </td>
-                      <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
-                        {page.carried.amt.toFixed(2)}
-                      </td>
+                      {!isChallanMode && (
+                        <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
+                          {page.carried.amt.toFixed(2)}
+                        </td>
+                      )}
                     </tr>
                   )}
 
                   {/* Totals row (only on last page) */}
                   {page.isLast && (
                     <>
-                      <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
-                        <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
-                        <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
-                          {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
-                        </td>
-                        <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
-                          {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
-                        </td>
-                        <td style={{ border: '1px solid #000', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
-                          {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
-                        </td>
-                        <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          {grandTotal.toFixed(2)}
-                        </td>
-                      </tr>
-                      {estimate?.type === 'ESTIMATE' && estimate?.client_id && (
+                      {estimate?.gst_percent > 0 ? (
+                        <>
+                          <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
+                            <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
+                            <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                              {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                              {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
+                            </td>
+                            {!isChallanMode && (
+                              <>
+                                <td style={{ border: '1px solid #000', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
+                                  Sub Total
+                                </td>
+                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                  {Number(estimate.sub_total).toFixed(2)}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                          {!isChallanMode && (
+                            <>
+                              <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
+                                <td colSpan={5} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12 }}>GST @ {estimate.gst_percent}%</td>
+                                <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13 }}>
+                                  {Number(estimate.gst_amount).toFixed(2)}
+                                </td>
+                              </tr>
+                              <tr style={{ background: '#f9f9f9', fontWeight: 800 }}>
+                                <td colSpan={4} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none' }}></td>
+                                <td style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
+                                  {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
+                                </td>
+                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                  {grandTotal.toFixed(2)}
+                                </td>
+                              </tr>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
+                          <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
+                          <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                            {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
+                          </td>
+                          <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                            {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
+                          </td>
+                          {!isChallanMode && (
+                            <>
+                              <td style={{ border: '1px solid #000', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
+                                {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                {grandTotal.toFixed(2)}
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      )}
+                      {estimate?.type === 'ESTIMATE' && estimate?.client_id && !isChallanMode && (
                         <>
                           <tr>
                             <td colSpan={4} style={{ border: '1px solid #000', padding: '4px 8px', borderRight: 'none' }}></td>
@@ -623,6 +772,8 @@ export default function EstimateView() {
             margin: 0 !important; 
             padding: 0 !important; 
             overflow: visible !important;
+            max-width: none !important;
+            width: 100% !important;
           }
           #print-area {
             padding: 0 !important;

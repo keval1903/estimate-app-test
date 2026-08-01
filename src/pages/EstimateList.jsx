@@ -16,7 +16,7 @@ export default function EstimateList() {
   const [collapsedDates, setCollapsedDates] = useState(new Set())
   const [activeTab, setActiveTab] = useState(() => {
     const p = new URLSearchParams(window.location.search).get('tab')
-    return p === 'quotations' ? 'QUOTATION' : 'ESTIMATE'
+    return p === 'quotations' ? 'QUOTATION' : p === 'returns' ? 'RETURN' : 'ESTIMATE'
   })
 
   const fetchEstimates = useCallback(async () => {
@@ -35,6 +35,8 @@ export default function EstimateList() {
 
         if (activeTab === 'QUOTATION') {
           query = query.eq('type', 'QUOTATION')
+        } else if (activeTab === 'RETURN') {
+          query = query.eq('type', 'RETURN')
         } else {
           query = query.or('type.eq.ESTIMATE,type.is.null')
         }
@@ -74,7 +76,18 @@ export default function EstimateList() {
         description: `Bill #${est.bill_number} (Preserved Balance)`,
         payment_mode: ''
       })
+    } else if (est.type === 'RETURN' && est.client_id) {
+      await supabase.from('payments').insert({
+        client_id: est.client_id,
+        payment_date: est.bill_date,
+        amount: Math.abs(est.grand_total || 0),
+        description: `Return #${est.bill_number} (Preserved Balance)`,
+        payment_mode: ''
+      })
     }
+
+    // also delete from client_purchases
+    await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number);
 
     // items cascade-delete via FK
     const { error } = await supabase.from('estimates').delete().eq('id', est.id)
@@ -95,17 +108,27 @@ export default function EstimateList() {
     const arr = Array.from(selectedIds)
     
     // get full estimates for these IDs to preserve ledger
-    const { data: estsToPreserve } = await supabase.from('estimates').select('*').in('id', arr).eq('type', 'ESTIMATE').not('client_id', 'is', null)
+    const { data: estsToPreserve } = await supabase.from('estimates').select('*').in('id', arr).in('type', ['ESTIMATE', 'RETURN']).not('client_id', 'is', null)
     
     if (estsToPreserve && estsToPreserve.length > 0) {
-      const inserts = estsToPreserve.map(e => ({
-        client_id: e.client_id,
-        payment_date: e.bill_date,
-        amount: -Math.abs(e.grand_total || 0),
-        description: `Bill #${e.bill_number} (Preserved Balance)`,
-        payment_mode: ''
-      }))
+      const inserts = estsToPreserve.map(e => {
+        const isReturn = e.type === 'RETURN';
+        return {
+          client_id: e.client_id,
+          payment_date: e.bill_date,
+          amount: isReturn ? Math.abs(e.grand_total || 0) : -Math.abs(e.grand_total || 0),
+          description: isReturn ? `Return #${e.bill_number} (Preserved Balance)` : `Bill #${e.bill_number} (Preserved Balance)`,
+          payment_mode: ''
+        };
+      })
       await supabase.from('payments').insert(inserts)
+    }
+
+    // delete client purchases for selected estimates
+    const { data: estsToDelete } = await supabase.from('estimates').select('bill_number').in('id', arr);
+    if (estsToDelete && estsToDelete.length > 0) {
+      const billNumbers = estsToDelete.map(e => e.bill_number);
+      await supabase.from('client_purchases').delete().in('bill_number', billNumbers);
     }
 
     const { error } = await supabase.from('estimates').delete().in('id', arr)
@@ -203,7 +226,7 @@ export default function EstimateList() {
     <div className="app-container">
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate('/')}>←</button>
-        <span className="nav-title">{activeTab === 'QUOTATION' ? 'Previous Quotations' : 'Previous Estimates'}</span>
+        <span className="nav-title">{activeTab === 'QUOTATION' ? 'Previous Quotations' : activeTab === 'RETURN' ? 'Previous Returns' : 'Previous Estimates'}</span>
       </div>
 
       <div className="page">
@@ -229,13 +252,23 @@ export default function EstimateList() {
           >
             📜 Quotations ({activeTab === 'QUOTATION' ? estimates.length : 'Quotes'})
           </button>
+          <button
+            className={`btn btn-sm ${activeTab === 'RETURN' ? 'btn-danger' : 'btn-secondary'}`}
+            style={{ flex: 1, background: activeTab === 'RETURN' ? '#dc2626' : undefined, color: activeTab === 'RETURN' ? '#fff' : undefined }}
+            onClick={() => {
+              setActiveTab('RETURN')
+              window.history.replaceState(null, '', '?tab=returns')
+            }}
+          >
+            ↩️ Returns ({activeTab === 'RETURN' ? estimates.length : 'Returns'})
+          </button>
         </div>
 
         {/* Search */}
         <div className="search-bar">
           <span>🔍</span>
           <input
-            placeholder={`Search ${activeTab === 'QUOTATION' ? 'quotations' : 'estimates'} by number, site or client...`}
+            placeholder={`Search ${activeTab === 'QUOTATION' ? 'quotations' : activeTab === 'RETURN' ? 'returns' : 'estimates'} by number, site or client...`}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />

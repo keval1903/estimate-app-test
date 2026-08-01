@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -15,6 +15,32 @@ export default function ClientLedger() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [selectedRefs, setSelectedRefs] = useState(new Set())
+  const [activeTab, setActiveTab] = useState('ledger')
+  const [purchases, setPurchases] = useState([])
+  const [expandedProducts, setExpandedProducts] = useState(new Set())
+
+  const groupedPurchases = useMemo(() => {
+    const map = new Map();
+    purchases.forEach(p => {
+      const name = p.product_name || 'Manual Item';
+      if (!map.has(name)) {
+        map.set(name, { name, totalQty: 0, unit: p.unit || '', items: [], totalAmount: 0 });
+      }
+      const group = map.get(name);
+      group.totalQty += Number(p.quantity) || 0;
+      group.totalAmount += Number(p.amount) || 0;
+      if (!group.unit && p.unit) group.unit = p.unit;
+      group.items.push(p);
+    });
+    return Array.from(map.values()).sort((a,b) => b.totalAmount - a.totalAmount);
+  }, [purchases]);
+
+  const toggleExpand = (name) => {
+    const next = new Set(expandedProducts);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    setExpandedProducts(next);
+  }
 
   // Payment Modal
   const [showModal, setShowModal] = useState(false)
@@ -46,6 +72,9 @@ export default function ClientLedger() {
       const { data: payData, error: payErr } = await supabase.from('payments').select('*').eq('client_id', id)
       if (payErr) throw payErr;
 
+      const { data: purData, error: purErr } = await supabase.from('client_purchases').select('*').eq('client_id', id).order('created_at', { ascending: false })
+      if (!purErr && purData) setPurchases(purData)
+
       const entries = []
       
       // Opening Balance
@@ -67,6 +96,15 @@ export default function ClientLedger() {
             debit: 0,
             credit: 0,
             type: 'QUOTE',
+            ref: e.id
+          });
+        } else if (e.type === 'RETURN') {
+          entries.push({
+            date: e.bill_date,
+            description: `Sales Return #${e.bill_number}`,
+            debit: 0,
+            credit: e.grand_total,
+            type: 'RETURN',
             ref: e.id
           });
         } else {
@@ -466,8 +504,34 @@ export default function ClientLedger() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-               <div className="search-bar" style={{ flex: 1, margin: 0, minWidth: 200 }}>
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 16, borderBottom: '1px solid var(--border-light)' }}>
+              <button 
+                onClick={() => setActiveTab('ledger')}
+                style={{ 
+                  background: 'none', border: 'none', padding: '8px 16px', fontSize: 16, cursor: 'pointer',
+                  borderBottom: activeTab === 'ledger' ? '2px solid var(--primary-color)' : '2px solid transparent',
+                  color: activeTab === 'ledger' ? 'var(--primary-color)' : 'var(--text-muted)',
+                  fontWeight: activeTab === 'ledger' ? 700 : 400
+                }}>
+                Financial Ledger
+              </button>
+              <button 
+                onClick={() => setActiveTab('history')}
+                style={{ 
+                  background: 'none', border: 'none', padding: '8px 16px', fontSize: 16, cursor: 'pointer',
+                  borderBottom: activeTab === 'history' ? '2px solid var(--primary-color)' : '2px solid transparent',
+                  color: activeTab === 'history' ? 'var(--primary-color)' : 'var(--text-muted)',
+                  fontWeight: activeTab === 'history' ? 700 : 400
+                }}>
+                Item History
+              </button>
+            </div>
+
+            {activeTab === 'ledger' ? (
+              <>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                   <div className="search-bar" style={{ flex: 1, margin: 0, minWidth: 200 }}>
                   <span>🔍</span>
                   <input
                     placeholder="Search transactions..."
@@ -579,8 +643,58 @@ export default function ClientLedger() {
                   )}
                 </tbody>
               </table>
-            </div>
-
+              </div>
+              </>
+            ) : (
+              <div className="table-container" style={{ overflowX: 'auto', background: 'var(--surface-color)', borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>Bill No.</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>Item</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right' }}>Quantity</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right' }}>Rate</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right' }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupedPurchases.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>
+                          No items purchased yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      groupedPurchases.map(g => (
+                        <Fragment key={g.name}>
+                          <tr onClick={() => toggleExpand(g.name)} style={{ borderBottom: '1px solid #f1f5f9', background: expandedProducts.has(g.name) ? '#f8fafc' : 'transparent', cursor: 'pointer' }}>
+                            <td style={{ padding: '10px 12px', color: 'var(--primary-color)', width: '40px', textAlign: 'center' }}>
+                              {expandedProducts.has(g.name) ? '▼' : '▶'}
+                            </td>
+                            <td style={{ padding: '10px 12px' }}></td>
+                            <td style={{ padding: '10px 12px', fontWeight: 600 }}>{g.name}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>{Number(g.totalQty).toFixed(2)} {g.unit}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right' }}></td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>{Number(g.totalAmount).toFixed(2)}</td>
+                          </tr>
+                          {expandedProducts.has(g.name) && g.items.map(p => (
+                            <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9', background: '#fcfcfc' }}>
+                              <td style={{ padding: '8px 12px', color: '#64748b', textAlign: 'center' }}>{new Date(p.bill_date || p.created_at).toLocaleDateString('en-GB')}</td>
+                              <td style={{ padding: '8px 12px', color: '#64748b' }}>{p.bill_number}</td>
+                              <td style={{ padding: '8px 12px' }}></td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>{Number(p.quantity)} {p.unit}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>{Number(p.rate).toFixed(2)}</td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>{Number(p.amount).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
             {showModal && (
               <div className="modal-overlay">
                 <div className="modal-content">

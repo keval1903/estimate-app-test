@@ -57,6 +57,14 @@ export default function Home() {
           </div>
         </button>
 
+        <button className="home-btn" onClick={() => navigate('/estimate/new?type=RETURN')}>
+          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
+          <div>
+            <div className="home-btn-text">CREATE NEW SALES RETURN</div>
+            <div className="home-btn-sub">Log returned items and issue a credit note</div>
+          </div>
+        </button>
+
         <button className="home-btn" onClick={() => navigate('/products')}>
           <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
           <div>
@@ -98,6 +106,14 @@ export default function Home() {
           <div>
             <div className="home-btn-text">PREVIOUS ESTIMATES</div>
             <div className="home-btn-sub">View, edit or reprint old bills</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate('/estimates?tab=returns')}>
+          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
+          <div>
+            <div className="home-btn-text">PREVIOUS RETURNS</div>
+            <div className="home-btn-sub">View, edit or reprint sales returns</div>
           </div>
         </button>
 
