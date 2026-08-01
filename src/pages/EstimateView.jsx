@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
@@ -126,10 +127,10 @@ export default function EstimateView() {
   }
 
   async function handleSaveImage() {
-    setExporting('img')
-    setIsExportingSingleImage(true)
-    // Wait for React to render the unpaginated view
-    await new Promise(r => setTimeout(r, 150))
+    flushSync(() => {
+      setExporting('img')
+      setIsExportingSingleImage(true)
+    })
     try {
       const canvas = await generateCanvas(previewRef.current, 3)
       const link = document.createElement('a')
@@ -163,39 +164,44 @@ export default function EstimateView() {
 
   async function handleWhatsApp() {
     const text = getSummaryText()
-    setExporting('whatsapp')
-    setIsExportingSingleImage(true)
-    // Wait for React to render the unpaginated view
-    await new Promise(r => setTimeout(r, 150))
+    flushSync(() => {
+      setExporting('whatsapp')
+      setIsExportingSingleImage(true)
+    })
 
     try {
       // Try native share with image first (mobile/HTTPS)
-      if (navigator.share && navigator.canShare) {
+      if (navigator.share) {
         try {
           const canvas = await generateCanvas(previewRef.current, 3)
           const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
           const files = [new File([blob], getFilename('png'), { type: 'image/png' })]
 
-          if (navigator.canShare({ files })) {
+          // If canShare exists, check it. Otherwise, assume true and try anyway.
+          const isShareSupported = navigator.canShare ? navigator.canShare({ files }) : true;
+
+          if (isShareSupported) {
             try {
               await navigator.clipboard.writeText(text)
               showToast('Caption copied! Paste it in WhatsApp')
             } catch (e) { }
 
             await navigator.share({ files, title: `Estimate #${estimate.bill_number}`, text })
-            return
+            return // Success! Exit early.
           }
-        } catch { }
+        } catch { 
+          // Native share failed, fall through to fallback
+        }
       }
 
-      // Fallback for HTTP (local network) where navigator.share is blocked by the browser
+      // Fallback for when native file share is unsupported or blocked
       try {
         const canvas = await generateCanvas(previewRef.current, 3)
         const link = document.createElement('a')
         link.download = getFilename('png')
         link.href = canvas.toDataURL('image/png')
         link.click()
-        showToast('Image saved! Please attach it in WhatsApp.', 'success', 4000)
+        showToast('Image saved to device! Please attach it manually in WhatsApp.', 'success', 5000)
       } catch (e) { }
 
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')

@@ -47,9 +47,9 @@ function calcTotals(items) {
     const fresh = calcItem(it)
     const amt = fresh.amount ?? parseFloat(it.amount) ?? 0
     const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
-    total_nos      += isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
+    total_nos += isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
     total_quantity += parseFloat(it.quantity) || 0
-    grand_total    += amt
+    grand_total += amt
   }
   return {
     total_nos: +total_nos.toFixed(2),
@@ -116,7 +116,7 @@ export default function CreateEstimate() {
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM)
   const [showProductCustomUnit, setShowProductCustomUnit] = useState(false)
   const [savingProduct, setSavingProduct] = useState(false)
-  
+
   const { isListening, startListening, error: voiceError } = useVoiceSearch({
     onResult: (text) => {
       setProductSearch(text)
@@ -131,6 +131,7 @@ export default function CreateEstimate() {
   // ── Form State ──autocomplete
   const [clientSuggestions, setClientSuggestions] = useState([])
   const [showClientSuggestions, setShowClientSuggestions] = useState(false)
+  const [clientSuggestionIdx, setClientSuggestionIdx] = useState(-1)
   const [siteSuggestions, setSiteSuggestions] = useState([])
   const [showSiteSuggestions, setShowSiteSuggestions] = useState(false)
   const [allSites, setAllSites] = useState([])
@@ -144,10 +145,10 @@ export default function CreateEstimate() {
   //── Load products & sites ──
   useEffect(() => {
     Promise.all([
-        supabase.from('products').select('*').order('product_name').range(0, 999),
-        supabase.from('products').select('*').order('product_name').range(1000, 1999)
+      supabase.from('products').select('*').order('product_name').range(0, 999),
+      supabase.from('products').select('*').order('product_name').range(1000, 1999)
     ]).then(([batch1, batch2]) => {
-      setAllProducts ([...(batch1.data || []), ...(batch2.data || [])])
+      setAllProducts([...(batch1.data || []), ...(batch2.data || [])])
     })
     supabase.from('sites').select('*').order('site_name')
       .then(({ data }) => setAllSites(data || []))
@@ -162,7 +163,7 @@ export default function CreateEstimate() {
       let parsedDraft = null
       const savedDraft = localStorage.getItem(draftKey)
       if (savedDraft) {
-        try { parsedDraft = JSON.parse(savedDraft) } catch (e) {}
+        try { parsedDraft = JSON.parse(savedDraft) } catch (e) { }
       }
 
       if (isEdit) {
@@ -170,7 +171,7 @@ export default function CreateEstimate() {
         const { data: est, error } = await supabase
           .from('estimates').select('*').eq('id', id).single()
         if (error || !est) { showToast('Estimate not found', 'error'); navigate('/estimates'); return }
-        
+
         if (parsedDraft) {
           setBillDate(parsedDraft.billDate)
           setClientName(parsedDraft.clientName || parsedDraft.transport || '')
@@ -228,19 +229,19 @@ export default function CreateEstimate() {
 
     // Load clients for autocomplete
     async function loadClientNames() {
-      const { data: cData } = await supabase.from('clients').select('name, mobile')
+      const { data: cData } = await supabase.from('clients').select('id, name, mobile')
       const { data: eData } = await supabase.from('estimates').select('client_name, client_mobile')
       const cmap = new Map()
       if (cData) cData.forEach(c => {
-        if (c.name) cmap.set(c.name.trim().toUpperCase(), c.mobile || '')
+        if (c.name) cmap.set(c.name.trim().toUpperCase(), { id: c.id, mobile: c.mobile || '' })
       })
       if (eData) eData.forEach(e => {
         if (e.client_name) {
-           const n = e.client_name.trim().toUpperCase()
-           if (!cmap.has(n)) cmap.set(n, e.client_mobile || '')
+          const n = e.client_name.trim().toUpperCase()
+          if (!cmap.has(n)) cmap.set(n, { id: null, mobile: e.client_mobile || '' })
         }
       })
-      const merged = Array.from(cmap.keys()).map(name => ({ name, mobile: cmap.get(name) })).sort((a,b) => a.name.localeCompare(b.name))
+      const merged = Array.from(cmap.entries()).map(([name, val]) => ({ name, id: val.id, mobile: val.mobile })).sort((a, b) => a.name.localeCompare(b.name))
       setAllClients(merged)
     }
     loadClientNames()
@@ -316,25 +317,25 @@ export default function CreateEstimate() {
   useEffect(() => {
     let q = productSearch.trim().toLowerCase()
     q = normalizeSearchQuery(q)
-    
-    if (!q) { 
+
+    if (!q) {
       setProductSuggestions(allProducts)
       setSuggestionIdx(-1)
-      return 
+      return
     }
     const searchTerms = q.split(/\s+/)
     const smartTerms = q.match(/[a-z]+|[0-9]+/g) || []
-    
+
     const results = allProducts.filter(p => {
       const pName = p.product_name.toLowerCase()
       const matchesAllTerms = searchTerms.every(term => pName.includes(term))
       const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
-      
-      return pName.includes(q) || 
-             pName.replace(/\s+/g, '').includes(q.replace(/\s+/g, '')) ||
-             matchesAllTerms ||
-             matchesSmartTerms ||
-             isFuzzyMatch(q.replace(/\s+/g, ''), pName)
+
+      return pName.includes(q) ||
+        pName.replace(/\s+/g, '').includes(q.replace(/\s+/g, '')) ||
+        matchesAllTerms ||
+        matchesSmartTerms ||
+        isFuzzyMatch(q.replace(/\s+/g, ''), pName)
     })
     setProductSuggestions(results)
     setSuggestionIdx(-1)
@@ -344,10 +345,11 @@ export default function CreateEstimate() {
   useEffect(() => {
     const qRaw = clientName.trim().toLowerCase()
     const q = qRaw.replace(/\s+/g, '')
-    if (!q) { 
+    if (!q) {
       setClientSuggestions([])
       setShowClientSuggestions(false)
-      return 
+      setClientSuggestionIdx(-1)
+      return
     }
     const searchTerms = qRaw.split(/\s+/)
     const smartTerms = qRaw.match(/[a-z]+|[0-9]+/g) || []
@@ -356,24 +358,22 @@ export default function CreateEstimate() {
       const cName = c.name.toLowerCase()
       const matchesAllTerms = searchTerms.every(term => cName.includes(term))
       const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => cName.includes(term))
-      return cName.includes(qRaw) || 
-             cName.replace(/\s+/g, '').includes(q) ||
-             matchesAllTerms || matchesSmartTerms ||
-             isFuzzyMatch(q, cName)
+      return cName.includes(qRaw) ||
+        cName.replace(/\s+/g, '').includes(q) ||
+        matchesAllTerms || matchesSmartTerms ||
+        isFuzzyMatch(q, cName)
     }).slice(0, 8)
     setClientSuggestions(results)
-    if (document.activeElement === clientInputRef.current) {
-      setShowClientSuggestions(results.length > 0)
-    }
+    setClientSuggestionIdx(-1)
   }, [clientName, allClients])
 
   // ── Site search ──
   useEffect(() => {
     const qRaw = siteName.trim().toLowerCase()
     const q = qRaw.replace(/\s+/g, '')
-    if (!qRaw) { 
+    if (!qRaw) {
       setSiteSuggestions(allSites.slice(0, 8))
-      return 
+      return
     }
     const searchTerms = qRaw.split(/\s+/)
     const smartTerms = qRaw.match(/[a-z]+|[0-9]+/g) || []
@@ -382,10 +382,10 @@ export default function CreateEstimate() {
       const sName = s.site_name.toLowerCase()
       const matchesAllTerms = searchTerms.every(term => sName.includes(term))
       const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => sName.includes(term))
-      return sName.includes(qRaw) || 
-             sName.replace(/\s+/g, '').includes(q) ||
-             matchesAllTerms || matchesSmartTerms ||
-             isFuzzyMatch(q, sName)
+      return sName.includes(qRaw) ||
+        sName.replace(/\s+/g, '').includes(q) ||
+        matchesAllTerms || matchesSmartTerms ||
+        isFuzzyMatch(q, sName)
     }).slice(0, 8)
     setSiteSuggestions(results)
   }, [siteName, allSites])
@@ -448,6 +448,26 @@ export default function CreateEstimate() {
       } else {
         selectProduct(productSuggestions[0])
       }
+    }
+  }
+
+  function handleClientKeyDown(e) {
+    if (!showClientSuggestions || clientSuggestions.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setClientSuggestionIdx(prev => (prev < clientSuggestions.length - 1 ? prev + 1 : prev))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setClientSuggestionIdx(prev => (prev > 0 ? prev - 1 : 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      let selected = clientSuggestions[0]
+      if (clientSuggestionIdx >= 0 && clientSuggestionIdx < clientSuggestions.length) {
+        selected = clientSuggestions[clientSuggestionIdx]
+      }
+      setClientName(selected.name)
+      if (selected.mobile && !clientMobile) setClientMobile(selected.mobile)
+      setShowClientSuggestions(false)
     }
   }
 
@@ -533,7 +553,7 @@ export default function CreateEstimate() {
     if (productForm.rate === '' || productForm.rate === null || productForm.rate === undefined || isNaN(productForm.rate) || Number(productForm.rate) < 0) return 'Valid rate is required'
     if (productForm.calculation_type === 'SQFT' || productForm.calculation_type === 'INCH' || productForm.calculation_type === 'FEET') {
       if (!productForm.length || isNaN(productForm.length)) return 'Length is required'
-      if (!productForm.width  || isNaN(productForm.width))  return 'Width is required'
+      if (!productForm.width || isNaN(productForm.width)) return 'Width is required'
     }
     if (productForm.has_stock) {
       if (productForm.stock === '' || isNaN(productForm.stock)) return 'Valid stock amount is required'
@@ -551,7 +571,7 @@ export default function CreateEstimate() {
       unit: productForm.unit.trim(), rate: Number(productForm.rate),
       calculation_type: productForm.calculation_type,
       length: isDimensionBased && productForm.length ? Number(productForm.length) : null,
-      width:  isDimensionBased && productForm.width  ? Number(productForm.width)  : null,
+      width: isDimensionBased && productForm.width ? Number(productForm.width) : null,
       has_stock: productForm.has_stock,
       stock: productForm.has_stock ? Number(productForm.stock) : 0,
       min_stock: productForm.has_stock ? Number(productForm.min_stock || 5) : 5,
@@ -560,11 +580,11 @@ export default function CreateEstimate() {
       keyword: productForm.keyword ? productForm.keyword.trim() : null,
       updated_at: new Date().toISOString()
     }
-    
+
     const { data, error } = await supabase.from('products').insert(payload).select().single()
     setSavingProduct(false)
     if (error) { showToast('Save failed: ' + error.message, 'error'); return }
-    
+
     if (payload.has_stock) {
       await supabase.from('stock_history').insert({
         product_id: data.id,
@@ -572,11 +592,11 @@ export default function CreateEstimate() {
         quantity_changed: payload.stock
       })
     }
-    
+
     showToast('Product added ✓')
     setAllProducts(prev => {
       const next = [...prev, data]
-      next.sort((a,b) => a.product_name.localeCompare(b.product_name))
+      next.sort((a, b) => a.product_name.localeCompare(b.product_name))
       return next
     })
     setShowProductModal(false)
@@ -605,7 +625,7 @@ export default function CreateEstimate() {
     if (itemForm.has_stock) {
       const availStock = Number(itemForm.stock || 0)
       const requestedQty = isPieceBased ? (parseFloat(itemForm.nos) || 0) : (parseFloat(itemForm.quantity) || 0)
-      
+
       const otherItemsQty = items
         .filter((_, idx) => idx !== editingItemIdx)
         .filter(it => it.product_id === itemForm.product_id)
@@ -613,7 +633,7 @@ export default function CreateEstimate() {
           const itPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET'
           return sum + (itPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0))
         }, 0)
-      
+
       const totalRequested = otherItemsQty + requestedQty
       if (totalRequested > availStock) {
         const unit = itemForm.unit_snapshot || 'units'
@@ -853,8 +873,8 @@ export default function CreateEstimate() {
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)}>←</button>
         <span className="nav-title">
-          {isEdit 
-            ? `Edit ${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'} #${existingBillNumber}` 
+          {isEdit
+            ? `Edit ${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'} #${existingBillNumber}`
             : `New ${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'}`}
         </span>
       </div>
@@ -930,7 +950,7 @@ export default function CreateEstimate() {
 
           <div className="field-row">
             <div className="field">
-              <label>Client Name</label>
+              <label>Client Name *</label>
               <div className="autocomplete-wrap">
                 <input
                   ref={clientInputRef}
@@ -940,17 +960,20 @@ export default function CreateEstimate() {
                     setClientName(val)
                     const found = allClients.find(c => c.name.toUpperCase() === val.trim())
                     if (found && found.mobile && !clientMobile) setClientMobile(found.mobile)
+                    setShowClientSuggestions(true)
                   }}
+                  onKeyDown={handleClientKeyDown}
                   onFocus={() => clientName && setShowClientSuggestions(clientSuggestions.length > 0)}
                   onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
-                  placeholder="Client name (optional)"
+                  placeholder="Client name (mandatory)"
                   style={{ textTransform: 'uppercase' }}
                 />
                 {showClientSuggestions && (
                   <div className="autocomplete-list">
                     {clientSuggestions.map((s, idx) => (
                       <div key={idx} className="autocomplete-item"
-                        onMouseDown={() => { 
+                        style={clientSuggestionIdx === idx ? { background: 'var(--bg)', borderLeft: '3px solid var(--accent)' } : {}}
+                        onMouseDown={() => {
                           setClientName(s.name)
                           if (s.mobile && !clientMobile) setClientMobile(s.mobile)
                           setShowClientSuggestions(false)
@@ -977,15 +1000,15 @@ export default function CreateEstimate() {
 
           {/* Site name with autocomplete */}
           <div className="field">
-            <label>Site Name *</label>
+            <label>Site Name</label>
             <div className="autocomplete-wrap">
               <input
                 ref={siteInputRef}
                 value={siteName}
-                onChange={e => setSiteName(e.target.value)}
+                onChange={e => { setSiteName(e.target.value); setShowSiteSuggestions(true) }}
                 onFocus={() => siteName && setShowSiteSuggestions(siteSuggestions.length > 0)}
                 onBlur={() => setTimeout(() => setShowSiteSuggestions(false), 200)}
-                placeholder="e.g. DINESH PANDE"
+                placeholder=""
                 style={{ textTransform: 'uppercase' }}
               />
               {showSiteSuggestions && (
@@ -1063,10 +1086,10 @@ export default function CreateEstimate() {
             style={{ flexShrink: 0 }}>Cancel</button>
           <button className="btn btn-primary btn-full btn-lg"
             onClick={handleGenerate} disabled={saving}>
-            {saving 
-              ? 'Saving...' 
-              : isEdit 
-                ? '💾 SAVE CHANGES' 
+            {saving
+              ? 'Saving...'
+              : isEdit
+                ? '💾 SAVE CHANGES'
                 : (docType === 'QUOTATION' ? '📜 GENERATE QUOTATION' : '📄 GENERATE ESTIMATE')}
           </button>
         </div>
@@ -1098,14 +1121,14 @@ export default function CreateEstimate() {
                       autoComplete="off"
                       style={{ paddingRight: 40 }}
                     />
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className={`btn btn-ghost btn-sm ${isListening ? 'listening' : ''}`}
                       style={{ position: 'absolute', right: 4, padding: '4px 8px', color: isListening ? 'var(--danger-color)' : 'var(--text-muted)' }}
-                      onPointerDown={(e) => { 
-                        e.preventDefault(); 
+                      onPointerDown={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
-                        if (isListening) stopListening(); else startListening(); 
+                        if (isListening) stopListening(); else startListening();
                       }}
                       title={voiceError || 'Voice Search'}
                     >
@@ -1149,7 +1172,7 @@ export default function CreateEstimate() {
                 )}
               </div>
             )}
-            
+
             {itemForm.keyword_snapshot && (
               <div style={{ background: '#fff3cd', color: '#856404', border: '1px solid #ffeeba', borderRadius: 8, padding: '8px 12px', marginBottom: 16, fontSize: 13, fontWeight: 700, textAlign: 'center', textTransform: 'uppercase' }}>
                 {itemForm.keyword_snapshot}
@@ -1168,9 +1191,9 @@ export default function CreateEstimate() {
                 {itemForm.nos && itemForm.length_snapshot && itemForm.width_snapshot && (
                   <div style={{ fontSize: 13, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
                     {itemForm.calculation_type_snapshot === 'SQFT' ? (
-                      `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} = ${(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos)||0)).toFixed(2)} Sq.Ft`
+                      `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} = ${(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0)).toFixed(2)} Sq.Ft`
                     ) : (
-                      `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} × ₹${itemForm.rate} = ₹${Math.ceil(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos)||0) * (parseFloat(itemForm.rate)||0)).toLocaleString('en-IN')} (Qty: ${itemForm.nos} ${itemForm.unit_snapshot})`
+                      `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} × ₹${itemForm.rate} = ₹${Math.ceil(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0) * (parseFloat(itemForm.rate) || 0)).toLocaleString('en-IN')} (Qty: ${itemForm.nos} ${itemForm.unit_snapshot})`
                     )}
                   </div>
                 )}
@@ -1249,16 +1272,16 @@ export default function CreateEstimate() {
               <span>Add New Product</span>
               <button className="btn btn-ghost" onClick={() => setShowProductModal(false)}>✕</button>
             </div>
-              <div className="field">
-                <label>Product Name *</label>
-                <input name="product_name" value={productForm.product_name} onChange={handleProductFormChange}
-                  placeholder="e.g. C PLY 4 18 MM 7 x 4" style={{ textTransform:'uppercase' }} autoFocus />
-              </div>
-              <div className="field">
-                <label>Highlight Keyword (Optional)</label>
-                <input name="keyword" value={productForm.keyword || ''} onChange={handleProductFormChange}
-                  placeholder="e.g. PLYWOOD or SPECIAL OFFER" />
-              </div>
+            <div className="field">
+              <label>Product Name *</label>
+              <input name="product_name" value={productForm.product_name} onChange={handleProductFormChange}
+                placeholder="e.g. C PLY 4 18 MM 7 x 4" style={{ textTransform: 'uppercase' }} autoFocus />
+            </div>
+            <div className="field">
+              <label>Highlight Keyword (Optional)</label>
+              <input name="keyword" value={productForm.keyword || ''} onChange={handleProductFormChange}
+                placeholder="e.g. PLYWOOD or SPECIAL OFFER" />
+            </div>
             <div className="field-row">
               <div className="field">
                 <label>Unit *</label>

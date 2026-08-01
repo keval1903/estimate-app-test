@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
+import { setSessionExpiry } from '../lib/sessionExpiry'
+
 export default function Login() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -35,6 +37,7 @@ export default function Login() {
       setError(error.message)
       setLoading(false)
     } else {
+      await setSessionExpiry()
       navigate('/', { replace: true })
     }
   }
