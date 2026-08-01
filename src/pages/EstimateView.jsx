@@ -341,7 +341,16 @@ export default function EstimateView() {
         amt: currentAmt
       };
 
-      result.push({ items: chunk, carried, brought, isLast });
+      let emptyRowsCount = 0;
+      if (isLast) {
+        const standardMaxRows = paperSize === 'a5' ? A5_ROWS : A4_ROWS;
+        const occupied = chunk.length + (!isFirst ? 1 : 0) + extraRows;
+        if (occupied < standardMaxRows) {
+          emptyRowsCount = standardMaxRows - occupied;
+        }
+      }
+
+      result.push({ items: chunk, carried, brought, isLast, emptyRowsCount });
       i += availableRowsForItems;
     }
     
@@ -527,13 +536,9 @@ export default function EstimateView() {
                     </tr>
                   ))}
 
-                  {/* Empty padding rows to perfectly align bottom */}
-                  {page.isLast && Array.from({ 
-                    length: isExportingSingleImage ? 0 : (layoutMode === 'compact' ? 2 : 
-                      Math.max(0, (paperSize === 'a5' ? A5_ROWS : A4_ROWS) - page.items.length - (page.brought ? 1 : 0) - (estimate?.type === 'ESTIMATE' && estimate?.client_id ? 4 : 2)))
-                  }).map((_, i) => (
+                  {/* Empty Filler Rows */}
+                  {page.emptyRowsCount > 0 && Array.from({ length: page.emptyRowsCount }).map((_, i) => (
                     <tr key={`empty-${i}`}>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
