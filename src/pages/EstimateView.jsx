@@ -539,6 +539,7 @@ export default function EstimateView() {
                   {/* Empty Filler Rows */}
                   {page.emptyRowsCount > 0 && Array.from({ length: page.emptyRowsCount }).map((_, i) => (
                     <tr key={`empty-${i}`}>
+                      <td style={{ border: '1px solid #000', padding: '2px 4px', height: '22px', fontSize: 12 }}>&nbsp;</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
