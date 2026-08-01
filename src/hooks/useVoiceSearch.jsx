@@ -1,5 +1,18 @@
 import { useState, useCallback, useRef } from 'react'
 
+function cleanTranscript(text) {
+  if (!text) return text;
+  let cleaned = text.toLowerCase();
+  // Common phonetic errors for hardware/plywood industry
+  cleaned = cleaned.replace(/\bfly\b/g, 'ply');
+  cleaned = cleaned.replace(/\bad\b/g, 'add');
+  cleaned = cleaned.replace(/\baddd\b/g, 'add');
+  cleaned = cleaned.replace(/\bmm\b/g, ' mm '); // ensure spacing around mm
+  // Collapse multiple spaces
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  return cleaned;
+}
+
 export function useVoiceSearch({ onResult, language = 'en-IN' }) {
   const [isListening, setIsListening] = useState(false)
   const [error, setError] = useState(null)
@@ -39,8 +52,9 @@ export function useVoiceSearch({ onResult, language = 'en-IN' }) {
           }
         }
         
-        const transcript = finalTranscript || interimTranscript
+        let transcript = finalTranscript || interimTranscript
         if (transcript && onResult) {
+          transcript = cleanTranscript(transcript)
           onResult(transcript)
         }
       }

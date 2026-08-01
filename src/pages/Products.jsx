@@ -551,7 +551,7 @@ export default function Products() {
             {search && <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')}>✕</button>}
             <button 
               type="button"
-              className={`btn btn-ghost btn-sm ${isListening ? 'listening' : ''}`}
+              className={`btn btn-ghost btn-sm ${isListening ? 'listening pulse-mic' : ''}`}
               style={{ color: isListening ? 'var(--danger-color)' : 'var(--text-muted)' }}
               onPointerDown={(e) => { 
                 e.preventDefault();
