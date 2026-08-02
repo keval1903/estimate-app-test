@@ -18,7 +18,10 @@ export default function EstimateView() {
   const [converting, setConverting] = useState(false)
   const [isExportingSingleImage, setIsExportingSingleImage] = useState(false)
   const [isChallanMode, setIsChallanMode] = useState(false)
+  const [scale, setScale] = useState(1)
+  const [previewHeight, setPreviewHeight] = useState(0)
   const previewRef = useRef()
+  const containerRef = useRef()
 
   useEffect(() => {
     async function load() {
@@ -46,6 +49,33 @@ export default function EstimateView() {
     }
     load()
   }, [id])
+
+  useEffect(() => {
+    function updateScale() {
+      if (!containerRef.current) return
+      const containerWidth = containerRef.current.clientWidth
+      const targetWidth = paperSize === 'a5' ? 529 : 763
+      if (containerWidth < targetWidth) {
+        setScale(containerWidth / targetWidth)
+      } else {
+        setScale(1)
+      }
+    }
+    updateScale()
+    window.addEventListener('resize', updateScale)
+    return () => window.removeEventListener('resize', updateScale)
+  }, [paperSize, loading])
+
+  useEffect(() => {
+    if (!previewRef.current) return
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setPreviewHeight(entry.contentRect.height)
+      }
+    })
+    observer.observe(previewRef.current)
+    return () => observer.disconnect()
+  }, [loading])
 
   function getFilename(ext) {
     const site = (estimate?.site_name || 'SITE').replace(/\s+/g, '-')
@@ -507,9 +537,14 @@ export default function EstimateView() {
       </div>
 
       {/* ── ESTIMATE PREVIEW ── */}
-      <div id="print-area" style={{ padding: '16px 8px 100px', background: 'var(--bg)', overflowX: 'auto' }}>
-        <div style={{ width: 'fit-content', margin: '0 auto' }}>
-          <div id="estimate-preview" ref={previewRef} style={{ display: 'flex', flexDirection: 'column', gap: '32px', minWidth: paperSize === 'a5' ? '529px' : '763px' }}>
+      <div id="print-area" style={{ padding: '16px 8px 100px', background: 'var(--bg)', display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
+        <div ref={containerRef} style={{ width: '100%', maxWidth: paperSize === 'a5' ? '529px' : '763px', height: previewHeight ? previewHeight * (exporting || isExportingSingleImage ? 1 : scale) : 'auto' }}>
+          <div style={{
+            transform: `scale(${exporting || isExportingSingleImage ? 1 : scale})`,
+            transformOrigin: 'top left',
+            width: paperSize === 'a5' ? '529px' : '763px'
+          }}>
+            <div id="estimate-preview" ref={previewRef} style={{ display: 'flex', flexDirection: 'column', gap: '32px', width: '100%' }}>
           {pages.map((page, pageIndex) => (
             <div key={pageIndex} className="estimate-page" style={{ pageBreakAfter: page.isLast ? 'auto' : 'always', position: 'relative' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', border: '1.5px solid #000', fontFamily: 'Arial, sans-serif', fontSize: 13, color: '#000', background: '#fff' }}>
@@ -750,7 +785,8 @@ export default function EstimateView() {
               </table>
             </div>
           ))}
-        </div>
+            </div>
+          </div>
         </div>
       </div>
 
