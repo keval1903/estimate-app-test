@@ -564,18 +564,18 @@ export default function ClientLedger() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: '800px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ padding: '12px', width: 40, textAlign: 'center' }}>
+                    <th style={{ padding: '12px', width: '5%', textAlign: 'center' }}>
                       <input 
                         type="checkbox" 
                         checked={filteredLedger.filter(l => l.type !== 'OPENING').length > 0 && filteredLedger.filter(l => l.type !== 'OPENING').every(l => selectedRefs.has(l.ref))} 
                         onChange={handleSelectAll} 
                       />
                     </th>
-                    <th style={{ padding: '12px', textAlign: 'left', whiteSpace: 'nowrap' }}>Date</th>
-                    <th style={{ padding: '12px', textAlign: 'left', whiteSpace: 'nowrap' }}>Description</th>
-                    <th style={{ padding: '12px', textAlign: 'right', whiteSpace: 'nowrap' }}>Debit (Material Dispatched)</th>
-                    <th style={{ padding: '12px', textAlign: 'right', whiteSpace: 'nowrap' }}>Credit (Payment Received)</th>
-                    <th style={{ padding: '12px', textAlign: 'right', whiteSpace: 'nowrap' }}>Balance</th>
+                    <th style={{ padding: '12px', width: '15%', textAlign: 'left', whiteSpace: 'nowrap' }}>Date</th>
+                    <th style={{ padding: '12px', width: '30%', textAlign: 'left', whiteSpace: 'nowrap' }}>Description</th>
+                    <th style={{ padding: '12px', width: '17%', textAlign: 'right', whiteSpace: 'nowrap' }}>Debit (Material Dispatched)</th>
+                    <th style={{ padding: '12px', width: '17%', textAlign: 'right', whiteSpace: 'nowrap' }}>Credit (Payment Received)</th>
+                    <th style={{ padding: '12px', width: '16%', textAlign: 'right', whiteSpace: 'nowrap' }}>Balance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -595,7 +595,7 @@ export default function ClientLedger() {
                           />
                         )}
                       </td>
-                      <td style={{ padding: '10px 12px' }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'left' }}>
                         {(() => {
                           const d = new Date(l.date)
                           if (!isNaN(d.getTime())) return d.toLocaleDateString('en-GB')
@@ -606,7 +606,7 @@ export default function ClientLedger() {
                           return String(l.date).replace(/-/g, '/')
                         })()}
                       </td>
-                      <td style={{ padding: '10px 12px', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
+                      <td style={{ padding: '10px 12px', width: '30%', textAlign: 'left', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span>{l.description}</span>
                           {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && (
@@ -631,9 +631,9 @@ export default function ClientLedger() {
                           )}
                         </div>
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#ef4444' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#10b981' }}>{l.credit > 0 ? l.credit.toFixed(2) : '-'}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: l.type === 'QUOTE' ? 400 : 600, color: l.type === 'QUOTE' ? '#94a3b8' : '#000' }}>
+                      <td style={{ padding: '10px 12px', width: '17%', textAlign: 'right', color: '#ef4444' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
+                      <td style={{ padding: '10px 12px', width: '17%', textAlign: 'right', color: '#10b981' }}>{l.credit > 0 ? l.credit.toFixed(2) : '-'}</td>
+                      <td style={{ padding: '10px 12px', width: '16%', textAlign: 'right', fontWeight: l.type === 'QUOTE' ? 400 : 600, color: l.type === 'QUOTE' ? '#94a3b8' : '#000' }}>
                         {Math.abs(l.balance).toFixed(2)} {l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}
                       </td>
                     </tr>
