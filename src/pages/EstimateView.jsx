@@ -532,45 +532,39 @@ export default function EstimateView() {
 
                   {/* Meta details */}
                   <tr>
-                    <td colSpan={isChallanMode ? 4 : 6} style={{ padding: 0, borderBottom: '1px solid #000' }}>
-                      <div style={{ display: 'flex', width: '100%' }}>
-                        {/* Left side: Site, Client & Mobile */}
-                        <div style={{ flex: 1, padding: '6px 10px', borderRight: '1px solid #000' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                            <tbody>
-                              {[
-                                ['Site', estimate.site_name],
-                                ['Client', estimate.client_name || estimate.transport || ''],
-                                ['Mobile', estimate.client_mobile || ''],
-                              ].map(([label, val]) => (
-                                <tr key={label}>
-                                  <td style={{ width: 52, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
-                                  <td style={{ width: 10, paddingBottom: 2 }}>:</td>
-                                  <td style={{ fontWeight: label === 'Site' ? 700 : 400, paddingBottom: 2 }}>{val}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        {/* Right side: Date, No. & Prepared By */}
-                        <div style={{ width: '240px', padding: '6px 10px' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                            <tbody>
-                              {[
-                                ['Date', estimate.bill_date],
-                                ['No.', estimate.bill_number],
-                                ['Prep. By', estimate.prepared_by || ''],
-                              ].map(([label, val]) => (
-                                <tr key={label}>
-                                  <td style={{ width: 68, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
-                                  <td style={{ width: 10, paddingBottom: 2 }}>:</td>
-                                  <td style={{ fontWeight: 400, paddingBottom: 2 }}>{val}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
+                    <td colSpan={3} style={{ padding: '6px 10px', borderBottom: '1px solid #000', borderRight: '1px solid #000' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <tbody>
+                          {[
+                            ['Site', estimate.site_name],
+                            ['Client', estimate.client_name || estimate.transport || ''],
+                            ['Mobile', estimate.client_mobile || ''],
+                          ].map(([label, val]) => (
+                            <tr key={label}>
+                              <td style={{ width: 52, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
+                              <td style={{ width: 10, paddingBottom: 2 }}>:</td>
+                              <td style={{ fontWeight: label === 'Site' ? 700 : 400, paddingBottom: 2 }}>{val}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                    <td colSpan={isChallanMode ? 1 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <tbody>
+                          {[
+                            ['Date', estimate.bill_date],
+                            ['No.', estimate.bill_number],
+                            ['Prep. By', estimate.prepared_by || ''],
+                          ].map(([label, val]) => (
+                            <tr key={label}>
+                              <td style={{ width: 68, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
+                              <td style={{ width: 10, paddingBottom: 2 }}>:</td>
+                              <td style={{ fontWeight: 400, paddingBottom: 2 }}>{val}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </td>
                   </tr>
 
