@@ -393,8 +393,8 @@ export default function EstimateView() {
   }
 
   // Smart Pagination Logic
-  const A5_ROWS = 23;
-  const A4_ROWS = 38;
+  const A5_ROWS = 20;
+  const A4_ROWS = 35;
   const SQUEEZE_LIMIT = 2;
 
   const pages = useMemo(() => {
