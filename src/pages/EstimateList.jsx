@@ -231,7 +231,7 @@ export default function EstimateList() {
 
       <div className="page">
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
           <button
             className={`btn btn-sm ${activeTab === 'ESTIMATE' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ flex: 1 }}
@@ -277,7 +277,7 @@ export default function EstimateList() {
           )}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <span className="section-label">{estimates.length} Estimate{estimates.length !== 1 ? 's' : ''}</span>
           {estimates.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -319,10 +319,10 @@ export default function EstimateList() {
                   </label>
                 </div>
                 {!isCollapsed && dateEsts.map(est => (
-                  <div key={est.id} className="estimate-row" style={{ border: selectedIds.has(est.id) ? '2px solid var(--primary-color)' : '1px solid var(--border-light)' }}>
+                  <div key={est.id} className="estimate-row" style={{ border: selectedIds.has(est.id) ? '2px solid var(--primary-color)' : '1px solid var(--border-light)', cursor: 'pointer' }} onClick={() => navigate(`/estimate/view/${est.id}`)}>
                     <div className="est-header">
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                        <input type="checkbox" checked={selectedIds.has(est.id)} onChange={() => toggleSelect(est.id)} style={{ width: 18, height: 18, marginTop: 4, cursor: 'pointer' }} />
+                        <input type="checkbox" checked={selectedIds.has(est.id)} onChange={() => toggleSelect(est.id)} onClick={(e) => e.stopPropagation()} style={{ width: 18, height: 18, marginTop: 4, cursor: 'pointer' }} />
                         <div>
                           <div className="est-bill" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             Bill #{est.bill_number}
@@ -343,22 +343,23 @@ export default function EstimateList() {
 
                     <div className="est-actions" style={{ marginLeft: 30 }}>
                       <button className="btn btn-secondary btn-sm"
-                        onClick={() => navigate(`/estimate/view/${est.id}`)}>
+                        onClick={(e) => { e.stopPropagation(); navigate(`/estimate/view/${est.id}`); }}>
                         👁 View
                       </button>
                       <button className="btn btn-primary btn-sm"
-                        onClick={() => navigate(`/estimate/edit/${est.id}`)}>
+                        onClick={(e) => { e.stopPropagation(); navigate(`/estimate/edit/${est.id}`); }}>
                         ✏️ Edit
                       </button>
                       <button className="btn btn-secondary btn-sm"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           navigate(`/estimate/view/${est.id}`)
                           setTimeout(() => window.print(), 800)
                         }}>
                         🖨 Print
                       </button>
                       <button className="btn btn-danger btn-sm"
-                        onClick={() => setDeleteConfirm(est)}>
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(est); }}>
                         🗑
                       </button>
                     </div>

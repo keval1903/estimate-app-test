@@ -154,8 +154,8 @@ export default function Clients() {
           <div style={{ textAlign: 'center', padding: 20 }}>Loading...</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-              <div className="search-bar" style={{ flex: 1, margin: 0 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+              <div className="search-bar" style={{ flex: '1 1 250px', margin: 0 }}>
                 <span>🔍</span>
                 <input
                   placeholder="Search clients by name or mobile..."
@@ -166,7 +166,7 @@ export default function Clients() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')}>✕</button>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {selectedClients.size > 0 && (
                   <button className="btn btn-danger" style={{ margin: 0, whiteSpace: 'nowrap', backgroundColor: '#dc2626' }} onClick={handleDeleteSelected}>
                     🗑️ Delete Selected ({selectedClients.size})
@@ -226,8 +226,8 @@ export default function Clients() {
                   )}
 
                   {filteredClients.map(c => (
-                    <div key={c.id} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: selectedClients.has(c.id) ? '#f0f9ff' : 'white' }} onClick={() => navigate(`/clients/${c.id}`)}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div key={c.id} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'center', backgroundColor: selectedClients.has(c.id) ? '#f0f9ff' : 'white' }} onClick={() => navigate(`/clients/${c.id}`)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: '150px' }}>
                         <input
                           type="checkbox"
                           style={{ width: 18, height: 18, cursor: 'pointer' }}
@@ -240,7 +240,7 @@ export default function Clients() {
                           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{c.mobile || 'No Mobile'}</div>
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 16 }}>
+                      <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                         <div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Outstanding Balance</div>
                           <div style={{ fontSize: 16, fontWeight: 700, color: c.balance > 0 ? '#ef4444' : (c.balance < 0 ? '#10b981' : '#000') }}>

@@ -205,6 +205,34 @@ export default function Products() {
     setDeleteConfirm(null)
   }
 
+  async function handleQuickAddStock(p) {
+    const isPieceBased = p.calculation_type === 'SQFT' || p.calculation_type === 'INCH' || p.calculation_type === 'FEET';
+    const displayUnit = isPieceBased ? 'Nos.' : p.unit;
+    const qtyStr = window.prompt(`Enter quantity to ADD to current stock (${p.stock} ${displayUnit}):`);
+    if (!qtyStr) return;
+    const qty = Number(qtyStr);
+    if (isNaN(qty) || qty <= 0) {
+      showToast('Please enter a valid positive number', 'error');
+      return;
+    }
+    setSaving(true);
+    const newStock = Number(p.stock || 0) + qty;
+    
+    const { error } = await supabase.from('products').update({ stock: newStock }).eq('id', p.id);
+    if (error) {
+      showToast('Failed to update stock: ' + error.message, 'error');
+    } else {
+      await supabase.from('stock_history').insert({
+        product_id: p.id,
+        change_type: 'MANUAL_ADJUST',
+        quantity_changed: qty
+      });
+      showToast(`Added ${qty} ${displayUnit} to stock ✓`);
+      fetchProducts();
+    }
+    setSaving(false);
+  }
+
   async function handleDeleteSelected() {
     if (selectedIds.size === 0) return
     if (!window.confirm(`Delete ${selectedIds.size} selected products?`)) return
@@ -617,6 +645,11 @@ export default function Products() {
               )}
             </div>
             <div className="item-actions" style={{ marginLeft: 26 }}>
+              {p.has_stock && (
+                <button className="btn btn-primary btn-sm" style={{ background: '#10b981' }} onClick={() => handleQuickAddStock(p)}>
+                  ➕ Stock
+                </button>
+              )}
               <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>✏️ Edit</button>
               <button className="btn btn-danger btn-sm" onClick={() => setDeleteConfirm(p)}>🗑 Delete</button>
             </div>
@@ -747,7 +780,7 @@ export default function Products() {
                     <input name="add_stock" type="number" inputMode="decimal"
                       value={form.add_stock} onChange={handleFormChange} placeholder="e.g. 10 to add 10 more" />
                     <div style={{ fontSize: 13, color: 'var(--accent)', marginTop: 6, fontWeight: 700 }}>
-                      Current: {form.stock || 0} → New Total: {Number(form.stock || 0) + (Number(form.add_stock) || 0)} {form.unit}
+                      Current: {form.stock || 0} → New Total: {Number(form.stock || 0) + (Number(form.add_stock) || 0)} {form.calculation_type === 'SQFT' || form.calculation_type === 'INCH' || form.calculation_type === 'FEET' ? 'Nos.' : form.unit}
                     </div>
                   </>
                 ) : (
@@ -757,7 +790,7 @@ export default function Products() {
                       value={form.stock} onChange={handleFormChange} placeholder="e.g. 100" />
                     {editingId && (
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                        Current Stock in system: {form.stock || 0} {form.unit}
+                        Current Stock in system: {form.stock || 0} {form.calculation_type === 'SQFT' || form.calculation_type === 'INCH' || form.calculation_type === 'FEET' ? 'Nos.' : form.unit}
                       </div>
                     )}
                   </>
