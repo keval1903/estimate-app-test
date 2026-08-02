@@ -666,7 +666,7 @@ export default function ClientLedger() {
             {activeTab === 'ledger' ? (
               <>
                 <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 550 }}>
                     <thead>
                       <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                         <th style={{ padding: '8px 4px', width: 30, textAlign: 'center' }}>
@@ -677,7 +677,7 @@ export default function ClientLedger() {
                           />
                         </th>
                         <th style={{ padding: '8px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>Date</th>
-                        <th style={{ padding: '8px 4px', textAlign: 'left' }}>Description</th>
+                        <th style={{ padding: '8px 4px', textAlign: 'left', minWidth: 120 }}>Description</th>
                         <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           Debit<br /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal' }}>(Material)</span>
                         </th>
