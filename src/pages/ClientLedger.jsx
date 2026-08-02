@@ -633,18 +633,6 @@ export default function ClientLedger() {
                               </button>
                             </div>
                           )}
-                          {l.type === 'BILL' && (
-                            <div style={{ display: 'flex' }}>
-                               <button 
-                                  className="btn btn-ghost btn-sm" 
-                                  style={{ padding: '2px 4px', margin: 0, color: 'var(--text-muted)' }}
-                                  onClick={() => handleNavigateToBill(l.ref)}
-                                  title="Open Estimate"
-                               >
-                                  👁️
-                               </button>
-                            </div>
-                          )}
                         </div>
                       </td>
                       <td style={{ padding: '8px 4px', textAlign: 'right', color: '#ef4444', whiteSpace: 'nowrap' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
