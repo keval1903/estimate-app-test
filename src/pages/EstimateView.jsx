@@ -507,8 +507,9 @@ export default function EstimateView() {
       </div>
 
       {/* ── ESTIMATE PREVIEW ── */}
-      <div id="print-area" style={{ padding: '0 8px 100px', background: 'var(--bg)', overflowX: 'auto' }}>
-        <div id="estimate-preview" ref={previewRef} style={{ display: 'flex', flexDirection: 'column', gap: '32px', minWidth: paperSize === 'a5' ? '529px' : '763px', margin: '0 auto' }}>
+      <div id="print-area" style={{ padding: '16px 8px 100px', background: 'var(--bg)', overflowX: 'auto' }}>
+        <div style={{ width: 'fit-content', margin: '0 auto' }}>
+          <div id="estimate-preview" ref={previewRef} style={{ display: 'flex', flexDirection: 'column', gap: '32px', minWidth: paperSize === 'a5' ? '529px' : '763px' }}>
           {pages.map((page, pageIndex) => (
             <div key={pageIndex} className="estimate-page" style={{ pageBreakAfter: page.isLast ? 'auto' : 'always', position: 'relative' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', border: '1.5px solid #000', fontFamily: 'Arial, sans-serif', fontSize: 13, color: '#000', background: '#fff' }}>
@@ -755,6 +756,7 @@ export default function EstimateView() {
               </table>
             </div>
           ))}
+        </div>
         </div>
       </div>
 
