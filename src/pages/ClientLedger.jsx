@@ -560,22 +560,22 @@ export default function ClientLedger() {
               </div>
             )}
 
-            <div className="card" style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: '800px' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ padding: '10px 12px', width: 40, textAlign: 'center' }}>
+                    <th style={{ padding: '12px', width: 40, textAlign: 'center' }}>
                       <input 
                         type="checkbox" 
                         checked={filteredLedger.filter(l => l.type !== 'OPENING').length > 0 && filteredLedger.filter(l => l.type !== 'OPENING').every(l => selectedRefs.has(l.ref))} 
                         onChange={handleSelectAll} 
                       />
                     </th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>Description</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Debit (Material Dispatched)</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Credit (Payment Received)</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Balance</th>
+                    <th style={{ padding: '12px', textAlign: 'left', whiteSpace: 'nowrap' }}>Date</th>
+                    <th style={{ padding: '12px', textAlign: 'left', whiteSpace: 'nowrap' }}>Description</th>
+                    <th style={{ padding: '12px', textAlign: 'right', whiteSpace: 'nowrap' }}>Debit (Material Dispatched)</th>
+                    <th style={{ padding: '12px', textAlign: 'right', whiteSpace: 'nowrap' }}>Credit (Payment Received)</th>
+                    <th style={{ padding: '12px', textAlign: 'right', whiteSpace: 'nowrap' }}>Balance</th>
                   </tr>
                 </thead>
                 <tbody>
