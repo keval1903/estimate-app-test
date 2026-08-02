@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isFuzzyMatch } from '../lib/searchUtils'
+import { useAuth } from '../context/AuthContext'
 
 export default function Clients() {
+  const { role } = useAuth()
   const navigate = useNavigate()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
@@ -167,12 +169,12 @@ export default function Clients() {
                 )}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {selectedClients.size > 0 && (
+                {role === 'ADMIN' && selectedClients.size > 0 && (
                   <button className="btn btn-danger" style={{ margin: 0, whiteSpace: 'nowrap', backgroundColor: '#dc2626' }} onClick={handleDeleteSelected}>
                     🗑️ Delete Selected ({selectedClients.size})
                   </button>
                 )}
-                {clients.length > 0 && (
+                {role === 'ADMIN' && clients.length > 0 && (
                   <button className="btn btn-danger" style={{ margin: 0, whiteSpace: 'nowrap' }} onClick={handleDeleteAllClients}>
                     🗑️ Delete All
                   </button>
@@ -211,7 +213,7 @@ export default function Clients() {
 
               return (
                 <>
-                  {filteredClients.length > 0 && (
+                  {role === 'ADMIN' && filteredClients.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px 8px', gap: 12 }}>
                       <input 
                         type="checkbox"
@@ -228,13 +230,15 @@ export default function Clients() {
                   {filteredClients.map(c => (
                     <div key={c.id} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'center', backgroundColor: selectedClients.has(c.id) ? '#f0f9ff' : 'white' }} onClick={() => navigate(`/clients/${c.id}`)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: '150px' }}>
-                        <input
-                          type="checkbox"
-                          style={{ width: 18, height: 18, cursor: 'pointer' }}
-                          checked={selectedClients.has(c.id)}
-                          onChange={(e) => handleSelectRow(c.id, e)}
-                          onClick={e => e.stopPropagation()}
-                        />
+                        {role === 'ADMIN' && (
+                          <input
+                            type="checkbox"
+                            style={{ width: 18, height: 18, cursor: 'pointer' }}
+                            checked={selectedClients.has(c.id)}
+                            onChange={(e) => handleSelectRow(c.id, e)}
+                            onClick={e => e.stopPropagation()}
+                          />
+                        )}
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 16 }}>{c.name}</div>
                           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{c.mobile || 'No Mobile'}</div>
@@ -250,9 +254,11 @@ export default function Clients() {
                         <button className="btn btn-ghost btn-sm" style={{ color: '#3b82f6', padding: '6px' }} title="Edit Client" onClick={(e) => handleEditClick(c, e)}>
                           ✏️
                         </button>
-                        <button className="btn btn-ghost btn-sm" style={{ color: '#ef4444', padding: '6px' }} title="Delete Client" onClick={(e) => { e.stopPropagation(); handleDeleteClient(c.id, c.name); }}>
-                          🗑️
-                        </button>
+                        {role === 'ADMIN' && (
+                          <button className="btn btn-ghost btn-sm" style={{ color: '#ef4444', padding: '6px' }} title="Delete Client" onClick={(e) => { e.stopPropagation(); handleDeleteClient(c.id, c.name); }}>
+                            🗑️
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
 export default function ClientLedger() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { role } = useAuth()
   
   const [client, setClient] = useState(null)
   const [ledger, setLedger] = useState([])
@@ -623,14 +625,16 @@ export default function ClientLedger() {
                               >
                                 ✏️
                               </button>
-                              <button 
-                                className="btn btn-ghost btn-sm" 
-                                style={{ padding: '2px 4px', margin: 0, color: '#dc2626' }}
-                                onClick={() => handleDeletePayment(l.ref)}
-                                title="Delete Payment"
-                              >
-                                🗑️
-                              </button>
+                              {role === 'ADMIN' && (
+                                <button 
+                                  className="btn btn-ghost btn-sm" 
+                                  style={{ padding: '2px 4px', margin: 0, color: '#dc2626' }}
+                                  onClick={() => handleDeletePayment(l.ref)}
+                                  title="Delete Payment"
+                                >
+                                  🗑️
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

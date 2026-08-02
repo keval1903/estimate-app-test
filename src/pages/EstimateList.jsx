@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
 import { isFuzzyMatch } from '../lib/searchUtils'
 
 export default function EstimateList() {
+  const { role } = useAuth()
   const { showToast, ToastEl } = useToast()
   const navigate = useNavigate()
   const [allEstimates, setAllEstimates] = useState([])
@@ -285,7 +287,7 @@ export default function EstimateList() {
                 <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ width: 16, height: 16 }} />
                 Select All
               </label>
-              {selectedIds.size > 0 && (
+              {selectedIds.size > 0 && role === 'ADMIN' && (
                 <button className="btn btn-danger btn-sm" onClick={handleDeleteSelected}>
                   🗑 Delete ({selectedIds.size})
                 </button>
@@ -358,10 +360,12 @@ export default function EstimateList() {
                         }}>
                         🖨 Print
                       </button>
-                      <button className="btn btn-danger btn-sm"
-                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(est); }}>
-                        🗑
-                      </button>
+                      {role === 'ADMIN' && (
+                        <button className="btn btn-danger btn-sm"
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(est); }}>
+                          🗑
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

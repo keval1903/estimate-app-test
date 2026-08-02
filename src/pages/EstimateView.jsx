@@ -2,9 +2,11 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
 
 export default function EstimateView() {
+  const { role } = useAuth()
   const { id } = useParams()
   const navigate = useNavigate()
   const { showToast, ToastEl } = useToast()
@@ -510,7 +512,7 @@ export default function EstimateView() {
             {converting ? 'Converting...' : '⚡ Convert to Estimate'}
           </button>
         )}
-        {estimate.type === 'ESTIMATE' && (
+        {estimate.type === 'ESTIMATE' && role === 'ADMIN' && (
           <button className="btn btn-warning btn-sm" style={{ background: '#e07a5f', color: '#fff' }}
             onClick={handleRevertToQuotation} disabled={converting}>
             {converting ? 'Reverting...' : '⚡ Revert to Quotation'}

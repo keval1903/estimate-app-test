@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 
 export default function Home() {
   const navigate = useNavigate()
+  const { role } = useAuth()
   const [connOk, setConnOk] = useState(null)
   const [lowStockCount, setLowStockCount] = useState(0)
 
@@ -124,6 +126,16 @@ export default function Home() {
             <div className="home-btn-sub">View pieces added, sold & stock audit log</div>
           </div>
         </button>
+
+        {role === 'ADMIN' && (
+          <button className="home-btn" onClick={() => navigate('/users')}>
+            <div className="home-btn-icon" style={{ background: '#f3e8ff' }}>🛡️</div>
+            <div>
+              <div className="home-btn-text">USER MANAGEMENT</div>
+              <div className="home-btn-sub">Add staff accounts and manage roles</div>
+            </div>
+          </button>
+        )}
       </div>
     </div>
   )

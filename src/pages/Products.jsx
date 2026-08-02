@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
 
 import { getMergedUnits } from '../constants/units.js'
@@ -16,6 +17,7 @@ const EMPTY_FORM = {
 }
 
 export default function Products() {
+  const { role } = useAuth()
   const navigate = useNavigate()
   const { showToast, ToastEl } = useToast()
   const [products, setProducts] = useState([])
@@ -557,12 +559,16 @@ export default function Products() {
           <button className="btn btn-sm"
             style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
             onClick={() => navigate('/stock-report')}>📊 Report</button>
-          <button className="btn btn-sm"
-            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
-            onClick={handleExport}>⬇ Export</button>
-          <button className="btn btn-sm"
-            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
-            onClick={() => setShowImport(true)}>⬆ Import</button>
+          {role === 'ADMIN' && (
+            <>
+              <button className="btn btn-sm"
+                style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
+                onClick={handleExport}>⬇ Export</button>
+              <button className="btn btn-sm"
+                style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
+                onClick={() => setShowImport(true)}>⬆ Import</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -595,7 +601,7 @@ export default function Products() {
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
           <span className="section-label">{filtered.length} Products</span>
-          {filtered.length > 0 && (
+          {filtered.length > 0 && role === 'ADMIN' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                 <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ width: 16, height: 16 }} />
@@ -619,7 +625,9 @@ export default function Products() {
           <div key={p.id} className="item-card" style={{ border: selectedIds.has(p.id) ? '2px solid var(--primary-color)' : '1px solid var(--border-light)' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+                {role === 'ADMIN' && (
+                  <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+                )}
                 <div className="item-name">{p.product_name}</div>
               </div>
               <span className={`badge ${p.calculation_type === 'SQFT' ? 'badge-sqft' : 'badge-qty'}`}>
@@ -645,23 +653,29 @@ export default function Products() {
               )}
             </div>
             <div className="item-actions" style={{ marginLeft: 26 }}>
-              {p.has_stock && (
+              {role === 'ADMIN' && p.has_stock && (
                 <button className="btn btn-primary btn-sm" style={{ background: '#10b981' }} onClick={() => handleQuickAddStock(p)}>
                   ➕ Stock
                 </button>
               )}
-              <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>✏️ Edit</button>
-              <button className="btn btn-danger btn-sm" onClick={() => setDeleteConfirm(p)}>🗑 Delete</button>
+              {role === 'ADMIN' && (
+                <>
+                  <button className="btn btn-ghost btn-sm" onClick={() => openEdit(p)}>✏️ Edit</button>
+                  <button className="btn btn-ghost btn-sm" style={{ color: '#ef4444' }} onClick={() => setDeleteConfirm(p)}>🗑 Delete</button>
+                </>
+              )}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="sticky-bottom">
-        <div className="sticky-bottom-inner">
-          <button className="btn btn-primary btn-full btn-lg" onClick={openAdd}>+ ADD PRODUCT</button>
+      {role === 'ADMIN' && (
+        <div className="sticky-bottom">
+          <div className="sticky-bottom-inner">
+            <button className="btn btn-primary btn-full btn-lg" onClick={openAdd}>+ ADD PRODUCT</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {showModal && (
         <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setShowModal(false)}>
