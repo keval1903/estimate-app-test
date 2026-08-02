@@ -393,8 +393,8 @@ export default function EstimateView() {
   }
 
   // Smart Pagination Logic
-  const A5_ROWS = 20;
-  const A4_ROWS = 35;
+  const A5_ROWS = 23;
+  const A4_ROWS = 38;
   const SQUEEZE_LIMIT = 2;
 
   const pages = useMemo(() => {
@@ -456,7 +456,9 @@ export default function EstimateView() {
         const standardMaxRows = paperSize === 'a5' ? A5_ROWS : A4_ROWS;
         const occupied = chunk.length + (!isFirst ? 1 : 0) + extraRows;
         if (occupied < standardMaxRows) {
-          emptyRowsCount = standardMaxRows - occupied;
+          const maxEmpty = paperSize === 'a5' ? 12 : 20;
+          emptyRowsCount = Math.min(emptyRowsCount, maxEmpty);
+          //emptyRowsCount = standardMaxRows - occupied;
         }
       }
 
