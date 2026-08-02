@@ -489,7 +489,7 @@ export default function EstimateView() {
 
       {/* Action buttons */}
       <div className="preview-actions no-print">
-        <div style={{ display: 'inline-flex', gap: 8, marginRight: 'auto' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginRight: 'auto' }}>
           <select className="btn btn-secondary btn-sm" value={paperSize} onChange={e => setPaperSize(e.target.value)}>
             <option value="a4">Size: A4</option>
             <option value="a5">Size: A5</option>
@@ -538,7 +538,7 @@ export default function EstimateView() {
 
       {/* ── ESTIMATE PREVIEW ── */}
       <div id="print-area" style={{ padding: '16px 8px 100px', background: 'var(--bg)', display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
-        <div ref={containerRef} style={{ width: '100%', maxWidth: paperSize === 'a5' ? '529px' : '763px', height: previewHeight ? previewHeight * (exporting || isExportingSingleImage ? 1 : scale) : 'auto' }}>
+        <div ref={containerRef} style={{ width: '100%', maxWidth: paperSize === 'a5' ? '529px' : '763px', minWidth: 0, height: previewHeight ? previewHeight * (exporting || isExportingSingleImage ? 1 : scale) : 'auto' }}>
           <div style={{
             transform: `scale(${exporting || isExportingSingleImage ? 1 : scale})`,
             transformOrigin: 'top left',
