@@ -561,27 +561,31 @@ export default function ClientLedger() {
             )}
 
             <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: '800px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ padding: '12px', width: '5%', textAlign: 'center' }}>
+                    <th style={{ padding: '8px 4px', width: 30, textAlign: 'center' }}>
                       <input 
                         type="checkbox" 
                         checked={filteredLedger.filter(l => l.type !== 'OPENING').length > 0 && filteredLedger.filter(l => l.type !== 'OPENING').every(l => selectedRefs.has(l.ref))} 
                         onChange={handleSelectAll} 
                       />
                     </th>
-                    <th style={{ padding: '12px', width: '15%', textAlign: 'left', whiteSpace: 'nowrap' }}>Date</th>
-                    <th style={{ padding: '12px', width: '30%', textAlign: 'left', whiteSpace: 'nowrap' }}>Description</th>
-                    <th style={{ padding: '12px', width: '17%', textAlign: 'right', whiteSpace: 'nowrap' }}>Debit (Material Dispatched)</th>
-                    <th style={{ padding: '12px', width: '17%', textAlign: 'right', whiteSpace: 'nowrap' }}>Credit (Payment Received)</th>
-                    <th style={{ padding: '12px', width: '16%', textAlign: 'right', whiteSpace: 'nowrap' }}>Balance</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>Date</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left' }}>Description</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      Debit<br/><span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal' }}>(Material)</span>
+                    </th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      Credit<br/><span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal' }}>(Payment)</span>
+                    </th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>Balance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLedger.map((l, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: l.type === 'OPENING' ? '#fffbeb' : (selectedRefs.has(l.ref) ? '#f0f9ff' : (l.type === 'QUOTE' ? '#f8fafc' : 'transparent')) }}>
-                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      <td style={{ padding: '8px 4px', textAlign: 'center' }}>
                         {l.type !== 'OPENING' && (
                           <input 
                             type="checkbox" 
@@ -595,7 +599,7 @@ export default function ClientLedger() {
                           />
                         )}
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'left' }}>
+                      <td style={{ padding: '8px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>
                         {(() => {
                           const d = new Date(l.date)
                           if (!isNaN(d.getTime())) return d.toLocaleDateString('en-GB')
@@ -606,34 +610,46 @@ export default function ClientLedger() {
                           return String(l.date).replace(/-/g, '/')
                         })()}
                       </td>
-                      <td style={{ padding: '10px 12px', width: '30%', textAlign: 'left', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>{l.description}</span>
+                      <td style={{ padding: '8px 4px', textAlign: 'left', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
+                          <span style={{ wordBreak: 'break-word' }}>{l.description}</span>
                           {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && (
-                            <div style={{ display: 'flex', gap: 4 }}>
+                            <div style={{ display: 'flex' }}>
                               <button 
                                 className="btn btn-ghost btn-sm" 
-                                style={{ padding: '2px 6px', margin: 0, color: '#3b82f6' }} 
-                                title="Edit"
+                                style={{ padding: '2px 4px', margin: 0, color: 'var(--text-muted)' }}
                                 onClick={() => handleEditClick(l.ref)}
+                                title="Edit Payment"
                               >
                                 ✏️
                               </button>
                               <button 
                                 className="btn btn-ghost btn-sm" 
-                                style={{ padding: '2px 6px', margin: 0, color: '#ef4444' }} 
-                                title={l.type === 'MANUAL_DEBIT' ? 'Delete Record' : 'Delete Payment'}
+                                style={{ padding: '2px 4px', margin: 0, color: '#dc2626' }}
                                 onClick={() => handleDeletePayment(l.ref)}
+                                title="Delete Payment"
                               >
                                 🗑️
                               </button>
                             </div>
                           )}
+                          {l.type === 'BILL' && (
+                            <div style={{ display: 'flex' }}>
+                               <button 
+                                  className="btn btn-ghost btn-sm" 
+                                  style={{ padding: '2px 4px', margin: 0, color: 'var(--text-muted)' }}
+                                  onClick={() => handleNavigateToBill(l.ref)}
+                                  title="Open Estimate"
+                               >
+                                  👁️
+                               </button>
+                            </div>
+                          )}
                         </div>
                       </td>
-                      <td style={{ padding: '10px 12px', width: '17%', textAlign: 'right', color: '#ef4444' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
-                      <td style={{ padding: '10px 12px', width: '17%', textAlign: 'right', color: '#10b981' }}>{l.credit > 0 ? l.credit.toFixed(2) : '-'}</td>
-                      <td style={{ padding: '10px 12px', width: '16%', textAlign: 'right', fontWeight: l.type === 'QUOTE' ? 400 : 600, color: l.type === 'QUOTE' ? '#94a3b8' : '#000' }}>
+                      <td style={{ padding: '8px 4px', textAlign: 'right', color: '#ef4444', whiteSpace: 'nowrap' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
+                      <td style={{ padding: '8px 4px', textAlign: 'right', color: '#10b981', whiteSpace: 'nowrap' }}>{l.credit > 0 ? l.credit.toFixed(2) : '-'}</td>
+                      <td style={{ padding: '8px 4px', textAlign: 'right', fontWeight: l.type === 'QUOTE' ? 400 : 600, color: l.type === 'QUOTE' ? '#94a3b8' : '#000', whiteSpace: 'nowrap' }}>
                         {Math.abs(l.balance).toFixed(2)} {l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}
                       </td>
                     </tr>
