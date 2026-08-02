@@ -63,13 +63,15 @@ export default function Clients() {
     setLoading(true)
     try {
       const { data: clientData } = await supabase.from('clients').select('*').order('name')
-      const { data: estData } = await supabase.from('estimates').select('client_id, grand_total').eq('type', 'ESTIMATE')
+      const { data: estData } = await supabase.from('estimates').select('client_id, grand_total, type').in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
       const { data: payData } = await supabase.from('payments').select('client_id, amount')
 
       const combined = (clientData || []).map(c => {
-        const estTotal = (estData || []).filter(e => e.client_id === c.id).reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
+        const clientEsts = (estData || []).filter(e => e.client_id === c.id)
+        const estTotal = clientEsts.filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE').reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
+        const returnTotal = clientEsts.filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN').reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
         const payTotal = (payData || []).filter(p => p.client_id === c.id).reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
-        const balance = Number(c.opening_balance || 0) + estTotal - payTotal
+        const balance = Number(c.opening_balance || 0) + estTotal - returnTotal - payTotal
         return { ...c, balance }
       })
 

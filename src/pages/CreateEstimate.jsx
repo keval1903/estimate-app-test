@@ -6,7 +6,6 @@ import { getMergedUnits } from '../constants/units.js'
 import { isFuzzyMatch } from '../lib/searchUtils'
 import { normalizeSearchQuery } from '../lib/synonyms.js'
 import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
-import Fuse from 'fuse.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function todayIST() {
@@ -127,87 +126,6 @@ export default function CreateEstimate() {
 
   const { isListening, startListening, error: voiceError } = useVoiceSearch({
     onResult: (text) => {
-      // 1. Try to extract quantity and product name from flexible format
-      const numMatch = text.match(/\b(\d+(?:\.\d+)?)\b/);
-      
-      if (numMatch) {
-        const quantityStr = numMatch[1];
-        const quantity = parseFloat(quantityStr);
-        
-        // Remove the number and filler words from text to get product name
-        let productText = text.replace(/\b(\d+(?:\.\d+)?)\b/, '');
-        productText = productText.replace(/\b(add|of|sheets?|pieces?|nos?|take)\b/gi, ' ');
-        productText = productText.replace(/\s+/g, ' ').trim().toUpperCase();
-        
-        if (productText && allProducts.length > 0) {
-          // 2. Fuzzy search for the best product match using Fuse.js
-          const fuse = new Fuse(allProducts, {
-            keys: ['product_name', 'keyword'],
-            threshold: 0.4,
-            includeScore: true
-          });
-          
-          const results = fuse.search(productText);
-          if (results.length > 0) {
-            const bestMatch = results[0].item;
-            
-            // 3. Auto-add to items
-            const isPieceBased = bestMatch.calculation_type === 'SQFT' || bestMatch.calculation_type === 'INCH' || bestMatch.calculation_type === 'FEET';
-            const baseRate = parseFloat(bestMatch.rate) || 0;
-            
-            const newItem = {
-              product_id: bestMatch.id,
-              product_name_snapshot: bestMatch.product_name,
-              length_snapshot: bestMatch.length,
-              width_snapshot: bestMatch.width,
-              unit_snapshot: bestMatch.unit,
-              base_rate: baseRate,
-              discount_percent: '',
-              rate: baseRate,
-              calculation_type_snapshot: bestMatch.calculation_type,
-              nos: isPieceBased ? quantityStr : '',
-              quantity: bestMatch.calculation_type === 'QUANTITY' ? quantityStr : '',
-              has_stock: bestMatch.has_stock || false,
-              stock: bestMatch.stock || 0,
-              has_remark: bestMatch.has_remark || false,
-              has_discount: bestMatch.has_discount || false,
-              keyword_snapshot: bestMatch.keyword || '',
-              amount: 0
-            };
-            
-            // Calc amount
-            const L = parseFloat(newItem.length_snapshot);
-            const W = parseFloat(newItem.width_snapshot);
-            const qtyOrNos = isPieceBased ? quantity : quantity;
-            
-            let calcAmount = 0;
-            if (isPieceBased) {
-              if (bestMatch.calculation_type === 'SQFT') {
-                calcAmount = Math.ceil(L * W * qtyOrNos * baseRate);
-                newItem.quantity = (L * W * qtyOrNos).toFixed(2);
-              } else if (bestMatch.calculation_type === 'INCH') {
-                calcAmount = Math.ceil((L * W * qtyOrNos * baseRate) / 144);
-                newItem.quantity = quantityStr;
-              } else {
-                calcAmount = Math.ceil(L * W * qtyOrNos * baseRate);
-                newItem.quantity = quantityStr;
-              }
-            } else {
-              calcAmount = Math.ceil(qtyOrNos * baseRate);
-              newItem.quantity = quantityStr;
-            }
-            newItem.amount = calcAmount;
-            
-            setItems(prev => [...prev, newItem]);
-            showToast(`Voice: Added ${quantity} ${bestMatch.product_name} ✓`);
-            setProductSearch('');
-            setShowSuggestions(false);
-            return;
-          }
-        }
-      }
-
-      // Fallback: Just search
       setProductSearch(text)
       setShowSuggestions(true)
       if (productInputRef.current) productInputRef.current.focus()
@@ -568,7 +486,7 @@ export default function CreateEstimate() {
   function handleInputKeyDown(e) {
     if (e.key === 'Enter') {
       e.preventDefault()
-      saveItem()
+      saveItem(false) // Changed to Add Next Item instead of closing
     }
   }
 
@@ -698,7 +616,7 @@ export default function CreateEstimate() {
   }
 
   // ── Save item ──
-  function saveItem() {
+  function saveItem(closeModal = true) {
     if (!itemForm.product_name_snapshot) { showToast('Select a product', 'error'); return }
     const rate = parseFloat(itemForm.rate)
     if (isNaN(rate) || rate < 0 || itemForm.rate === '') { showToast('Enter a valid rate', 'error'); return }
@@ -756,7 +674,15 @@ export default function CreateEstimate() {
       }
       return next
     })
-    setShowItemModal(false)
+    
+    if (closeModal) {
+      setShowItemModal(false)
+    } else {
+      setItemForm(EMPTY_ITEM)
+      setProductSearch('')
+      setEditingItemIdx(null)
+      setTimeout(() => productInputRef.current?.focus(), 100)
+    }
   }
 
   function removeItem(idx) {
@@ -1441,7 +1367,10 @@ export default function CreateEstimate() {
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-secondary btn-full" onClick={() => setShowItemModal(false)}>Cancel</button>
-              <button className="btn btn-primary btn-full" onClick={saveItem}>
+              <button className="btn btn-primary btn-full" style={{ background: '#f59e0b', color: '#fff', border: 'none' }} onClick={() => saveItem(false)}>
+                Add Next
+              </button>
+              <button className="btn btn-primary btn-full" onClick={() => saveItem(true)}>
                 {editingItemIdx !== null ? 'Update Item' : 'Add Item'}
               </button>
             </div>

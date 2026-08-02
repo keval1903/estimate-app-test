@@ -27,14 +27,14 @@ export default function Home() {
   return (
     <div className="app-container">
       <div className="top-nav" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span className="nav-title">📋 AB Estimate App</span>
+        <span className="nav-title">📋 CCAI Estimate App</span>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           {connOk !== null && (
             <span className={`conn-status ${connOk ? 'conn-ok' : 'conn-err'}`}>
               {connOk ? '● Live' : '● Offline'}
             </span>
           )}
-          <button 
+          <button
             onClick={async () => await supabase.auth.signOut()}
             style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: '0.875rem' }}
           >
@@ -114,7 +114,7 @@ export default function Home() {
         <button className="home-btn" onClick={() => navigate('/estimates?tab=returns')}>
           <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
           <div>
-            <div className="home-btn-text">PREVIOUS RETURNS</div>
+            <div className="home-btn-text">PREVIOUS SALE RETURNS</div>
             <div className="home-btn-sub">View, edit or reprint sales returns</div>
           </div>
         </button>
@@ -124,6 +124,14 @@ export default function Home() {
           <div>
             <div className="home-btn-text">STOCK MOVEMENT REPORT</div>
             <div className="home-btn-sub">View pieces added, sold & stock audit log</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate('/sales-report')}>
+          <div className="home-btn-icon" style={{ background: '#fef08a' }}>📈</div>
+          <div>
+            <div className="home-btn-text">SALES REPORT</div>
+            <div className="home-btn-sub">View product group sales by client</div>
           </div>
         </button>
 

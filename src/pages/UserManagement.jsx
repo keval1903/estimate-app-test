@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export default function UserManagement() {
   const navigate = useNavigate()
-  const { role } = useAuth()
+  const { role, onlineUsers } = useAuth()
   
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -82,6 +82,21 @@ export default function UserManagement() {
     }
   }
 
+  const handleDeleteUser = async (id, username) => {
+    if (!window.confirm(`Are you absolutely sure you want to permanently delete user "${username}"?`)) return
+    
+    const { error } = await supabase.rpc('admin_delete_user', {
+      target_user_id: id
+    })
+
+    if (error) {
+      alert('Failed to delete user: ' + error.message)
+    } else {
+      alert('User deleted successfully!')
+      setUsers(users.filter(u => u.id !== id))
+    }
+  }
+
   const handleCreateUser = async (e) => {
     e.preventDefault()
     if (!newUsername || !newPassword) return
@@ -104,7 +119,7 @@ export default function UserManagement() {
     })
 
     const { data, error } = await adminClient.auth.signUp({
-      email: `${newUsername}@estimateapp.local`,
+      email: `${newUsername}@estimateapp.com`,
       password: newPassword
     })
 
@@ -174,12 +189,27 @@ export default function UserManagement() {
                 <th style={{ textAlign: 'left' }}>Username</th>
                 <th style={{ textAlign: 'center' }}>Role</th>
                 <th style={{ textAlign: 'center' }}>Status</th>
+                <th style={{ textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map(u => (
                 <tr key={u.id}>
-                  <td style={{ fontWeight: 500 }}>{u.username}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div 
+                        title={onlineUsers.has(u.id) ? 'Online' : 'Offline'}
+                        style={{ 
+                          width: 8, 
+                          height: 8, 
+                          borderRadius: '50%', 
+                          background: onlineUsers.has(u.id) ? '#10b981' : '#cbd5e1',
+                          boxShadow: onlineUsers.has(u.id) ? '0 0 6px #10b981' : 'none'
+                        }} 
+                      />
+                      {u.username}
+                    </div>
+                  </td>
                   <td style={{ textAlign: 'center' }}>
                     <select 
                       value={u.role} 
@@ -190,6 +220,17 @@ export default function UserManagement() {
                       <option value="STAFF">STAFF</option>
                       <option value="ADMIN">ADMIN</option>
                     </select>
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {u.is_active ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }}></div> Active
+                      </span>
+                    ) : (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fee2e2', color: '#dc2626', padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626' }}></div> Disabled
+                      </span>
+                    )}
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
@@ -218,6 +259,19 @@ export default function UserManagement() {
                         }}
                       >
                         {u.is_active ? 'Disable' : 'Enable'}
+                      </button>
+                      <button 
+                        className="btn" 
+                        onClick={() => handleDeleteUser(u.id, u.username)}
+                        style={{ 
+                          padding: '4px 8px', 
+                          fontSize: 12,
+                          background: '#fff',
+                          color: '#dc2626',
+                          border: '1px solid #fee2e2'
+                        }}
+                      >
+                        Delete
                       </button>
                     </div>
                   </td>

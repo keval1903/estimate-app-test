@@ -3,11 +3,33 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
+function formatLedgerDate(dateStr) {
+  if (!dateStr) return '';
+  const s = String(dateStr);
+  const parts = s.split(/[-/]/);
+  if (parts.length === 3) {
+    if (parts[2].length === 4) {
+      return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+    }
+    if (parts[0].length === 4) {
+      return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+    }
+  }
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return s;
+}
+
 export default function ClientLedger() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { role } = useAuth()
-  
+
   const [client, setClient] = useState(null)
   const [ledger, setLedger] = useState([])
   const [loading, setLoading] = useState(true)
@@ -20,11 +42,19 @@ export default function ClientLedger() {
   const [activeTab, setActiveTab] = useState('ledger')
   const [purchases, setPurchases] = useState([])
   const [expandedProducts, setExpandedProducts] = useState(new Set())
+  const [paperSize, setPaperSize] = useState('a4')
 
   const groupedPurchases = useMemo(() => {
     const map = new Map();
+    const query = search.toLowerCase().trim();
+    const fd = fromDate || null;
+    const td = toDate || null;
     purchases.forEach(p => {
+      const pDateStr = getNormalizedDateString(p.bill_date || p.created_at);
+      if (fd && pDateStr < fd) return;
+      if (td && pDateStr > td) return;
       const name = p.product_name || 'Manual Item';
+      if (query && !name.toLowerCase().includes(query)) return;
       if (!map.has(name)) {
         map.set(name, { name, totalQty: 0, unit: p.unit || '', items: [], totalAmount: 0 });
       }
@@ -34,8 +64,8 @@ export default function ClientLedger() {
       if (!group.unit && p.unit) group.unit = p.unit;
       group.items.push(p);
     });
-    return Array.from(map.values()).sort((a,b) => b.totalAmount - a.totalAmount);
-  }, [purchases]);
+    return Array.from(map.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [purchases, search, fromDate, toDate]);
 
   const toggleExpand = (name) => {
     const next = new Set(expandedProducts);
@@ -70,7 +100,7 @@ export default function ClientLedger() {
       // Fetch all estimates AND quotations for this client
       const { data: estData, error: estErr } = await supabase.from('estimates').select('*').eq('client_id', id)
       if (estErr) throw estErr;
-      
+
       const { data: payData, error: payErr } = await supabase.from('payments').select('*').eq('client_id', id)
       if (payErr) throw payErr;
 
@@ -78,7 +108,7 @@ export default function ClientLedger() {
       if (!purErr && purData) setPurchases(purData)
 
       const entries = []
-      
+
       // Opening Balance
       if (Number(cData.opening_balance)) {
         entries.push({
@@ -107,6 +137,24 @@ export default function ClientLedger() {
             debit: 0,
             credit: e.grand_total,
             type: 'RETURN',
+            ref: e.id
+          });
+        } else if (e.type === 'DELETED_RETURN') {
+          entries.push({
+            date: e.bill_date,
+            description: `Sales Return #${e.bill_number}`,
+            debit: 0,
+            credit: e.grand_total,
+            type: 'RETURN',
+            ref: e.id
+          });
+        } else if (e.type === 'DELETED_ESTIMATE') {
+          entries.push({
+            date: e.bill_date,
+            description: `Bill #${e.bill_number}`,
+            debit: e.grand_total,
+            credit: 0,
+            type: 'BILL',
             ref: e.id
           });
         } else {
@@ -142,7 +190,7 @@ export default function ClientLedger() {
           });
         }
       }
-      
+
       // Sort chronologically
       entries.sort((a, b) => parseDate(a.date) - parseDate(b.date))
 
@@ -164,32 +212,55 @@ export default function ClientLedger() {
 
   function parseDate(dateStr) {
     if (!dateStr) return new Date(0)
-    const d = new Date(dateStr)
-    if (!isNaN(d.getTime())) return d
-    const parts = String(dateStr).replace(/\//g, '-').split('-')
+    const s = String(dateStr).split('T')[0]
+    const parts = s.replace(/\//g, '-').split('-')
     if (parts.length === 3 && parts[2].length === 4) {
       return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`)
     }
+    if (parts.length === 3 && parts[0].length === 4) {
+      return new Date(`${parts[0]}-${parts[1]}-${parts[2]}T00:00:00`)
+    }
+    const d = new Date(dateStr)
+    if (!isNaN(d.getTime())) return d
     return new Date(0)
+  }
+
+  function getNormalizedDateString(dateStr) {
+    if (!dateStr) return '';
+    const s = String(dateStr).split('T')[0];
+    const parts = s.replace(/\//g, '-').split('-');
+    if (parts.length === 3) {
+      if (parts[2].length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      }
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    return '';
   }
 
   const filteredLedger = useMemo(() => {
     let result = []
     let ob = null
-    const fd = fromDate ? new Date(fromDate) : null
-    const td = toDate ? new Date(toDate) : null
+    const fd = fromDate || null
+    const td = toDate || null
 
     if (fd) {
-      const prior = ledger.filter(l => parseDate(l.date) < fd)
+      const prior = ledger.filter(l => getNormalizedDateString(l.date) < fd)
       if (prior.length > 0) ob = prior[prior.length - 1].balance
       else ob = Number(client?.opening_balance || 0)
     }
 
     const currentRows = ledger.filter(l => {
-      const d = parseDate(l.date)
-      if (fd && d < fd) return false
-      if (td && d > td) return false
-      
+      const dStr = getNormalizedDateString(l.date)
+      if (fd && dStr < fd) return false
+      if (td && dStr > td) return false
+
       if (search.trim()) {
         const terms = search.toLowerCase().trim().split(/\s+/)
         const target = `${l.description || ''} ${l.date || ''}`.toLowerCase()
@@ -199,14 +270,14 @@ export default function ClientLedger() {
     })
 
     if (fd && ob !== null) {
-       result.push({
-         date: fromDate,
-         description: 'Opening Balance (Brought Forward)',
-         debit: 0,
-         credit: 0,
-         balance: ob,
-         type: 'OPENING'
-       })
+      result.push({
+        date: fromDate,
+        description: 'Opening Balance (Brought Forward)',
+        debit: 0,
+        credit: 0,
+        balance: ob,
+        type: 'OPENING'
+      })
     }
 
     result = [...result, ...currentRows]
@@ -229,10 +300,10 @@ export default function ClientLedger() {
   async function handleDeleteSelected() {
     if (selectedRefs.size === 0) return
     if (!window.confirm(`Are you sure you want to delete ${selectedRefs.size} selected entries?\n\nWARNING: Deleting Bills from the ledger will permanently delete them from the entire system.`)) return
-    
+
     const paymentIds = []
     const billIds = []
-    
+
     for (const l of filteredLedger) {
       if (selectedRefs.has(l.ref)) {
         if (l.type === 'BILL' || l.type === 'QUOTE') {
@@ -242,7 +313,7 @@ export default function ClientLedger() {
         }
       }
     }
-    
+
     let hasError = false
     try {
       if (paymentIds.length > 0) {
@@ -257,7 +328,7 @@ export default function ClientLedger() {
       alert("Error deleting: " + e.message)
       hasError = true
     }
-    
+
     if (!hasError) {
       setSelectedRefs(new Set())
       loadData()
@@ -286,7 +357,7 @@ export default function ClientLedger() {
       reference_number: payRef,
       description: payDesc
     }
-    
+
     let error;
     if (editPaymentId) {
       const { error: err } = await supabase.from('payments').update(payload).eq('id', editPaymentId)
@@ -325,98 +396,102 @@ export default function ClientLedger() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
 
-    const doc = new jsPDF()
-    
+    const isA5 = paperSize === 'a5'
+    const doc = new jsPDF({ format: paperSize })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const rightX = pageWidth - 14
+
     // ---- HEADER ----
-    doc.setFontSize(22)
+    doc.setFontSize(isA5 ? 16 : 20)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(140, 120, 90) // Professional Dark Beige
-    doc.text('STATEMENT OF ACCOUNT', 14, 25)
+    const startY = isA5 ? 16 : 20
+    doc.text('LEDGER', 14, startY)
 
     if (fromDate || toDate) {
-      doc.setFontSize(10)
+      doc.setFontSize(isA5 ? 8 : 9)
       doc.setFont('helvetica', 'normal')
       const pF = fromDate ? new Date(fromDate).toLocaleDateString('en-GB') : 'Start'
       const pT = toDate ? new Date(toDate).toLocaleDateString('en-GB') : 'Today'
-      doc.text(`Period: ${pF} to ${pT}`, 14, 31)
+      doc.text(`Period: ${pF} to ${pT}`, 14, startY + (isA5 ? 4 : 5))
     }
 
-    let yPos = 35
+    let yPos = (fromDate || toDate) ? startY + (isA5 ? 8 : 9) : startY + (isA5 ? 4 : 4)
 
     // Divider
     doc.setDrawColor(220, 220, 220)
     doc.setLineWidth(0.5)
-    doc.line(14, yPos + 2, 196, yPos + 2)
+    doc.line(14, yPos, rightX, yPos)
 
     // ---- CLIENT & SUMMARY DETAILS ----
-    yPos += 12
-    doc.setFontSize(11)
+    yPos += (isA5 ? 5 : 7)
+    doc.setFontSize(isA5 ? 9 : 10)
     doc.setFont('helvetica', 'bold')
-    doc.text('BILL TO:', 14, yPos)
+    doc.text('Client:', 14, yPos)
+
+    const clientLabelWidth = doc.getTextWidth('Client: ')
     
     doc.setFont('helvetica', 'normal')
-    doc.text(client?.name || '', 14, yPos + 6)
-    if (client?.mobile) doc.text(`Mobile: ${client.mobile}`, 14, yPos + 12)
+    doc.text(client?.name || '', 14 + clientLabelWidth, yPos)
+    if (client?.mobile) doc.text(`Mobile: ${client.mobile}`, 14, yPos + (isA5 ? 5 : 6))
 
     doc.setFont('helvetica', 'bold')
-    doc.text('STATEMENT DATE:', 196, yPos, { align: 'right' })
+    doc.text('STATEMENT DATE:', rightX, yPos, { align: 'right' })
     doc.setFont('helvetica', 'normal')
-    doc.text(new Date().toLocaleDateString('en-GB'), 196, yPos + 6, { align: 'right' })
+    doc.text(new Date().toLocaleDateString('en-GB'), rightX, yPos + (isA5 ? 5 : 6), { align: 'right' })
 
     const finalBalance = filteredLedger.length > 0 ? filteredLedger[filteredLedger.length - 1].balance : 0
     doc.setFont('helvetica', 'bold')
-    doc.text('AMOUNT DUE:', 196, yPos + 14, { align: 'right' })
-    doc.setFontSize(12)
+    doc.text('AMOUNT DUE:', rightX, yPos + (isA5 ? 11 : 13), { align: 'right' })
+    doc.setFontSize(isA5 ? 10 : 11)
     doc.setTextColor(220, 38, 38) // Red if due
     if (finalBalance < 0) doc.setTextColor(16, 185, 129) // Green if credit
     if (finalBalance === 0) doc.setTextColor(0, 0, 0)
-    
-    doc.text(`Rs. ${Math.abs(finalBalance).toFixed(2)} ${finalBalance > 0 ? 'Dr' : (finalBalance < 0 ? 'Cr' : '')}`, 196, yPos + 20, { align: 'right' })
+
+    doc.text(`Rs. ${Math.abs(finalBalance).toFixed(2)} ${finalBalance > 0 ? 'Dr' : (finalBalance < 0 ? 'Cr' : '')}`, rightX, yPos + (isA5 ? 16 : 19), { align: 'right' })
 
     doc.setTextColor(0, 0, 0) // reset
 
     // ---- TABLE ----
     const tableData = filteredLedger.map(l => {
-       const dateStr = (() => {
-          const d = new Date(l.date)
-          if (!isNaN(d.getTime())) return d.toLocaleDateString('en-GB')
-          const parts = String(l.date).replace(/\//g, '-').split('-')
-          if (parts.length === 3 && parts[2].length === 4) {
-            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`).toLocaleDateString('en-GB')
-          }
-          return String(l.date).replace(/-/g, '/')
-        })()
-       return [
-         dateStr,
-         String(l.description).replace(/₹/g, 'Rs. '),
-         l.debit > 0 ? l.debit.toFixed(2) : '-',
-         l.credit > 0 ? l.credit.toFixed(2) : '-',
-         `${Math.abs(l.balance).toFixed(2)} ${l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}`
-       ]
+      return [
+        formatLedgerDate(l.date),
+        String(l.description).replace(/₹/g, 'Rs. '),
+        l.debit > 0 ? l.debit.toFixed(2) : '-',
+        l.credit > 0 ? l.credit.toFixed(2) : '-',
+        `${Math.abs(l.balance).toFixed(2)} ${l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}`
+      ]
     })
 
     autoTable(doc, {
-      startY: yPos + 30,
-      head: [['Date', 'Description', 'Debit (Material Delivered)', 'Credit (Payment Received)', 'Balance']],
+      startY: yPos + (isA5 ? 22 : 27),
+      head: [
+        isA5 
+          ? ['Date', 'Description', 'Debit', 'Credit', 'Balance'] 
+          : ['Date', 'Description', 'Debit (Material Delivered)', 'Credit (Payment Received)', 'Balance']
+      ],
       body: tableData,
       theme: 'grid',
-      headStyles: { 
+      headStyles: {
         fillColor: [215, 205, 185], // Elegant Beige
         textColor: 0, // Black text for contrast
-        fontStyle: 'bold'
+        fontStyle: 'bold',
+        fontSize: isA5 ? 7 : 9
       },
       styles: {
-        fontSize: 10,
-        cellPadding: 5,
+        fontSize: isA5 ? 7 : 9,
+        cellPadding: isA5 ? 2 : 4,
         lineColor: [220, 220, 220]
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252]
       },
       columnStyles: {
-        2: { halign: 'right' },
-        3: { halign: 'right' },
-        4: { halign: 'right', fontStyle: 'bold' }
+        0: { cellWidth: isA5 ? 18 : 25 },
+        1: { cellWidth: 'auto' },
+        2: { halign: 'right', cellWidth: isA5 ? 22 : 35 },
+        3: { halign: 'right', cellWidth: isA5 ? 22 : 35 },
+        4: { halign: 'right', fontStyle: 'bold', cellWidth: isA5 ? 24 : 35 }
       }
     })
 
@@ -430,6 +505,20 @@ export default function ClientLedger() {
       doc.save(`Ledger-${client?.name || 'Client'}.pdf`)
     } catch (e) {
       alert("Failed to generate PDF: " + e.message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handlePrintPDF() {
+    setExporting(true)
+    try {
+      const doc = await generatePDF()
+      doc.autoPrint()
+      const blobUrl = doc.output('bloburl')
+      window.open(blobUrl, '_blank')
+    } catch (e) {
+      alert("Failed to print: " + e.message)
     } finally {
       setExporting(false)
     }
@@ -486,7 +575,18 @@ export default function ClientLedger() {
                   <div style={{ fontSize: 20, fontWeight: 700 }}>{client.name}</div>
                   <div style={{ color: 'var(--text-muted)' }}>{client.mobile}</div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select
+                    value={paperSize}
+                    onChange={(e) => setPaperSize(e.target.value)}
+                    style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border-light)', fontSize: 13, background: 'var(--surface-color)' }}
+                  >
+                    <option value="a4">Size: A4</option>
+                    <option value="a5">Size: A5</option>
+                  </select>
+                  <button className="btn btn-secondary btn-sm" onClick={handlePrintPDF} disabled={exporting}>
+                    🖨️ {exporting ? 'Wait...' : 'Print'}
+                  </button>
                   <button className="btn btn-secondary btn-sm" onClick={handleDownloadPDF} disabled={exporting}>
                     📥 {exporting ? 'Wait...' : 'PDF'}
                   </button>
@@ -508,9 +608,9 @@ export default function ClientLedger() {
 
             {/* Tabs */}
             <div style={{ display: 'flex', gap: 16, marginBottom: 16, borderBottom: '1px solid var(--border-light)' }}>
-              <button 
+              <button
                 onClick={() => setActiveTab('ledger')}
-                style={{ 
+                style={{
                   background: 'none', border: 'none', padding: '8px 16px', fontSize: 16, cursor: 'pointer',
                   borderBottom: activeTab === 'ledger' ? '2px solid var(--primary-color)' : '2px solid transparent',
                   color: activeTab === 'ledger' ? 'var(--primary-color)' : 'var(--text-muted)',
@@ -518,9 +618,9 @@ export default function ClientLedger() {
                 }}>
                 Financial Ledger
               </button>
-              <button 
+              <button
                 onClick={() => setActiveTab('history')}
-                style={{ 
+                style={{
                   background: 'none', border: 'none', padding: '8px 16px', fontSize: 16, cursor: 'pointer',
                   borderBottom: activeTab === 'history' ? '2px solid var(--primary-color)' : '2px solid transparent',
                   color: activeTab === 'history' ? 'var(--primary-color)' : 'var(--text-muted)',
@@ -530,132 +630,128 @@ export default function ClientLedger() {
               </button>
             </div>
 
-            {activeTab === 'ledger' ? (
-              <>
-                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-                   <div className="search-bar" style={{ flex: 1, margin: 0, minWidth: 200 }}>
-                  <span>🔍</span>
-                  <input
-                    placeholder="Search transactions..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                  {search && <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')}>✕</button>}
-               </div>
-               <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'var(--surface-color)', padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-light)' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>From:</span>
-                  <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', padding: '8px 0' }} />
-               </div>
-               <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'var(--surface-color)', padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-light)' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>To:</span>
-                  <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', padding: '8px 0' }} />
-               </div>
-               {(fromDate || toDate) && (
-                 <button className="btn btn-ghost btn-sm" onClick={() => { setFromDate(''); setToDate('') }}>Clear Filter</button>
-               )}
+            {/* Global Filters */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div className="search-bar" style={{ flex: 1, margin: 0, minWidth: 200 }}>
+                <span>🔍</span>
+                <input
+                  placeholder={activeTab === 'ledger' ? "Search transactions..." : "Search products..."}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+                {search && <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')}>✕</button>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'var(--surface-color)', padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-light)' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>From:</span>
+                <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', padding: '8px 0' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'var(--surface-color)', padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-light)' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>To:</span>
+                <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', padding: '8px 0' }} />
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              {(fromDate || toDate) ? (
+                <button className="btn btn-ghost btn-sm" style={{ padding: 0, color: 'var(--primary-color)' }} onClick={() => { setFromDate(''); setToDate('') }}>Clear Date Filter</button>
+              ) : <div />}
+              {activeTab === 'ledger' && selectedRefs.size > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', background: '#fee2e2', padding: '4px 12px', borderRadius: 8, gap: 12 }}>
+                  <span style={{ fontWeight: 600, color: '#991b1b', fontSize: 13 }}>{selectedRefs.size} selected</span>
+                  <button className="btn btn-danger btn-sm" style={{ margin: 0 }} onClick={handleDeleteSelected}>🗑️ Delete</button>
+                </div>
+              )}
             </div>
 
-            {selectedRefs.size > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fee2e2', padding: '12px 16px', borderRadius: 8, marginBottom: 16 }}>
-                <span style={{ fontWeight: 600, color: '#991b1b' }}>{selectedRefs.size} entries selected</span>
-                <button className="btn btn-danger btn-sm" style={{ margin: 0 }} onClick={handleDeleteSelected}>🗑️ Delete Selected</button>
-              </div>
-            )}
-
-            <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ padding: '8px 4px', width: 30, textAlign: 'center' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={filteredLedger.filter(l => l.type !== 'OPENING').length > 0 && filteredLedger.filter(l => l.type !== 'OPENING').every(l => selectedRefs.has(l.ref))} 
-                        onChange={handleSelectAll} 
-                      />
-                    </th>
-                    <th style={{ padding: '8px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>Date</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'left' }}>Description</th>
-                    <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      Debit<br/><span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal' }}>(Material)</span>
-                    </th>
-                    <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      Credit<br/><span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal' }}>(Payment)</span>
-                    </th>
-                    <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLedger.map((l, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: l.type === 'OPENING' ? '#fffbeb' : (selectedRefs.has(l.ref) ? '#f0f9ff' : (l.type === 'QUOTE' ? '#f8fafc' : 'transparent')) }}>
-                      <td style={{ padding: '8px 4px', textAlign: 'center' }}>
-                        {l.type !== 'OPENING' && (
-                          <input 
-                            type="checkbox" 
-                            checked={selectedRefs.has(l.ref)} 
-                            onChange={() => {
-                              const newSet = new Set(selectedRefs)
-                              if (newSet.has(l.ref)) newSet.delete(l.ref)
-                              else newSet.add(l.ref)
-                              setSelectedRefs(newSet)
-                            }} 
+            {activeTab === 'ledger' ? (
+              <>
+                <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                        <th style={{ padding: '8px 4px', width: 30, textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={filteredLedger.filter(l => l.type !== 'OPENING').length > 0 && filteredLedger.filter(l => l.type !== 'OPENING').every(l => selectedRefs.has(l.ref))}
+                            onChange={handleSelectAll}
                           />
-                        )}
-                      </td>
-                      <td style={{ padding: '8px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>
-                        {(() => {
-                          const d = new Date(l.date)
-                          if (!isNaN(d.getTime())) return d.toLocaleDateString('en-GB')
-                          const parts = String(l.date).replace(/\//g, '-').split('-')
-                          if (parts.length === 3 && parts[2].length === 4) {
-                            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`).toLocaleDateString('en-GB')
-                          }
-                          return String(l.date).replace(/-/g, '/')
-                        })()}
-                      </td>
-                      <td style={{ padding: '8px 4px', textAlign: 'left', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-                          <span style={{ wordBreak: 'break-word' }}>{l.description}</span>
-                          {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && (
-                            <div style={{ display: 'flex' }}>
-                              <button 
-                                className="btn btn-ghost btn-sm" 
-                                style={{ padding: '2px 4px', margin: 0, color: 'var(--text-muted)' }}
-                                onClick={() => handleEditClick(l.ref)}
-                                title="Edit Payment"
-                              >
-                                ✏️
-                              </button>
-                              {role === 'ADMIN' && (
-                                <button 
-                                  className="btn btn-ghost btn-sm" 
-                                  style={{ padding: '2px 4px', margin: 0, color: '#dc2626' }}
-                                  onClick={() => handleDeletePayment(l.ref)}
-                                  title="Delete Payment"
-                                >
-                                  🗑️
-                                </button>
+                        </th>
+                        <th style={{ padding: '8px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>Date</th>
+                        <th style={{ padding: '8px 4px', textAlign: 'left' }}>Description</th>
+                        <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          Debit<br /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal' }}>(Material)</span>
+                        </th>
+                        <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          Credit<br /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal' }}>(Payment)</span>
+                        </th>
+                        <th style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredLedger.map((l, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: l.type === 'OPENING' ? '#fffbeb' : (selectedRefs.has(l.ref) ? '#f0f9ff' : (l.type === 'QUOTE' ? '#f8fafc' : 'transparent')) }}>
+                          <td style={{ padding: '8px 4px', textAlign: 'center' }}>
+                            {l.type !== 'OPENING' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedRefs.has(l.ref)}
+                                onChange={() => {
+                                  const newSet = new Set(selectedRefs)
+                                  if (newSet.has(l.ref)) newSet.delete(l.ref)
+                                  else newSet.add(l.ref)
+                                  setSelectedRefs(newSet)
+                                }}
+                              />
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 4px', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                            {formatLedgerDate(l.date)}
+                          </td>
+                          <td style={{ padding: '8px 4px', textAlign: 'left', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
+                              <span style={{ wordBreak: 'break-word' }}>{l.description}</span>
+                              {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && (
+                                <div style={{ display: 'flex' }}>
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ padding: '2px 4px', margin: 0, color: 'var(--text-muted)' }}
+                                    onClick={() => handleEditClick(l.ref)}
+                                    title="Edit Payment"
+                                  >
+                                    ✏️
+                                  </button>
+                                  {role === 'ADMIN' && (
+                                    <button
+                                      className="btn btn-ghost btn-sm"
+                                      style={{ padding: '2px 4px', margin: 0, color: '#dc2626' }}
+                                      onClick={() => handleDeletePayment(l.ref)}
+                                      title="Delete Payment"
+                                    >
+                                      🗑️
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ padding: '8px 4px', textAlign: 'right', color: '#ef4444', whiteSpace: 'nowrap' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
-                      <td style={{ padding: '8px 4px', textAlign: 'right', color: '#10b981', whiteSpace: 'nowrap' }}>{l.credit > 0 ? l.credit.toFixed(2) : '-'}</td>
-                      <td style={{ padding: '8px 4px', textAlign: 'right', fontWeight: l.type === 'QUOTE' ? 400 : 600, color: l.type === 'QUOTE' ? '#94a3b8' : '#000', whiteSpace: 'nowrap' }}>
-                        {Math.abs(l.balance).toFixed(2)} {l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredLedger.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20 }}>No transactions found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-              </div>
+                          </td>
+                          <td style={{ padding: '8px 4px', textAlign: 'right', color: '#ef4444', whiteSpace: 'nowrap' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
+                          <td style={{ padding: '8px 4px', textAlign: 'right', color: '#10b981', whiteSpace: 'nowrap' }}>{l.credit > 0 ? l.credit.toFixed(2) : '-'}</td>
+                          <td style={{ padding: '8px 4px', textAlign: 'right', fontWeight: l.type === 'QUOTE' ? 400 : 600, color: l.type === 'QUOTE' ? '#94a3b8' : '#000', whiteSpace: 'nowrap' }}>
+                            {Math.abs(l.balance).toFixed(2)} {l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredLedger.length === 0 && (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: 20 }}>No transactions found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </>
             ) : (
-              <div className="table-container" style={{ overflowX: 'auto', background: 'var(--surface-color)', borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <>
+                <div className="table-container" style={{ overflowX: 'auto', background: 'var(--surface-color)', borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                       <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date</th>
@@ -702,6 +798,7 @@ export default function ClientLedger() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
             {showModal && (
               <div className="modal-overlay">
@@ -710,7 +807,7 @@ export default function ClientLedger() {
                   <form onSubmit={handleAddPayment} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600 }}>Date</label>
-                      <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: 4 }} />
+                      <input type="date" value={payDate} max={new Date().toISOString().split('T')[0]} onChange={e => setPayDate(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: 4 }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600 }}>Amount (₹)</label>

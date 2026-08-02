@@ -25,19 +25,38 @@ export default function Login() {
     setError(null)
     setLoading(true)
     
-    // Simulate username login by appending @estimateapp.local
-    const email = `${username}@estimateapp.local`
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
+    // Simulate username login by trying @estimateapp.local first (for older users)
+    const emailLocal = `${username}@estimateapp.local`
+    
+    let { data, error } = await supabase.auth.signInWithPassword({
+      email: emailLocal,
       password,
     })
+
+    // If it fails with invalid credentials, it might be a newer user with @estimateapp.com
+    if (error && error.message.includes('Invalid login credentials')) {
+      const emailCom = `${username}@estimateapp.com`
+      const retry = await supabase.auth.signInWithPassword({
+        email: emailCom,
+        password,
+      })
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) {
       setError(error.message)
       setLoading(false)
     } else {
       await setSessionExpiry()
+      
+      // Enforce single session
+      const newToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
+      localStorage.setItem('active_session_token', newToken)
+      if (data?.user?.id) {
+        await supabase.from('user_roles').update({ current_session_token: newToken }).eq('id', data.user.id)
+      }
+      
       navigate('/', { replace: true })
     }
   }

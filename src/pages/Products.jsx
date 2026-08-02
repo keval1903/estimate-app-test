@@ -10,7 +10,7 @@ import { normalizeSearchQuery } from '../lib/synonyms.js'
 import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
 
 const EMPTY_FORM = {
-  product_name: '', keyword: '', length: '', width: '',
+  product_name: '', keyword: '', product_group: '', length: '', width: '',
   unit: '', rate: '', calculation_type: 'QUANTITY',
   has_stock: false, stock: '', add_stock: '', min_stock: '5',
   has_remark: false, has_discount: false
@@ -95,7 +95,7 @@ export default function Products() {
 
   function openEdit(p) {
     setForm({
-      product_name: p.product_name, keyword: p.keyword ?? '', length: p.length ?? '',
+      product_name: p.product_name, keyword: p.keyword ?? '', product_group: p.product_group ?? '', length: p.length ?? '',
       width: p.width ?? '', unit: p.unit, rate: p.rate,
       calculation_type: p.calculation_type,
       has_stock: p.has_stock || false, stock: p.stock ?? '', add_stock: '',
@@ -165,6 +165,7 @@ export default function Products() {
     const payload = {
       product_name: form.product_name.trim().toUpperCase(),
       keyword: form.keyword ? form.keyword.trim() : null,
+      product_group: form.product_group ? form.product_group.trim() : 'Uncategorized',
       unit: form.unit.trim(), rate: Number(form.rate),
       calculation_type: form.calculation_type,
       length: isDimensionBased && form.length ? Number(form.length) : null,
@@ -635,6 +636,7 @@ export default function Products() {
               </span>
             </div>
             <div className="item-grid" style={{ marginTop:8, marginLeft: 26 }}>
+              <div><span style={{ color:'var(--text-muted)', fontSize:12 }}>GROUP</span><br />{p.product_group || 'Uncategorized'}</div>
               <div><span style={{ color:'var(--text-muted)', fontSize:12 }}>UNIT</span><br />{p.unit}</div>
               <div><span style={{ color:'var(--text-muted)', fontSize:12 }}>RATE</span><br />₹{Number(p.rate).toFixed(2)}</div>
               {(p.calculation_type === 'SQFT' || p.calculation_type === 'INCH' || p.calculation_type === 'FEET') && (p.length || p.width) && (
@@ -653,7 +655,7 @@ export default function Products() {
               )}
             </div>
             <div className="item-actions" style={{ marginLeft: 26 }}>
-              {role === 'ADMIN' && p.has_stock && (
+              {p.has_stock && (
                 <button className="btn btn-primary btn-sm" style={{ background: '#10b981' }} onClick={() => handleQuickAddStock(p)}>
                   ➕ Stock
                 </button>
@@ -689,10 +691,17 @@ export default function Products() {
               <input name="product_name" value={form.product_name} onChange={handleFormChange}
                 placeholder="e.g. C PLY 4 18 MM 7 x 4" style={{ textTransform:'uppercase' }} />
             </div>
-            <div className="field">
-              <label>Highlight Keyword (Optional)</label>
-              <input name="keyword" value={form.keyword || ''} onChange={handleFormChange}
-                placeholder="e.g. PLYWOOD or SPECIAL OFFER" />
+            <div className="field-row">
+              <div className="field">
+                <label>Product Group</label>
+                <input name="product_group" value={form.product_group || ''} onChange={handleFormChange}
+                  placeholder="e.g. Hardware, Plywood" />
+              </div>
+              <div className="field">
+                <label>Highlight Keyword (Optional)</label>
+                <input name="keyword" value={form.keyword || ''} onChange={handleFormChange}
+                  placeholder="e.g. PLYWOOD or SPECIAL OFFER" />
+              </div>
             </div>
             <div className="field-row">
               <div className="field">

@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [onlineUsers, setOnlineUsers] = useState(new Set())
 
   async function fetchRole(userId) {
     if (!userId) {
@@ -17,7 +18,7 @@ export function AuthProvider({ children }) {
     }
     const { data, error } = await supabase
       .from('user_roles')
-      .select('role, is_active')
+      .select('role, is_active, current_session_token')
       .eq('id', userId)
       .single()
       
@@ -34,8 +35,24 @@ export function AuthProvider({ children }) {
     if (!data.is_active) {
       await supabase.auth.signOut()
       alert('Your account has been disabled. Please contact the administrator.')
-      setRole(null)
       return false
+    }
+
+    // Verify session token for single active session
+    const localToken = localStorage.getItem('active_session_token')
+    if (data.current_session_token) {
+      if (localToken !== data.current_session_token) {
+        await supabase.auth.signOut()
+        localStorage.removeItem('active_session_token')
+        alert('You have been logged out because your account was accessed from another device.')
+        setRole(null)
+        return false
+      }
+    } else {
+      // Legacy session without a token, generate one to prevent getting immediately kicked out by future logins
+      const newToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
+      localStorage.setItem('active_session_token', newToken)
+      await supabase.from('user_roles').update({ current_session_token: newToken }).eq('id', userId)
     }
 
     setRole(data.role)
@@ -97,10 +114,40 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  // Broadcast presence when user is logged in
+  useEffect(() => {
+    if (!user) {
+      setOnlineUsers(new Set())
+      return
+    }
+    
+    const channel = supabase.channel('online-users', {
+      config: {
+        presence: { key: user.id }
+      }
+    })
+    
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState()
+      setOnlineUsers(new Set(Object.keys(state)))
+    })
+    
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({ online_at: new Date().toISOString() })
+      }
+    })
+    
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [user])
+
   const value = {
     user,
     role,
-    loading
+    loading,
+    onlineUsers
   }
 
   return (

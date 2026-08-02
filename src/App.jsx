@@ -10,6 +10,7 @@ import StockReport from './pages/StockReport'
 import Clients from './pages/Clients'
 import ClientLedger from './pages/ClientLedger'
 import UserManagement from './pages/UserManagement'
+import SalesReport from './pages/SalesReport'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/stock-report" element={<ProtectedRoute><StockReport /></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
           <Route path="/clients/:id" element={<ProtectedRoute><ClientLedger /></ProtectedRoute>} />
+          <Route path="/sales-report" element={<ProtectedRoute><SalesReport /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>

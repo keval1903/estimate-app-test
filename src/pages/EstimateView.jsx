@@ -38,13 +38,14 @@ export default function EstimateView() {
 
       // Fetch ledger balance if this is a final estimate linked to a client
       if (est?.type === 'ESTIMATE' && est?.client_id) {
-        const { data: estData } = await supabase.from('estimates').select('grand_total').eq('client_id', est.client_id).eq('type', 'ESTIMATE')
+        const { data: estData } = await supabase.from('estimates').select('grand_total, type').eq('client_id', est.client_id).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
         const { data: payData } = await supabase.from('payments').select('amount').eq('client_id', est.client_id)
         const { data: cData } = await supabase.from('clients').select('opening_balance').eq('id', est.client_id).single()
 
-        const estTotal = (estData || []).reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
+        const estTotal = (estData || []).filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
+        const returnTotal = (estData || []).filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
         const payTotal = (payData || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
-        setClientBalance(Number(cData?.opening_balance || 0) + estTotal - payTotal)
+        setClientBalance(Number(cData?.opening_balance || 0) + estTotal - returnTotal - payTotal)
       }
 
       setLoading(false)
@@ -571,7 +572,7 @@ export default function EstimateView() {
 
                   {/* Meta details */}
                   <tr>
-                    <td colSpan={3} style={{ padding: '6px 10px', borderBottom: '1px solid #000', borderRight: '1px solid #000' }}>
+                    <td colSpan={isChallanMode ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000', borderRight: '1px solid #000' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <tbody>
                           {[
@@ -588,7 +589,7 @@ export default function EstimateView() {
                         </tbody>
                       </table>
                     </td>
-                    <td colSpan={isChallanMode ? 1 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000' }}>
+                    <td colSpan={isChallanMode ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <tbody>
                           {[
@@ -597,7 +598,7 @@ export default function EstimateView() {
                             ['Prep. By', estimate.prepared_by || ''],
                           ].map(([label, val]) => (
                             <tr key={label}>
-                              <td style={{ width: 68, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
+                              <td style={{ width: 56, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
                               <td style={{ width: 10, paddingBottom: 2 }}>:</td>
                               <td style={{ fontWeight: 400, paddingBottom: 2 }}>{val}</td>
                             </tr>
@@ -816,10 +817,21 @@ export default function EstimateView() {
             background: white !important;
             margin: 0 !important;
             box-sizing: border-box !important;
+            display: block !important;
+            overflow: visible !important;
+          }
+          #print-area > div, #print-area > div > div {
+            display: block !important;
+            transform: none !important;
+            height: auto !important;
+            max-width: none !important;
+            width: auto !important;
           }
           #estimate-preview {
+            display: block !important;
             max-width: none !important;
             padding: 4mm 4mm 15mm 4mm !important;
+            height: auto !important;
           }
           #estimate-preview table {
             width: 100% !important;
@@ -828,6 +840,10 @@ export default function EstimateView() {
           #estimate-preview td {
             word-wrap: break-word !important;
             overflow-wrap: break-word !important;
+          }
+          #estimate-preview tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
         }
       `}</style>

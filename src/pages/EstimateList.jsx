@@ -70,33 +70,22 @@ export default function EstimateList() {
   async function handleDelete(est) {
     setDeleting(true)
     
-    if (est.type === 'ESTIMATE' && est.client_id) {
-      await supabase.from('payments').insert({
-        client_id: est.client_id,
-        payment_date: est.bill_date,
-        amount: -Math.abs(est.grand_total || 0),
-        description: `Bill #${est.bill_number} (Preserved Balance)`,
-        payment_mode: ''
-      })
-    } else if (est.type === 'RETURN' && est.client_id) {
-      await supabase.from('payments').insert({
-        client_id: est.client_id,
-        payment_date: est.bill_date,
-        amount: Math.abs(est.grand_total || 0),
-        description: `Return #${est.bill_number} (Preserved Balance)`,
-        payment_mode: ''
-      })
-    }
-
-    // also delete from client_purchases
-    await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number);
-
-    // items cascade-delete via FK
-    const { error } = await supabase.from('estimates').delete().eq('id', est.id)
-    if (error) showToast('Delete failed: ' + error.message, 'error')
-    else {
-      showToast(`Bill #${est.bill_number} deleted`)
-      fetchEstimates()
+    if (est.type === 'QUOTATION' || !est.type) {
+      await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number);
+      const { error } = await supabase.from('estimates').delete().eq('id', est.id)
+      if (error) showToast('Delete failed: ' + error.message, 'error')
+      else {
+        showToast(`${est.type === 'QUOTATION' ? 'Quotation' : 'Bill'} #${est.bill_number} deleted`)
+        fetchEstimates()
+      }
+    } else {
+      const newType = est.type === 'ESTIMATE' ? 'DELETED_ESTIMATE' : 'DELETED_RETURN';
+      const { error } = await supabase.from('estimates').update({ type: newType }).eq('id', est.id)
+      if (error) showToast('Delete failed: ' + error.message, 'error')
+      else {
+        showToast(`Bill #${est.bill_number} marked as deleted`)
+        fetchEstimates()
+      }
     }
     setDeleteConfirm(null)
     setDeleting(false)
@@ -109,37 +98,40 @@ export default function EstimateList() {
     setDeleting(true)
     const arr = Array.from(selectedIds)
     
-    // get full estimates for these IDs to preserve ledger
-    const { data: estsToPreserve } = await supabase.from('estimates').select('*').in('id', arr).in('type', ['ESTIMATE', 'RETURN']).not('client_id', 'is', null)
+    const { data: estsToDelete } = await supabase.from('estimates').select('id, type, bill_number').in('id', arr);
     
-    if (estsToPreserve && estsToPreserve.length > 0) {
-      const inserts = estsToPreserve.map(e => {
-        const isReturn = e.type === 'RETURN';
-        return {
-          client_id: e.client_id,
-          payment_date: e.bill_date,
-          amount: isReturn ? Math.abs(e.grand_total || 0) : -Math.abs(e.grand_total || 0),
-          description: isReturn ? `Return #${e.bill_number} (Preserved Balance)` : `Bill #${e.bill_number} (Preserved Balance)`,
-          payment_mode: ''
-        };
-      })
-      await supabase.from('payments').insert(inserts)
-    }
-
-    // delete client purchases for selected estimates
-    const { data: estsToDelete } = await supabase.from('estimates').select('bill_number').in('id', arr);
     if (estsToDelete && estsToDelete.length > 0) {
-      const billNumbers = estsToDelete.map(e => e.bill_number);
-      await supabase.from('client_purchases').delete().in('bill_number', billNumbers);
+      const softDeleteIds = [];
+      const hardDeleteIds = [];
+      const hardDeleteBillNumbers = [];
+      const returnSoftDeleteIds = [];
+      
+      for (const e of estsToDelete) {
+        if (e.type === 'QUOTATION' || !e.type) {
+          hardDeleteIds.push(e.id);
+          hardDeleteBillNumbers.push(e.bill_number);
+        } else if (e.type === 'RETURN') {
+          returnSoftDeleteIds.push(e.id);
+        } else {
+          softDeleteIds.push(e.id);
+        }
+      }
+      
+      if (softDeleteIds.length > 0) {
+        await supabase.from('estimates').update({ type: 'DELETED_ESTIMATE' }).in('id', softDeleteIds);
+      }
+      if (returnSoftDeleteIds.length > 0) {
+        await supabase.from('estimates').update({ type: 'DELETED_RETURN' }).in('id', returnSoftDeleteIds);
+      }
+      if (hardDeleteIds.length > 0) {
+        await supabase.from('client_purchases').delete().in('bill_number', hardDeleteBillNumbers);
+        await supabase.from('estimates').delete().in('id', hardDeleteIds);
+      }
     }
 
-    const { error } = await supabase.from('estimates').delete().in('id', arr)
-    if (error) showToast('Batch delete failed: ' + error.message, 'error')
-    else {
-      showToast(`${arr.length} estimates deleted`)
-      setSelectedIds(new Set())
-      fetchEstimates()
-    }
+    showToast(`${arr.length} estimates deleted`)
+    setSelectedIds(new Set())
+    fetchEstimates()
     setDeleting(false)
   }
 
