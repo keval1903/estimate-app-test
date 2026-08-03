@@ -2,16 +2,24 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { downloadExcelBackup } from '../lib/excelBackup'
+import { syncOfflineCache } from '../lib/offlineStorage'
 
 export default function Home() {
   const navigate = useNavigate()
   const { role } = useAuth()
   const [connOk, setConnOk] = useState(null)
   const [lowStockCount, setLowStockCount] = useState(0)
+  const [downloadingBackup, setDownloadingBackup] = useState(false)
 
   useEffect(() => {
     supabase.from('products').select('id', { count: 'exact', head: true })
-      .then(({ error }) => setConnOk(!error))
+      .then(({ error }) => {
+        setConnOk(!error)
+        if (!error) {
+          syncOfflineCache(supabase)
+        }
+      })
 
     // Fetch low stock items count
     supabase.from('products').select('stock, min_stock, has_stock')
@@ -23,6 +31,17 @@ export default function Home() {
         }
       })
   }, [])
+
+  async function handleBackupDownload() {
+    setDownloadingBackup(true)
+    try {
+      await downloadExcelBackup(supabase)
+    } catch (e) {
+      alert('Failed to download backup: ' + e.message)
+    } finally {
+      setDownloadingBackup(false)
+    }
+  }
 
   return (
     <div className="app-container">
@@ -136,13 +155,25 @@ export default function Home() {
         </button>
 
         {role === 'ADMIN' && (
-          <button className="home-btn" onClick={() => navigate('/users')}>
-            <div className="home-btn-icon" style={{ background: '#f3e8ff' }}>🛡️</div>
-            <div>
-              <div className="home-btn-text">USER MANAGEMENT</div>
-              <div className="home-btn-sub">Add staff accounts and manage roles</div>
-            </div>
-          </button>
+          <>
+            <button className="home-btn" onClick={handleBackupDownload} disabled={downloadingBackup}>
+              <div className="home-btn-icon" style={{ background: '#dcfce7' }}>📥</div>
+              <div>
+                <div className="home-btn-text">
+                  {downloadingBackup ? 'GENERATING EXCEL...' : 'DOWNLOAD EXCEL BACKUP'}
+                </div>
+                <div className="home-btn-sub">Export full client ledgers & estimates as Excel (.xlsx)</div>
+              </div>
+            </button>
+
+            <button className="home-btn" onClick={() => navigate('/users')}>
+              <div className="home-btn-icon" style={{ background: '#f3e8ff' }}>🛡️</div>
+              <div>
+                <div className="home-btn-text">USER MANAGEMENT</div>
+                <div className="home-btn-sub">Add staff accounts and manage roles</div>
+              </div>
+            </button>
+          </>
         )}
       </div>
     </div>
