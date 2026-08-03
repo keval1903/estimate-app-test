@@ -101,9 +101,9 @@ export default function EstimateView() {
     return text
   }
 
-  async function generateCanvas(el, scale = 2, targetWidth = '680px') {
+  async function generateCanvas(el, scale = 2, targetWidth = '680px', addPadding = false) {
     const { default: html2canvas } = await import('html2canvas')
-    const targetEl = el.querySelector('table') || el
+    const targetEl = (addPadding && el.querySelector('table')) || el
 
     // Force exact width so canvas aspect ratio perfectly matches physical paper sizes
     const originalWidth = targetEl.style.width
@@ -129,7 +129,9 @@ export default function EstimateView() {
     targetEl.style.maxWidth = originalMaxWidth
     window.scrollTo(0, oldScroll)
 
-    // Add clean 16px white margin padding around all 4 sides of the table
+    if (!addPadding) return rawCanvas;
+
+    // Add clean 16px white margin padding around all 4 sides of the table (for Image / WhatsApp export)
     const padding = 16 * scale
     const finalCanvas = document.createElement('canvas')
     finalCanvas.width = rawCanvas.width + (padding * 2)
@@ -152,20 +154,16 @@ export default function EstimateView() {
       const { default: jsPDF } = await import('jspdf')
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: paperSize })
       const pdfW = pdf.internal.pageSize.getWidth()
+      const pdfH = pdf.internal.pageSize.getHeight()
 
       const pagesEls = document.querySelectorAll('.estimate-page')
       const targetWidth = paperSize === 'a5' ? '529px' : '763px'
 
       for (let i = 0; i < pagesEls.length; i++) {
         if (i > 0) pdf.addPage()
-        const canvas = await generateCanvas(pagesEls[i], 2, targetWidth)
-        const imgData = canvas.toDataURL('image/png')
-
-        const margin = 8; // 8mm margin on all sides
-        const drawWidth = pdfW - (margin * 2);
-        const drawHeight = (canvas.height * drawWidth) / canvas.width;
-
-        pdf.addImage(imgData, 'PNG', margin, margin, drawWidth, drawHeight)
+        const canvas = await generateCanvas(pagesEls[i], 2, targetWidth, false)
+        const imgData = canvas.toDataURL('image/jpeg', 0.95)
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH)
       }
 
       pdf.save(getFilename('pdf'))
@@ -182,7 +180,8 @@ export default function EstimateView() {
       setIsExportingSingleImage(true)
     })
     try {
-      const canvas = await generateCanvas(previewRef.current, 3)
+      const targetWidth = paperSize === 'a5' ? '529px' : '763px'
+      const canvas = await generateCanvas(previewRef.current, 3, targetWidth, true)
       const link = document.createElement('a')
       link.download = getFilename('png')
       link.href = canvas.toDataURL('image/png')
@@ -242,7 +241,7 @@ export default function EstimateView() {
     try {
       const scale = isMobile ? 1.5 : 2
       const targetWidth = paperSize === 'a5' ? '529px' : '763px'
-      const canvas = await generateCanvas(previewRef.current, scale, targetWidth)
+      const canvas = await generateCanvas(previewRef.current, scale, targetWidth, true)
       const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
       const file = new File([blob], getFilename('png'), { type: 'image/png' })
 
