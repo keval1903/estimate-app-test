@@ -199,7 +199,9 @@ export default function EstimateView() {
 
   async function handleWhatsApp() {
     const text = getSummaryText()
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`
+    let phone = estimate?.client_mobile ? String(estimate.client_mobile).replace(/\D/g, '') : ''
+    if (phone && phone.length === 10) phone = '91' + phone
+    const waUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`
     
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     const canNativeShare = isMobile && !!navigator.share
@@ -224,7 +226,7 @@ export default function EstimateView() {
       if (canNativeShare) {
         try {
           const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
-          if (!blob) throw new Error("Image generation failed (too large).")
+          if (!blob) throw new Error("Image generation failed.")
           const files = [new File([blob], getFilename('png'), { type: 'image/png' })]
 
           if (navigator.canShare && !navigator.canShare({ files })) {
@@ -238,25 +240,15 @@ export default function EstimateView() {
           }
         }
       } else {
-        // Desktop: Copy image to Clipboard so user can Ctrl+V in WhatsApp Web
+        // Desktop: Download sanitized image and open WhatsApp Web directly to client chat
         try {
-          const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
-          if (navigator.clipboard && window.ClipboardItem && blob) {
-            await navigator.clipboard.write([
-              new ClipboardItem({ 'image/png': blob })
-            ])
-            showToast('Image copied to clipboard! Press Ctrl+V in WhatsApp to paste.', 'success', 6000)
-          } else {
-            const link = document.createElement('a')
-            link.download = getFilename('png')
-            link.href = canvas.toDataURL('image/png')
-            link.click()
-          }
-        } catch (e) {
           const link = document.createElement('a')
           link.download = getFilename('png')
           link.href = canvas.toDataURL('image/png')
           link.click()
+          showToast('Image downloaded! Opening WhatsApp to client chat...', 'success', 5000)
+        } catch (e) {
+          showToast('Failed to save image', 'error')
         }
       }
     } finally {
