@@ -116,7 +116,7 @@ export default function EstimateView() {
     // Force browser to recalculate layout synchronously without losing user gesture
     void targetEl.offsetHeight
 
-    const canvas = await html2canvas(targetEl, {
+    const rawCanvas = await html2canvas(targetEl, {
       scale,
       useCORS: true,
       backgroundColor: '#fff',
@@ -129,7 +129,17 @@ export default function EstimateView() {
     targetEl.style.maxWidth = originalMaxWidth
     window.scrollTo(0, oldScroll)
 
-    return canvas
+    // Add clean 16px white margin padding around all 4 sides of the table
+    const padding = 16 * scale
+    const finalCanvas = document.createElement('canvas')
+    finalCanvas.width = rawCanvas.width + (padding * 2)
+    finalCanvas.height = rawCanvas.height + (padding * 2)
+    const ctx = finalCanvas.getContext('2d')
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height)
+    ctx.drawImage(rawCanvas, padding, padding)
+
+    return finalCanvas
   }
 
   function handlePrint() {
