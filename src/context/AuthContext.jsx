@@ -87,14 +87,19 @@ export function AuthProvider({ children }) {
       if (!mounted) return;
       
       if (session) {
-        const [isValid, allowed] = await Promise.all([
-          checkSessionExpiry(supabase),
-          fetchRole(session.user.id)
-        ]);
-        if (!isValid || !allowed) {
+        const isValid = await checkSessionExpiry(supabase);
+        if (!isValid) {
+          // checkSessionExpiry already called signOut
           setUser(null);
           setRole(null);
           setLoading(false);
+          return;
+        }
+
+        const allowed = await fetchRole(session.user.id)
+        if (!allowed) {
+          setUser(null)
+          setLoading(false)
           return;
         }
       }
