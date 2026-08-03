@@ -200,18 +200,15 @@ export default function EstimateView() {
     const text = getSummaryText()
     const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`
     
-    let canShareFiles = false;
-    if (navigator.share && navigator.canShare) {
-      try {
-        canShareFiles = navigator.canShare({ files: [new File([''], 'test.png', { type: 'image/png' })] })
-      } catch (e) {}
-    } else if (navigator.share) {
-      canShareFiles = true;
-    }
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    const canNativeShare = isMobile && !!navigator.share
 
     let fallbackWindow = null;
-    if (!canShareFiles) {
+    if (!canNativeShare) {
       fallbackWindow = window.open(waUrl, '_blank');
+      if (!fallbackWindow) {
+        showToast('Please allow popups to open WhatsApp', 'error')
+      }
     }
 
     flushSync(() => {
@@ -220,44 +217,40 @@ export default function EstimateView() {
     })
 
     try {
-      // Try native share with image first (mobile/HTTPS)
-      if (canShareFiles) {
+      const canvas = await generateCanvas(previewRef.current, 3)
+      
+      if (canNativeShare) {
         try {
-          const canvas = await generateCanvas(previewRef.current, 3)
           const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
           const files = [new File([blob], getFilename('png'), { type: 'image/png' })]
 
-          // If canShare exists, check it. Otherwise, assume true and try anyway.
-          const isShareSupported = navigator.canShare ? navigator.canShare({ files }) : true;
-
-          if (isShareSupported) {
-            try {
-              await navigator.clipboard.writeText(text)
-              showToast('Caption copied! Paste it in WhatsApp')
-            } catch (e) { }
-
-            await navigator.share({ files, title: `Estimate #${estimate.bill_number}`, text })
-            return // Success! Exit early.
+          if (navigator.canShare && !navigator.canShare({ files })) {
+            throw new Error("File sharing not supported on this device.")
           }
+
+          try {
+            await navigator.clipboard.writeText(text)
+            showToast('Caption copied! Paste it in WhatsApp')
+          } catch (e) { }
+
+          await navigator.share({ files, title: `Estimate #${estimate.bill_number}`, text })
         } catch (error) {
-          if (error.name === 'AbortError') return;
-          // Native share failed, fall through to fallback
+          if (error.name !== 'AbortError') {
+            showToast('Native share failed: ' + error.message, 'error')
+          }
+        }
+      } else {
+        // Desktop Fallback: Download image and open WhatsApp Web
+        try {
+          const link = document.createElement('a')
+          link.download = getFilename('png')
+          link.href = canvas.toDataURL('image/png')
+          link.click()
+          showToast('Image saved! Please attach it manually in WhatsApp.', 'success', 5000)
+        } catch (e) {
+          showToast('Failed to save image', 'error')
         }
       }
-
-      // Fallback for when native file share is unsupported or blocked
-      if (!fallbackWindow) {
-        fallbackWindow = window.open(waUrl, '_blank');
-      }
-
-      try {
-        const canvas = await generateCanvas(previewRef.current, 3)
-        const link = document.createElement('a')
-        link.download = getFilename('png')
-        link.href = canvas.toDataURL('image/png')
-        link.click()
-        showToast('Image saved to device! Please attach it manually in WhatsApp.', 'success', 5000)
-      } catch (e) { }
     } finally {
       setIsExportingSingleImage(false)
       setExporting('')

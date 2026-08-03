@@ -530,46 +530,45 @@ export default function ClientLedger() {
     if (phone && phone.length === 10) phone = '91' + phone
     const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
 
-    let canShareFiles = false;
-    if (navigator.share && navigator.canShare) {
-      try {
-        canShareFiles = navigator.canShare({ files: [new File([''], 'test.pdf', { type: 'application/pdf' })] })
-      } catch (e) {}
-    } else if (navigator.share) {
-      canShareFiles = true;
-    }
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    const canNativeShare = isMobile && !!navigator.share
 
     let fallbackWindow = null;
-    if (!canShareFiles) {
+    if (!canNativeShare) {
       fallbackWindow = window.open(waUrl, '_blank');
+      if (!fallbackWindow) {
+        alert('Please allow popups to open WhatsApp')
+      }
     }
 
     setExporting(true)
     try {
       const doc = await generatePDF()
-      const blob = doc.output('blob')
-      const file = new File([blob], `Ledger-${client?.name || 'Client'}.pdf`, { type: 'application/pdf' })
+      
+      if (canNativeShare) {
+        const blob = doc.output('blob')
+        const file = new File([blob], `Ledger-${client?.name || 'Client'}.pdf`, { type: 'application/pdf' })
+        
+        if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+          throw new Error("File sharing not supported on this device.")
+        }
 
-      if (canShareFiles) {
         try {
           await navigator.share({
             files: [file],
             title: 'Statement of Account',
             text: text
           })
-          return;
         } catch (error) {
-          if (error.name === 'AbortError') return;
+          if (error.name !== 'AbortError') {
+            alert('Native share failed: ' + error.message)
+          }
         }
-      } 
-      
-      // Fallback for desktop/unsupported browsers or if share failed (but not aborted)
-      if (!fallbackWindow) {
-        fallbackWindow = window.open(waUrl, '_blank');
+      } else {
+        // Desktop Fallback
+        doc.save(`Ledger-${client?.name || 'Client'}.pdf`)
+        alert("Your PDF has been downloaded. We will now open WhatsApp where you can manually attach the file.")
       }
-      doc.save(`Ledger-${client?.name || 'Client'}.pdf`)
-      alert("Your PDF has been downloaded. We will now open WhatsApp where you can manually attach the file.")
-      
     } catch (e) {
       alert("Failed to share: " + e.message)
     } finally {
