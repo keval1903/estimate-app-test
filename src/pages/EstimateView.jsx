@@ -217,11 +217,13 @@ export default function EstimateView() {
     })
 
     try {
-      const canvas = await generateCanvas(previewRef.current, 3)
+      const scale = isMobile ? 1.5 : 3
+      const canvas = await generateCanvas(previewRef.current, scale)
       
       if (canNativeShare) {
         try {
           const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
+          if (!blob) throw new Error("Image generation failed (too large).")
           const files = [new File([blob], getFilename('png'), { type: 'image/png' })]
 
           if (navigator.canShare && !navigator.canShare({ files })) {
