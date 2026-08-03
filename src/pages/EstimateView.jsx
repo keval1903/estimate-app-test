@@ -203,8 +203,8 @@ export default function EstimateView() {
     if (phone && phone.length === 10) phone = '91' + phone
     const waUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`
 
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-    const canNativeShare = isMobile && !!navigator.share
+    // Allow Web Share API on any platform (Mobile & Desktop Windows) if supported
+    const canNativeShare = !!navigator.share
 
     let fallbackWindow = null;
     if (!canNativeShare) {

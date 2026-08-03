@@ -536,8 +536,7 @@ export default function ClientLedger() {
     if (phone && phone.length === 10) phone = '91' + phone
     const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
 
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-    const canNativeShare = isMobile && !!navigator.share
+    const canNativeShare = !!navigator.share
 
     let fallbackWindow = null;
     if (!canNativeShare) {
