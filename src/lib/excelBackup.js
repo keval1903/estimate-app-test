@@ -81,6 +81,7 @@ export async function generateExcelWorkbook(supabase) {
 }
 
 export async function downloadExcelBackup(supabase) {
+  const XLSX = await import('xlsx')
   const wb = await generateExcelWorkbook(supabase)
   const dateStr = new Date().toISOString().split('T')[0]
   XLSX.writeFile(wb, `Ledger_Backup_${dateStr}.xlsx`)
