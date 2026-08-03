@@ -1,66 +1,84 @@
 export async function generateExcelWorkbook(supabase) {
   try {
     const XLSX = await import('xlsx')
+
     // 1. Fetch Clients
     const { data: clients } = await supabase
       .from('clients')
       .select('*')
       .order('name', { ascending: true })
 
-    // 2. Fetch Payments
+    // 2. Fetch Payments (table: 'payments')
     const { data: payments } = await supabase
-      .from('client_payments')
+      .from('payments')
       .select('*')
       .order('payment_date', { ascending: false })
 
-    // 3. Fetch Estimates
+    // 3. Fetch Estimates & Returns
     const { data: estimates } = await supabase
       .from('estimates')
       .select('*')
       .order('bill_number', { ascending: false })
 
-    // Build Sheet 1: Client Balances
-    const clientRows = (clients || []).map(c => {
-      const clientEstimates = (estimates || []).filter(e => String(e.client_id) === String(c.id) && e.type === 'ESTIMATE')
-      const totalDebit = clientEstimates.reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0) + (Number(c.opening_balance) || 0)
-      
-      const clientPayments = (payments || []).filter(p => String(p.client_id) === String(c.id))
-      const totalCredit = clientPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+    const clientMap = new Map((clients || []).map(c => [c.id, c.name]))
 
+    // Build Sheet 1: Client Ledger Balances
+    const clientRows = (clients || []).map(c => {
+      const openingBal = Number(c.opening_balance || 0)
+      const openingDebit = openingBal > 0 ? openingBal : 0
+      const openingCredit = openingBal < 0 ? Math.abs(openingBal) : 0
+
+      const clientEsts = (estimates || []).filter(e => String(e.client_id) === String(c.id))
+      const estTotal = clientEsts
+        .filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE')
+        .reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
+
+      const returnTotal = clientEsts
+        .filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN')
+        .reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
+
+      const clientPayments = (payments || []).filter(p => String(p.client_id) === String(c.id))
+      const payTotal = clientPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+
+      const totalDebit = openingDebit + estTotal
+      const totalCredit = openingCredit + returnTotal + payTotal
       const netBalance = totalDebit - totalCredit
-      const type = netBalance > 0 ? 'Dr (Due)' : (netBalance < 0 ? 'Cr (Advance)' : '0.00')
+
+      let status = 'Clear'
+      if (netBalance > 0) status = 'Dr (Due)'
+      if (netBalance < 0) status = 'Cr (Advance)'
 
       return {
         'Client Name': c.name || 'Unnamed',
         'Mobile': c.mobile || '-',
-        'Opening Balance': Number(c.opening_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-        'Total Debit (Billing)': totalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-        'Total Credit (Payments)': totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-        'Net Outstanding Balance': Math.abs(netBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-        'Status': type
+        'Opening Balance': openingBal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        'Total Bills / Debit (₹)': totalDebit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        'Total Paid / Credit (₹)': totalCredit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        'Net Outstanding Balance (₹)': Math.abs(netBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        'Status': status
       }
     })
 
-    // Build Sheet 2: Estimates & Quotations
+    // Build Sheet 2: Estimates, Quotations & Returns
     const estimateRows = (estimates || []).map(e => ({
       'Bill No': e.bill_number,
       'Type': e.type || 'ESTIMATE',
       'Date': e.bill_date || '-',
-      'Client': e.client_name || e.transport || 'Cash',
+      'Client': e.client_name || e.transport || clientMap.get(e.client_id) || 'Cash',
       'Site': e.site_name || '-',
-      'Sub Total': Number(e.sub_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-      'GST Amount': Number(e.gst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-      'Grand Total': Number(e.grand_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+      'Sub Total (₹)': Number(e.sub_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      'GST Amount (₹)': Number(e.gst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      'Grand Total (₹)': Number(e.grand_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       'Prep By': e.prepared_by || '-'
     }))
 
     // Build Sheet 3: Payments Log
     const paymentRows = (payments || []).map(p => ({
       'Date': p.payment_date || '-',
-      'Client ID': p.client_id || '-',
-      'Amount (₹)': Number(p.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+      'Client Name': clientMap.get(p.client_id) || 'Unknown Client',
+      'Amount (₹)': Number(p.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       'Payment Mode': p.payment_mode || 'CASH',
-      'Notes / Ref': p.notes || '-'
+      'Description / Ref': p.description || '-'
     }))
 
     const wb = XLSX.utils.book_new()

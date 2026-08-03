@@ -11,7 +11,7 @@ export async function syncOfflineCache(supabase) {
     const [clientsRes, estimatesRes, paymentsRes, productsRes] = await Promise.allSettled([
       supabase.from('clients').select('*'),
       supabase.from('estimates').select('*'),
-      supabase.from('client_payments').select('*'),
+      supabase.from('payments').select('*'),
       supabase.from('products').select('*')
     ])
 
