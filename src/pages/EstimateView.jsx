@@ -198,6 +198,22 @@ export default function EstimateView() {
 
   async function handleWhatsApp() {
     const text = getSummaryText()
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`
+    
+    let canShareFiles = false;
+    if (navigator.share && navigator.canShare) {
+      try {
+        canShareFiles = navigator.canShare({ files: [new File([''], 'test.png', { type: 'image/png' })] })
+      } catch (e) {}
+    } else if (navigator.share) {
+      canShareFiles = true;
+    }
+
+    let fallbackWindow = null;
+    if (!canShareFiles) {
+      fallbackWindow = window.open(waUrl, '_blank');
+    }
+
     flushSync(() => {
       setExporting('whatsapp')
       setIsExportingSingleImage(true)
@@ -205,7 +221,7 @@ export default function EstimateView() {
 
     try {
       // Try native share with image first (mobile/HTTPS)
-      if (navigator.share) {
+      if (canShareFiles) {
         try {
           const canvas = await generateCanvas(previewRef.current, 3)
           const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
@@ -223,12 +239,17 @@ export default function EstimateView() {
             await navigator.share({ files, title: `Estimate #${estimate.bill_number}`, text })
             return // Success! Exit early.
           }
-        } catch {
+        } catch (error) {
+          if (error.name === 'AbortError') return;
           // Native share failed, fall through to fallback
         }
       }
 
       // Fallback for when native file share is unsupported or blocked
+      if (!fallbackWindow) {
+        fallbackWindow = window.open(waUrl, '_blank');
+      }
+
       try {
         const canvas = await generateCanvas(previewRef.current, 3)
         const link = document.createElement('a')
@@ -237,8 +258,6 @@ export default function EstimateView() {
         link.click()
         showToast('Image saved to device! Please attach it manually in WhatsApp.', 'success', 5000)
       } catch (e) { }
-
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
     } finally {
       setIsExportingSingleImage(false)
       setExporting('')
