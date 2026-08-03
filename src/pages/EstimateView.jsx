@@ -238,15 +238,25 @@ export default function EstimateView() {
           }
         }
       } else {
-        // Desktop Fallback: Download image and open WhatsApp Web
+        // Desktop: Copy image to Clipboard so user can Ctrl+V in WhatsApp Web
         try {
+          const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
+          if (navigator.clipboard && window.ClipboardItem && blob) {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob })
+            ])
+            showToast('Image copied to clipboard! Press Ctrl+V in WhatsApp to paste.', 'success', 6000)
+          } else {
+            const link = document.createElement('a')
+            link.download = getFilename('png')
+            link.href = canvas.toDataURL('image/png')
+            link.click()
+          }
+        } catch (e) {
           const link = document.createElement('a')
           link.download = getFilename('png')
           link.href = canvas.toDataURL('image/png')
           link.click()
-          showToast('Image saved! Please attach it manually in WhatsApp.', 'success', 5000)
-        } catch (e) {
-          showToast('Failed to save image', 'error')
         }
       }
     } finally {
