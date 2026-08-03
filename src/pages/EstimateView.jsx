@@ -231,27 +231,17 @@ export default function EstimateView() {
     try {
       const scale = isMobile ? 1.5 : 2
       const targetWidth = paperSize === 'a5' ? '529px' : '763px'
-      const pagesEls = document.querySelectorAll('.estimate-page')
-      const files = []
-
-      for (let i = 0; i < pagesEls.length; i++) {
-        const canvas = await generateCanvas(pagesEls[i], scale, targetWidth)
-        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
-        if (blob) {
-          const filename = pagesEls.length > 1 
-            ? getFilename('png').replace('.png', `_page${i + 1}.png`)
-            : getFilename('png')
-          files.push(new File([blob], filename, { type: 'image/png' }))
-        }
-      }
+      const canvas = await generateCanvas(previewRef.current, scale, targetWidth)
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
+      const file = new File([blob], getFilename('png'), { type: 'image/png' })
 
       if (canShareFiles) {
         try {
-          if (navigator.canShare && !navigator.canShare({ files })) {
+          if (navigator.canShare && !navigator.canShare({ files: [file] })) {
             throw new Error("File sharing not supported on this device.")
           }
 
-          await navigator.share({ files, title: `Estimate #${estimate.bill_number}`, text })
+          await navigator.share({ files: [file], title: `Estimate #${estimate.bill_number}`, text })
         } catch (error) {
           if (error.name !== 'AbortError') {
             showToast('Native share failed: ' + error.message, 'error')
@@ -260,13 +250,11 @@ export default function EstimateView() {
       } else {
         // Desktop Fallback: Download page image(s) and open WhatsApp Web to client chat
         try {
-          for (let i = 0; i < files.length; i++) {
-            const link = document.createElement('a')
-            link.download = files[i].name
-            link.href = URL.createObjectURL(files[i])
-            link.click()
-            setTimeout(() => URL.revokeObjectURL(link.href), 1000)
-          }
+          const link = document.createElement('a')
+          link.download = file.name
+          link.href = URL.createObjectURL(file)
+          link.click()
+          setTimeout(() => URL.revokeObjectURL(link.href), 1000)
           showToast('Image downloaded! Opening WhatsApp...', 'success', 5000)
         } catch (e) {
           showToast('Failed to save image', 'error')
