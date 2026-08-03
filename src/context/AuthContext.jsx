@@ -85,27 +85,30 @@ export function AuthProvider({ children }) {
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return;
-      
-      if (session) {
-        const isValid = await checkSessionExpiry(supabase);
-        if (!isValid) {
-          // checkSessionExpiry already called signOut
-          setUser(null);
-          setRole(null);
-          setLoading(false);
-          return;
-        }
+      try {
+        if (session) {
+          const isValid = await checkSessionExpiry(supabase);
+          if (!isValid) {
+            setUser(null);
+            setRole(null);
+            return;
+          }
 
-        const allowed = await fetchRole(session.user.id)
-        if (!allowed) {
-          setUser(null)
-          setLoading(false)
-          return;
+          const allowed = await fetchRole(session.user.id)
+          if (!allowed) {
+            setUser(null);
+            return;
+          }
         }
+        setUser(session?.user ?? null)
+      } catch (err) {
+        console.error('Session initialization error:', err);
+      } finally {
+        if (mounted) setLoading(false)
       }
-      
-      setUser(session?.user ?? null)
-      setLoading(false)
+    }).catch((err) => {
+      console.error('supabase getSession failed:', err);
+      if (mounted) setLoading(false);
     })
 
     return () => {

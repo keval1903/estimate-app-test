@@ -16,23 +16,32 @@ export function getNext5AM() {
 }
 
 export async function setSessionExpiry() {
-  const expiryTime = getNext5AM();
-  await set(EXPIRY_KEY, expiryTime);
+  try {
+    const expiryTime = getNext5AM();
+    await set(EXPIRY_KEY, expiryTime);
+  } catch (e) {
+    console.error('Failed to set session expiry:', e);
+  }
 }
 
 export async function checkSessionExpiry(supabase) {
-  const expiryTime = await get(EXPIRY_KEY);
-  
-  // If there's no expiry set, we'll allow the session to remain (fail-safe)
-  if (!expiryTime) return true; 
-  
-  const now = Date.now();
-  if (now >= expiryTime) {
-    // It's past 5 AM of the target day, clear the expiry and sign out
-    await del(EXPIRY_KEY);
-    await supabase.auth.signOut();
-    return false; // Session is expired
+  try {
+    const expiryTime = await get(EXPIRY_KEY);
+    
+    // If there's no expiry set, we'll allow the session to remain (fail-safe)
+    if (!expiryTime) return true; 
+    
+    const now = Date.now();
+    if (now >= expiryTime) {
+      // It's past 5 AM of the target day, clear the expiry and sign out
+      await del(EXPIRY_KEY).catch(() => {});
+      await supabase.auth.signOut().catch(() => {});
+      return false; // Session is expired
+    }
+    
+    return true; // Session is valid
+  } catch (err) {
+    console.error('Session expiry check fail-safe:', err);
+    return true; // Fail safe: allow app to load
   }
-  
-  return true; // Session is valid
 }
