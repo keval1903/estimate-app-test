@@ -103,19 +103,20 @@ export default function EstimateView() {
 
   async function generateCanvas(el, scale = 2, targetWidth = '680px') {
     const { default: html2canvas } = await import('html2canvas')
+    const targetEl = el.querySelector('table') || el
 
     // Force exact width so canvas aspect ratio perfectly matches physical paper sizes
-    const originalWidth = el.style.width
-    const originalMaxWidth = el.style.maxWidth
-    el.style.width = targetWidth
-    el.style.maxWidth = 'none'
+    const originalWidth = targetEl.style.width
+    const originalMaxWidth = targetEl.style.maxWidth
+    targetEl.style.width = targetWidth
+    targetEl.style.maxWidth = 'none'
 
     const oldScroll = window.scrollY
     window.scrollTo(0, 0)
     // Force browser to recalculate layout synchronously without losing user gesture
-    void el.offsetHeight
+    void targetEl.offsetHeight
 
-    const canvas = await html2canvas(el, {
+    const canvas = await html2canvas(targetEl, {
       scale,
       useCORS: true,
       backgroundColor: '#fff',
@@ -124,8 +125,8 @@ export default function EstimateView() {
     })
 
     // Restore
-    el.style.width = originalWidth
-    el.style.maxWidth = originalMaxWidth
+    targetEl.style.width = originalWidth
+    targetEl.style.maxWidth = originalMaxWidth
     window.scrollTo(0, oldScroll)
 
     return canvas
