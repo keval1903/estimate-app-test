@@ -498,11 +498,17 @@ export default function ClientLedger() {
     return doc
   }
 
+  function getLedgerFilename() {
+    const rawName = client?.name || 'Client'
+    const cleanName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '') || 'Client'
+    return `Ledger-${cleanName}.pdf`
+  }
+
   async function handleDownloadPDF() {
     setExporting(true)
     try {
       const doc = await generatePDF()
-      doc.save(`Ledger-${client?.name || 'Client'}.pdf`)
+      doc.save(getLedgerFilename())
     } catch (e) {
       alert("Failed to generate PDF: " + e.message)
     } finally {
@@ -547,9 +553,8 @@ export default function ClientLedger() {
       
       if (canNativeShare) {
         const blob = doc.output('blob')
-        const rawName = client?.name || 'Client'
-        const cleanName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '') || 'Client'
-        const file = new File([blob], `Ledger-${cleanName}.pdf`, { type: 'application/pdf' })
+        const filename = getLedgerFilename()
+        const file = new File([blob], filename, { type: 'application/pdf' })
         
         if (navigator.canShare && !navigator.canShare({ files: [file] })) {
           throw new Error("File sharing not supported on this device.")
@@ -568,7 +573,7 @@ export default function ClientLedger() {
         }
       } else {
         // Desktop Fallback
-        doc.save(`Ledger-${client?.name || 'Client'}.pdf`)
+        doc.save(getLedgerFilename())
         alert("Your PDF has been downloaded. We will now open WhatsApp where you can manually attach the file.")
       }
     } catch (e) {
