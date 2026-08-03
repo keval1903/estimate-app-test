@@ -536,10 +536,15 @@ export default function ClientLedger() {
     if (phone && phone.length === 10) phone = '91' + phone
     const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
 
-    const canNativeShare = !!navigator.share
+    let canShareFiles = false
+    if (navigator.share && navigator.canShare) {
+      try {
+        canShareFiles = navigator.canShare({ files: [new File([''], 'test.pdf', { type: 'application/pdf' })] })
+      } catch (e) {}
+    }
 
     let fallbackWindow = null;
-    if (!canNativeShare) {
+    if (!canShareFiles) {
       fallbackWindow = window.open(waUrl, '_blank');
       if (!fallbackWindow) {
         alert('Please allow popups to open WhatsApp')
@@ -550,7 +555,7 @@ export default function ClientLedger() {
     try {
       const doc = await generatePDF()
       
-      if (canNativeShare) {
+      if (canShareFiles) {
         const blob = doc.output('blob')
         const filename = getLedgerFilename()
         const file = new File([blob], filename, { type: 'application/pdf' })

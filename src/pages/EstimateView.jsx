@@ -203,11 +203,15 @@ export default function EstimateView() {
     if (phone && phone.length === 10) phone = '91' + phone
     const waUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`
 
-    // Allow Web Share API on any platform (Mobile & Desktop Windows) if supported
-    const canNativeShare = !!navigator.share
+    let canShareFiles = false
+    if (navigator.share && navigator.canShare) {
+      try {
+        canShareFiles = navigator.canShare({ files: [new File([''], 'test.png', { type: 'image/png' })] })
+      } catch (e) {}
+    }
 
     let fallbackWindow = null;
-    if (!canNativeShare) {
+    if (!canShareFiles) {
       fallbackWindow = window.open(waUrl, '_blank');
       if (!fallbackWindow) {
         showToast('Please allow popups to open WhatsApp', 'error')
@@ -223,7 +227,7 @@ export default function EstimateView() {
       const scale = isMobile ? 1.5 : 2
       const canvas = await generateCanvas(previewRef.current, scale)
 
-      if (canNativeShare) {
+      if (canShareFiles) {
         try {
           const files = []
           const ratio = paperSize === 'a5' ? (210 / 148) : (297 / 210)
