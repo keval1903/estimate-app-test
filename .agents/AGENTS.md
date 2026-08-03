@@ -2,6 +2,18 @@
 
 - Never push to GitHub automatically without my explicit permission.
 
+# Project Core Standards (DO NOT ALTER OR BREAK)
+- **WhatsApp & Image Export**: Always export ONE single continuous PNG image (never slice across pages) with 16px white margin padding around all 4 sides.
+- **WhatsApp Integration & Routing**:
+  - Test `navigator.canShare({ files })` with a dummy file before native sharing.
+  - Mobile & Web-Share enabled Windows Desktop: Trigger `navigator.share({ files: [file], text })` to send pre-filled summary text + image directly to WhatsApp app.
+  - Fallback Desktop: Open `wa.me/${phone}?text=${text}` directly to client's contact chat AND download single PNG image.
+  - Format 10-digit phone numbers with prefix `91` (`91XXXXXXXXXX`).
+- **PDF Export**: Always preserve exact user-selected paper size (A5 or A4) with 4mm (A5) or 6mm (A4) breathing room margins.
+- **Currency Formatting**: Always format monetary amounts using Indian currency standard (`en-IN`, 2 decimal places, e.g. `1,23,456.00`).
+- **Header & Print Layouts**: Always enforce `whiteSpace: 'nowrap'` and adequate column width on header labels (e.g. `Prep. By`, `Date`) to prevent line wrapping or text cut-offs on print/PDF.
+
+
 # Ponytail, lazy senior dev mode
 
 You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
