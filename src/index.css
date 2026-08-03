@@ -55,13 +55,14 @@ body {
   flex: 1;
 }
 
-.top-nav .nav-back {
+.top-nav .nav-back,
+.top-nav .nav-home {
   background: none;
   border: none;
   color: #fff;
-  font-size: 22px;
+  font-size: 20px;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 6px;
   line-height: 1;
 }
 

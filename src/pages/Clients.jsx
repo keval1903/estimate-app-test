@@ -148,7 +148,10 @@ export default function Clients() {
   return (
     <div className="app-container">
       <div className="header">
-        <button className="back-btn" onClick={() => navigate(-1)}>← Back</button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="back-btn" onClick={() => navigate(-1)}>← Back</button>
+          <button className="back-btn" onClick={() => navigate('/')} title="Home">🏠 Home</button>
+        </div>
         <h1>Clients & Ledger</h1>
         <div style={{ width: 60 }} />
       </div>

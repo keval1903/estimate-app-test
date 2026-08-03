@@ -219,7 +219,8 @@ export default function EstimateList() {
   return (
     <div className="app-container">
       <div className="top-nav">
-        <button className="nav-back" onClick={() => navigate('/')}>←</button>
+        <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
+        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
         <span className="nav-title">{activeTab === 'QUOTATION' ? 'Previous Quotations' : activeTab === 'RETURN' ? 'Previous Returns' : 'Previous Estimates'}</span>
       </div>
 

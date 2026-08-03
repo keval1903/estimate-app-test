@@ -331,7 +331,8 @@ export default function StockReport() {
     <div className="app-container">
       {/* Nav */}
       <div className="top-nav">
-        <button className="nav-back" onClick={() => navigate(-1)}>←</button>
+        <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
+        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
         <span className="nav-title">📊 Stock Movement Report</span>
         <button
           className="btn btn-sm"

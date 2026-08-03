@@ -498,7 +498,8 @@ export default function EstimateView() {
     <div className="app-container">
       {/* Nav */}
       <div className="top-nav no-print">
-        <button className="nav-back" onClick={() => navigate(-1)}>←</button>
+        <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
+        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
         <span className="nav-title">{estimate.type === 'QUOTATION' ? 'Quotation' : estimate.type === 'RETURN' ? 'Sales Return' : 'Estimate'} #{estimate.bill_number}</span>
       </div>
 

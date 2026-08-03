@@ -128,7 +128,8 @@ export default function SalesReport() {
   return (
     <div className="app-container">
       <div className="top-nav">
-        <button className="nav-back" onClick={() => navigate('/')}>←</button>
+        <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
+        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
         <span className="nav-title">Sales Report</span>
       </div>
 

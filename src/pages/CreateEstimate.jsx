@@ -942,6 +942,7 @@ export default function CreateEstimate() {
     <div className="app-container">
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)}>←</button>
+        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
         <span className="nav-title">{isEdit ? 'Edit Estimate' : 'New Estimate'}</span>
       </div>
       <div className="spinner" />
@@ -952,6 +953,7 @@ export default function CreateEstimate() {
     <div className="app-container">
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)}>←</button>
+        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
         <span className="nav-title">
           {isEdit
             ? `Edit ${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'} #${existingBillNumber}`
@@ -1060,6 +1062,11 @@ export default function CreateEstimate() {
                   <div className="autocomplete-list">
                     {clientSuggestions.map((s, idx) => (
                       <div key={idx} className="autocomplete-item"
+                        ref={(el) => {
+                          if (clientSuggestionIdx === idx && el) {
+                            el.scrollIntoView({ block: 'nearest' })
+                          }
+                        }}
                         style={clientSuggestionIdx === idx ? { background: 'var(--bg)', borderLeft: '3px solid var(--accent)' } : {}}
                         onMouseDown={() => {
                           setClientName(s.name)
@@ -1250,6 +1257,11 @@ export default function CreateEstimate() {
                     <div className="autocomplete-list">
                       {productSuggestions.map((p, i) => (
                         <div key={p.id} className="autocomplete-item"
+                          ref={(el) => {
+                            if (suggestionIdx === i && el) {
+                              el.scrollIntoView({ block: 'nearest' })
+                            }
+                          }}
                           style={suggestionIdx === i ? { background: 'var(--bg)', borderLeft: '3px solid var(--accent)' } : {}}
                           onMouseDown={() => selectProduct(p)}>
                           <div style={{ fontWeight: 600 }}>{p.product_name}</div>

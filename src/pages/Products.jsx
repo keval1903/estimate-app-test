@@ -554,7 +554,8 @@ export default function Products() {
   return (
     <div className="app-container">
       <div className="top-nav">
-        <button className="nav-back" onClick={() => navigate('/')}>←</button>
+        <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
+        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
         <span className="nav-title">Product Master</span>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className="btn btn-sm"
