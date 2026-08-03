@@ -159,11 +159,15 @@ export default function EstimateView() {
       const pagesEls = document.querySelectorAll('.estimate-page')
       const targetWidth = paperSize === 'a5' ? '529px' : '763px'
 
+      const margin = paperSize === 'a5' ? 4 : 6
+      const drawW = pdfW - (margin * 2)
+      const drawH = pdfH - (margin * 2)
+
       for (let i = 0; i < pagesEls.length; i++) {
         if (i > 0) pdf.addPage()
         const canvas = await generateCanvas(pagesEls[i], 2, targetWidth, false)
         const imgData = canvas.toDataURL('image/jpeg', 0.95)
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH)
+        pdf.addImage(imgData, 'JPEG', margin, margin, drawW, drawH)
       }
 
       pdf.save(getFilename('pdf'))
