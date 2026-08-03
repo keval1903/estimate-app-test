@@ -230,34 +230,23 @@ export default function EstimateView() {
 
     try {
       const scale = isMobile ? 1.5 : 2
-      const canvas = await generateCanvas(previewRef.current, scale)
+      const targetWidth = paperSize === 'a5' ? '529px' : '763px'
+      const pagesEls = document.querySelectorAll('.estimate-page')
+      const files = []
+
+      for (let i = 0; i < pagesEls.length; i++) {
+        const canvas = await generateCanvas(pagesEls[i], scale, targetWidth)
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
+        if (blob) {
+          const filename = pagesEls.length > 1 
+            ? getFilename('png').replace('.png', `_page${i + 1}.png`)
+            : getFilename('png')
+          files.push(new File([blob], filename, { type: 'image/png' }))
+        }
+      }
 
       if (canShareFiles) {
         try {
-          const files = []
-          const ratio = paperSize === 'a5' ? (210 / 148) : (297 / 210)
-          const pageHeight = canvas.width * ratio
-          let heightLeft = canvas.height
-          let position = 0
-          let pageNum = 1
-
-          while (heightLeft > 0) {
-            const sliceHeight = Math.min(pageHeight, heightLeft)
-            const sliceCanvas = document.createElement('canvas')
-            sliceCanvas.width = canvas.width
-            sliceCanvas.height = sliceHeight
-            const ctx = sliceCanvas.getContext('2d')
-            ctx.drawImage(canvas, 0, position, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight)
-            const blob = await new Promise(res => sliceCanvas.toBlob(res, 'image/png'))
-            if (blob) {
-              const filename = getFilename('png').replace('.png', `_page${pageNum}.png`)
-              files.push(new File([blob], filename, { type: 'image/png' }))
-            }
-            heightLeft -= pageHeight
-            position += pageHeight
-            pageNum++
-          }
-
           if (navigator.canShare && !navigator.canShare({ files })) {
             throw new Error("File sharing not supported on this device.")
           }
@@ -269,12 +258,15 @@ export default function EstimateView() {
           }
         }
       } else {
-        // Desktop Fallback: Download sanitized image and open WhatsApp Web to client chat
+        // Desktop Fallback: Download page image(s) and open WhatsApp Web to client chat
         try {
-          const link = document.createElement('a')
-          link.download = getFilename('png')
-          link.href = canvas.toDataURL('image/png')
-          link.click()
+          for (let i = 0; i < files.length; i++) {
+            const link = document.createElement('a')
+            link.download = files[i].name
+            link.href = URL.createObjectURL(files[i])
+            link.click()
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+          }
           showToast('Image downloaded! Opening WhatsApp...', 'success', 5000)
         } catch (e) {
           showToast('Failed to save image', 'error')
