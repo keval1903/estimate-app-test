@@ -547,7 +547,9 @@ export default function ClientLedger() {
       
       if (canNativeShare) {
         const blob = doc.output('blob')
-        const file = new File([blob], `Ledger-${client?.name || 'Client'}.pdf`, { type: 'application/pdf' })
+        const rawName = client?.name || 'Client'
+        const cleanName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '') || 'Client'
+        const file = new File([blob], `Ledger-${cleanName}.pdf`, { type: 'application/pdf' })
         
         if (navigator.canShare && !navigator.canShare({ files: [file] })) {
           throw new Error("File sharing not supported on this device.")

@@ -81,8 +81,9 @@ export default function EstimateView() {
   }, [loading])
 
   function getFilename(ext) {
-    const site = (estimate?.site_name || 'SITE').replace(/\s+/g, '-')
-    return `Estimate-${estimate?.bill_number}-${site}.${ext}`
+    const rawSite = estimate?.site_name || 'SITE'
+    const cleanSite = rawSite.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '') || 'SITE'
+    return `Estimate-${estimate?.bill_number || '0'}-${cleanSite}.${ext}`
   }
 
   function getSummaryText() {
