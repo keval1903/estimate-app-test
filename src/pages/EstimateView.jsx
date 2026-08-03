@@ -619,7 +619,7 @@ export default function EstimateView() {
                             <tr key={label}>
                               <td style={{ width: 56, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
                               <td style={{ width: 10, paddingBottom: 2 }}>:</td>
-                              <td style={{ fontWeight: 400, paddingBottom: 2 }}>{val}</td>
+                              <td style={{ fontWeight: 400, paddingBottom: 2, whiteSpace: 'nowrap' }}>{val}</td>
                             </tr>
                           ))}
                         </tbody>
