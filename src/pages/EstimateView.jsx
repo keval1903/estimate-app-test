@@ -80,6 +80,10 @@ export default function EstimateView() {
     return () => observer.disconnect()
   }, [loading])
 
+  function fmtMoney(val) {
+    return Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
   function getFilename(ext) {
     const rawSite = estimate?.site_name || 'SITE'
     const cleanSite = rawSite.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '') || 'SITE'
@@ -673,7 +677,7 @@ export default function EstimateView() {
                       </td>
                       {!isChallanMode && (
                         <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
-                          {page.brought.amt.toFixed(2)}
+                          {fmtMoney(page.brought.amt)}
                         </td>
                       )}
                     </tr>
@@ -698,12 +702,12 @@ export default function EstimateView() {
                       </td>
                       {!isChallanMode && (
                         <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
-                          {Number(it.rate).toFixed(2)}
+                          {fmtMoney(it.rate)}
                         </td>
                       )}
                       {!isChallanMode && (
                         <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
-                          {Number(it.amount).toFixed(2)}
+                          {fmtMoney(it.amount)}
                         </td>
                       )}
                     </tr>
@@ -733,7 +737,7 @@ export default function EstimateView() {
                       </td>
                       {!isChallanMode && (
                         <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
-                          {page.carried.amt.toFixed(2)}
+                          {fmtMoney(page.carried.amt)}
                         </td>
                       )}
                     </tr>
@@ -758,7 +762,7 @@ export default function EstimateView() {
                                   Sub Total
                                 </td>
                                 <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                  {Number(estimate.sub_total).toFixed(2)}
+                                  {fmtMoney(estimate.sub_total)}
                                 </td>
                               </>
                             )}
@@ -768,7 +772,7 @@ export default function EstimateView() {
                               <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
                                 <td colSpan={5} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12 }}>GST @ {estimate.gst_percent}%</td>
                                 <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13 }}>
-                                  {Number(estimate.gst_amount).toFixed(2)}
+                                  {fmtMoney(estimate.gst_amount)}
                                 </td>
                               </tr>
                               <tr style={{ background: '#f9f9f9', fontWeight: 800 }}>
@@ -777,7 +781,7 @@ export default function EstimateView() {
                                   {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
                                 </td>
                                 <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                                  {grandTotal.toFixed(2)}
+                                  {fmtMoney(grandTotal)}
                                 </td>
                               </tr>
                             </>
@@ -798,7 +802,7 @@ export default function EstimateView() {
                                 {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
                               </td>
                               <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {grandTotal.toFixed(2)}
+                                {fmtMoney(grandTotal)}
                               </td>
                             </>
                           )}
@@ -810,14 +814,14 @@ export default function EstimateView() {
                             <td colSpan={4} style={{ border: '1px solid #000', padding: '4px 8px', borderRight: 'none' }}></td>
                             <td style={{ border: '1px solid #000', borderLeft: 'none', padding: '4px 4px', textAlign: 'right', fontSize: 13, fontStyle: 'italic' }}>Prev. Bal.</td>
                             <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13, fontStyle: 'italic' }}>
-                              {(clientBalance - grandTotal).toFixed(2)}
+                              {fmtMoney(clientBalance - grandTotal)}
                             </td>
                           </tr>
                           <tr style={{ background: '#f1f5f9' }}>
                             <td colSpan={4} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none', fontWeight: 600, fontSize: 13 }}>Estimate #{estimate.bill_number}</td>
                             <td style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 14, fontWeight: 700 }}>Total Due</td>
                             <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                              {clientBalance.toFixed(2)}
+                              {fmtMoney(clientBalance)}
                             </td>
                           </tr>
                         </>

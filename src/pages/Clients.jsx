@@ -253,7 +253,7 @@ export default function Clients() {
                         <div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Outstanding Balance</div>
                           <div style={{ fontSize: 16, fontWeight: 700, color: c.balance > 0 ? '#ef4444' : (c.balance < 0 ? '#10b981' : '#000') }}>
-                            ₹ {Math.abs(c.balance).toFixed(2)} {c.balance > 0 ? 'Dr' : (c.balance < 0 ? 'Cr' : '')}
+                            ₹ {Math.abs(c.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {c.balance > 0 ? 'Dr' : (c.balance < 0 ? 'Cr' : '')}
                           </div>
                         </div>
                         <button className="btn btn-ghost btn-sm" style={{ color: '#3b82f6', padding: '6px' }} title="Edit Client" onClick={(e) => handleEditClick(c, e)}>

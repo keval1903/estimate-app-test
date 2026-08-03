@@ -448,7 +448,7 @@ export default function ClientLedger() {
     if (finalBalance < 0) doc.setTextColor(16, 185, 129) // Green if credit
     if (finalBalance === 0) doc.setTextColor(0, 0, 0)
 
-    doc.text(`Rs. ${Math.abs(finalBalance).toFixed(2)} ${finalBalance > 0 ? 'Dr' : (finalBalance < 0 ? 'Cr' : '')}`, rightX, yPos + (isA5 ? 16 : 19), { align: 'right' })
+    doc.text(`Rs. ${Math.abs(finalBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${finalBalance > 0 ? 'Dr' : (finalBalance < 0 ? 'Cr' : '')}`, rightX, yPos + (isA5 ? 16 : 19), { align: 'right' })
 
     doc.setTextColor(0, 0, 0) // reset
 
@@ -457,9 +457,9 @@ export default function ClientLedger() {
       return [
         formatLedgerDate(l.date),
         String(l.description).replace(/₹/g, 'Rs. '),
-        l.debit > 0 ? l.debit.toFixed(2) : '-',
-        l.credit > 0 ? l.credit.toFixed(2) : '-',
-        `${Math.abs(l.balance).toFixed(2)} ${l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}`
+        l.debit > 0 ? l.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+        l.credit > 0 ? l.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
+        `${Math.abs(l.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}`
       ]
     })
 
@@ -770,10 +770,10 @@ export default function ClientLedger() {
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '8px 4px', textAlign: 'right', color: '#ef4444', whiteSpace: 'nowrap' }}>{l.debit > 0 ? l.debit.toFixed(2) : '-'}</td>
-                          <td style={{ padding: '8px 4px', textAlign: 'right', color: '#10b981', whiteSpace: 'nowrap' }}>{l.credit > 0 ? l.credit.toFixed(2) : '-'}</td>
+                          <td style={{ padding: '8px 4px', textAlign: 'right', color: '#ef4444', whiteSpace: 'nowrap' }}>{l.debit > 0 ? l.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
+                          <td style={{ padding: '8px 4px', textAlign: 'right', color: '#10b981', whiteSpace: 'nowrap' }}>{l.credit > 0 ? l.credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
                           <td style={{ padding: '8px 4px', textAlign: 'right', fontWeight: l.type === 'QUOTE' ? 400 : 600, color: l.type === 'QUOTE' ? '#94a3b8' : '#000', whiteSpace: 'nowrap' }}>
-                            {Math.abs(l.balance).toFixed(2)} {l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}
+                            {Math.abs(l.balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {l.balance > 0 ? 'Dr' : (l.balance < 0 ? 'Cr' : '')}
                           </td>
                         </tr>
                       ))}

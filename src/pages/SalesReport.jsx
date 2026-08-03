@@ -188,14 +188,14 @@ export default function SalesReport() {
                         <td style={{ padding: '10px 12px', fontWeight: 600 }}>{g.clientName}</td>
                         <td style={{ padding: '10px 12px', fontWeight: 600 }}>{g.groupName}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>{Number(g.totalQty).toFixed(2)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>₹{Number(g.totalAmount).toFixed(2)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>₹{Number(g.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                       {isExpanded && g.products.map((p, idx) => (
                         <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', background: '#fcfcfc' }}>
                           <td style={{ padding: '8px 12px' }}></td>
                           <td colSpan={2} style={{ padding: '8px 12px', color: '#64748b', paddingLeft: 32 }}>↳ {p.name}</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>{Number(p.totalQty).toFixed(2)} {p.unit}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>₹{Number(p.totalAmount).toFixed(2)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: '#64748b' }}>₹{Number(p.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                       ))}
                     </React.Fragment>
