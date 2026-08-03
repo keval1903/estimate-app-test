@@ -592,8 +592,8 @@ export default function EstimateView() {
                 <colgroup>
                   <col style={{ width: 42 }} />     {/* Sr No */}
                   <col style={{ width: 'auto' }} /> {/* Description */}
-                  <col style={{ width: 42 }} />     {/* Nos. */}
-                  <col style={{ width: 68 }} />     {/* Quantity */}
+                  <col style={{ width: isChallanMode ? 55 : 42 }} />     {/* Nos. */}
+                  <col style={{ width: isChallanMode ? 100 : 68 }} />     {/* Quantity */}
                   {!isChallanMode && <col style={{ width: 72 }} />}     {/* Rate */}
                   {!isChallanMode && <col style={{ width: 94 }} />}     {/* Amount */}
                 </colgroup>
@@ -634,7 +634,7 @@ export default function EstimateView() {
                             ['Prep. By', estimate.prepared_by || ''],
                           ].map(([label, val]) => (
                             <tr key={label}>
-                              <td style={{ width: 56, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
+                              <td style={{ width: 62, fontWeight: 600, paddingBottom: 2, whiteSpace: 'nowrap' }}>{label}</td>
                               <td style={{ width: 10, paddingBottom: 2 }}>:</td>
                               <td style={{ fontWeight: 400, paddingBottom: 2, whiteSpace: 'nowrap' }}>{val}</td>
                             </tr>
