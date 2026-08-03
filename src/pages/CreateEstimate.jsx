@@ -141,6 +141,7 @@ export default function CreateEstimate() {
   const [clientSuggestionIdx, setClientSuggestionIdx] = useState(-1)
   const [siteSuggestions, setSiteSuggestions] = useState([])
   const [showSiteSuggestions, setShowSiteSuggestions] = useState(false)
+  const [siteSuggestionIdx, setSiteSuggestionIdx] = useState(-1)
   const [allSites, setAllSites] = useState([])
 
   const productInputRef = useRef()
@@ -482,6 +483,51 @@ export default function CreateEstimate() {
       setShowClientSuggestions(false)
     }
   }
+
+  function handleSiteKeyDown(e) {
+    if (!showSiteSuggestions || siteSuggestions.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setSiteSuggestionIdx(prev => (prev < siteSuggestions.length - 1 ? prev + 1 : prev))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSiteSuggestionIdx(prev => (prev > 0 ? prev - 1 : 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      let selected = siteSuggestions[0]
+      if (siteSuggestionIdx >= 0 && siteSuggestionIdx < siteSuggestions.length) {
+        selected = siteSuggestions[siteSuggestionIdx]
+      }
+      setSiteName(selected.site_name)
+      setShowSiteSuggestions(false)
+    }
+  }
+
+  // ── Global Keyboard Shortcuts ──
+  useEffect(() => {
+    function handleGlobalHotkeys(e) {
+      // Ctrl+S or Cmd+S -> Save Estimate
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        handleGenerate()
+      }
+      // F2 -> Focus Product Search Input
+      if (e.key === 'F2') {
+        e.preventDefault()
+        productInputRef.current?.focus()
+      }
+      // Escape -> Close active modals / suggestions
+      if (e.key === 'Escape') {
+        setShowItemModal(false)
+        setShowProductModal(false)
+        setShowSuggestions(false)
+        setShowClientSuggestions(false)
+        setShowSiteSuggestions(false)
+      }
+    }
+    window.addEventListener('keydown', handleGlobalHotkeys)
+    return () => window.removeEventListener('keydown', handleGlobalHotkeys)
+  }, [clientName, preparedBy, items, siteName, showItemModal, showProductModal])
 
   function handleInputKeyDown(e) {
     if (e.key === 'Enter') {
@@ -1101,6 +1147,7 @@ export default function CreateEstimate() {
                 ref={siteInputRef}
                 value={siteName}
                 onChange={e => { setSiteName(e.target.value); setShowSiteSuggestions(true) }}
+                onKeyDown={handleSiteKeyDown}
                 onFocus={() => siteName && setShowSiteSuggestions(siteSuggestions.length > 0)}
                 onBlur={() => setTimeout(() => setShowSiteSuggestions(false), 200)}
                 placeholder=""
@@ -1108,8 +1155,14 @@ export default function CreateEstimate() {
               />
               {showSiteSuggestions && (
                 <div className="autocomplete-list">
-                  {siteSuggestions.map(s => (
-                    <div key={s.id} className="autocomplete-item"
+                  {siteSuggestions.map((s, idx) => (
+                    <div key={s.id || idx} className="autocomplete-item"
+                      ref={(el) => {
+                        if (siteSuggestionIdx === idx && el) {
+                          el.scrollIntoView({ block: 'nearest' })
+                        }
+                      }}
+                      style={siteSuggestionIdx === idx ? { background: 'var(--bg)', borderLeft: '3px solid var(--accent)' } : {}}
                       onMouseDown={() => { setSiteName(s.site_name); setShowSiteSuggestions(false) }}>
                       {s.site_name}
                     </div>
