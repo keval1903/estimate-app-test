@@ -230,11 +230,6 @@ export default function EstimateView() {
             throw new Error("File sharing not supported on this device.")
           }
 
-          try {
-            await navigator.clipboard.writeText(text)
-            showToast('Caption copied! Paste it in WhatsApp')
-          } catch (e) { }
-
           await navigator.share({ files, title: `Estimate #${estimate.bill_number}`, text })
         } catch (error) {
           if (error.name !== 'AbortError') {
