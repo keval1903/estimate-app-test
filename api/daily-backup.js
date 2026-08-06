@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import * as XLSX from 'xlsx';
 import { generateExcelWorkbook } from '../src/lib/excelBackup.js';
 
@@ -13,8 +13,6 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -26,10 +24,19 @@ export default async function handler(req, res) {
     const dateStr = new Date().toISOString().split('T')[0];
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
+    console.log(`[Backup Engine] Configuring Nodemailer...`);
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_PASS,
+      },
+    });
+
     console.log(`[Backup Engine] Sending email for ${dateStr}...`);
-    const { data, error } = await resend.emails.send({
-      from: 'CCAI Backup <onboarding@resend.dev>', // Free tier domain
-      to: ['ryanshree209@gmail.com'], // Must be the verified Resend account email on free tier
+    const info = await transporter.sendMail({
+      from: `"CCAI Backup" <${process.env.GMAIL_USER}>`,
+      to: ['darshanloyapune@gmail.com', 'kevaltaank53@gmail.com'],
       subject: `CCAI Daily Ledger Backup - ${dateStr}`,
       text: 'Please find the daily ledger and estimate backup attached.',
       attachments: [
@@ -40,13 +47,8 @@ export default async function handler(req, res) {
       ],
     });
 
-    if (error) {
-      console.error('[Backup Engine] Email send failed:', error);
-      return res.status(500).json({ error });
-    }
-
-    console.log('[Backup Engine] Email sent successfully:', data);
-    return res.status(200).json({ success: true, data });
+    console.log('[Backup Engine] Email sent successfully:', info.messageId);
+    return res.status(200).json({ success: true, messageId: info.messageId });
   } catch (err) {
     console.error('[Backup Engine] Backup endpoint error:', err);
     return res.status(500).json({ error: err.message });

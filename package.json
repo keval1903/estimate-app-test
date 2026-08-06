@@ -17,11 +17,11 @@
     "idb-keyval": "^6.3.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "nodemailer": "^9.0.4",
     "papaparse": "^5.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",
-    "resend": "^6.18.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
