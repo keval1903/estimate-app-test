@@ -557,7 +557,7 @@ export default function Products() {
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
         <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
         <span className="nav-title">Product Master</span>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button className="btn btn-sm"
             style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
             onClick={() => navigate('/stock-report')}>📊 Report</button>

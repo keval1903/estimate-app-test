@@ -325,7 +325,6 @@ export default function CreateEstimate() {
 
   // ── Recalc totals when items change ──
   useEffect(() => { setTotals(calcTotals(items, parseFloat(gstPercent) || 0)) }, [items, gstPercent])
-
   // ── Product search ──
   useEffect(() => {
     let q = productSearch.trim().toLowerCase()
@@ -1410,7 +1409,10 @@ export default function CreateEstimate() {
               <input name="rate" type="number" inputMode="decimal"
                 value={itemForm.rate} onChange={handleItemChange}
                 onKeyDown={handleInputKeyDown}
-                placeholder="0.00" />
+                placeholder="0.00"
+                disabled={itemForm.has_discount || Boolean(parseFloat(itemForm.discount_percent))}
+                title={(itemForm.has_discount || Boolean(parseFloat(itemForm.discount_percent))) ? "Rate is read-only for discounted products. Edit in Product Master." : ""}
+              />
             </div>
 
             {/* Remark (shown if enabled for product or already set) */}
