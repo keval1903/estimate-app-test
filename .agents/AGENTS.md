@@ -13,6 +13,27 @@
 - **Currency Formatting**: Always format monetary amounts using Indian currency standard (`en-IN`, 2 decimal places, e.g. `1,23,456.00`).
 - **Header & Print Layouts**: Always enforce `whiteSpace: 'nowrap'` and adequate column width on header labels (e.g. `Prep. By`, `Date`) to prevent line wrapping or text cut-offs on print/PDF.
 
+# AI Code Quality Agent Rules (READ & FOLLOW)
+
+**CRITICAL FOR AI CODE QUALITY:**
+
+1. **NEVER OUTPUT INCOMPLETE CODE:** If you show a code snippet, it MUST be a complete working file (including imports, exports, setup, etc.). Do NOT show partial code and tell me to "add imports" or "complete the function".
+
+2. **NEVER USE PLACEHOLDERS:** Do NOT use `// ...`, `// TODO`, `/* fill this in */`, or any placeholder code. If you don't have all the information, ask me instead of using placeholders.
+
+3. **CORRECT SYNTAX REQUIRED:** Always use correct, valid syntax. No typos, no missing brackets, no incorrect imports. If unsure about a complex API, verify the syntax before using it.
+
+4. **COMPLETE EXAMPLES REQUIRED:** When showing how to use something, provide a full, working example that can be copied and run directly (or nearly directly).
+
+5. **NO BREAKING CHANGES WITHOUT WARNING:** If something is deprecated or will break existing code, warn me clearly and explain the migration path.
+
+**GENERAL CODE QUALITY:**
+- Write clean, modular, maintainable code
+- Follow DRY (Don't Repeat Yourself) principles
+- Use meaningful variable and function names
+- Add comments only when necessary (code should be self-documenting where possible)
+- Handle errors gracefully
+
 
 # Ponytail, lazy senior dev mode
 
