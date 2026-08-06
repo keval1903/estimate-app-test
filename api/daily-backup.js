@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     console.log(`[Backup Engine] Sending email for ${dateStr}...`);
     const { data, error } = await resend.emails.send({
       from: 'CCAI Backup <onboarding@resend.dev>', // Free tier domain
-      to: ['darshanloyapune@gmail.com', 'kevaltaank53@gmail.com'],
+      to: ['ryanshree209@gmail.com'], // Must be the verified Resend account email on free tier
       subject: `CCAI Daily Ledger Backup - ${dateStr}`,
       text: 'Please find the daily ledger and estimate backup attached.',
       attachments: [
