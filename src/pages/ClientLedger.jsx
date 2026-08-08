@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { restoreStockForEstimates } from '../lib/stockUtils.js'
 
 function formatLedgerDate(dateStr) {
   if (!dateStr) return '';
@@ -321,6 +322,7 @@ export default function ClientLedger() {
         if (error) throw error
       }
       if (billIds.length > 0) {
+        await restoreStockForEstimates(billIds);
         const { error } = await supabase.from('estimates').delete().in('id', billIds)
         if (error) throw error
       }

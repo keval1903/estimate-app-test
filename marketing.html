@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCAI Estimate - The Ultimate Materials OS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Mermaid.js for the flowchart -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --primary: #38bdf8;
+            --primary-glow: rgba(56, 189, 248, 0.5);
+            --accent: #c084fc;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        h1, h2, h3, .brand {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        /* Animated Background Gradients */
+        .bg-glow {
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(192, 132, 252, 0.05) 0%, transparent 40%);
+            z-index: -1;
+            animation: pulse 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        /* Header Navigation */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 5%;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(to right, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #2563eb);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px var(--primary-glow);
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(56, 189, 248, 0.7);
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 6rem 1rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            font-weight: 800;
+        }
+
+        .highlight {
+            background: linear-gradient(to right, #60a5fa, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            margin-bottom: 3rem;
+            max-width: 700px;
+            margin-inline: auto;
+        }
+
+        /* 3 Pillars / Features Section */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            padding: 2rem 5%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2.5rem;
+            backdrop-filter: blur(12px);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(to right, var(--primary), var(--accent));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: rgba(192, 132, 252, 0.3);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: white;
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        /* Flowchart Section */
+        .flowchart-container {
+            max-width: 1200px;
+            margin: 5rem auto;
+            padding: 0 5%;
+            text-align: center;
+        }
+
+        .flowchart-container h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .flowchart-container p {
+            color: var(--text-muted);
+            margin-bottom: 3rem;
+        }
+
+        .mermaid-wrapper {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2rem;
+            overflow-x: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--glass-border);
+            margin-top: 5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .hero p { font-size: 1.1rem; }
+            .features { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-glow"></div>
+
+    <header>
+        <div class="brand">CCAI Estimate</div>
+        <button class="btn-primary">Book a Demo</button>
+    </header>
+
+    <section class="hero">
+        <h1>The Lightning-Fast Engine for <span class="highlight">Materials Businesses</span></h1>
+        <p>Throw away the notebooks. Calculate complex dimensions, dictate bills with your voice, and send professional WhatsApp quotations in seconds.</p>
+        <button class="btn-primary" style="padding: 1rem 2rem; font-size: 1rem;">Experience the Magic</button>
+    </section>
+
+    <section class="features">
+        <div class="card">
+            <div class="card-icon">🎙️</div>
+            <h3>Speed to Quote</h3>
+            <p>Stop typing out 20-item bills on a tiny phone screen. Your staff can simply speak into the app on the floor. Our custom math engine instantly converts dimensions (SQFT, Inches, Feet) into accurate pricing.</p>
+        </div>
+        
+        <div class="card">
+            <div class="card-icon">📱</div>
+            <h3>Zero-Friction Sharing</h3>
+            <p>Customers don't want to log into portals or download email attachments. With one tap, CCAI generates a beautiful, continuous image of their quotation and drops it directly into their WhatsApp.</p>
+        </div>
+        
+        <div class="card">
+            <div class="card-icon">🔒</div>
+            <h3>Invisible Bookkeeping</h3>
+            <p>The moment a quotation becomes an Estimate, your stock is securely deducted, and your client's ledger balance is updated. No double-entry, no end-of-day reconciliation, and no missing inventory.</p>
+        </div>
+    </section>
+
+    <section class="flowchart-container">
+        <h2>How It Works: The Operational Flow</h2>
+        <p>A completely frictionless journey from customer walk-in to finalized ledger.</p>
+        
+        <div class="mermaid-wrapper">
+            <!-- Mermaid Definition -->
+            <div class="mermaid">
+            %%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#f8fafc', 'primaryBorderColor': '#38bdf8', 'lineColor': '#c084fc', 'secondaryColor': '#0f172a', 'tertiaryColor': '#0f172a'}}}%%
+            graph TD
+                %% Styling overrides
+                classDef magic fill:#4c1d95,stroke:#c084fc,stroke-width:2px,color:#fff,rx:10,ry:10;
+                classDef core fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc,rx:5,ry:5;
+                classDef export fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#fff,rx:10,ry:10;
+                classDef data fill:#1e293b,stroke:#64748b,stroke-width:1px,color:#cbd5e1,stroke-dasharray: 5 5;
+                
+                Start((Login)):::core --> Hub{Dashboard}
+                
+                Hub -->|Walk-in| CreateDoc[Create Quote]:::core
+                
+                CreateDoc --> InputMethod{Add Items}
+                InputMethod -->|Typing| Fuzzy[Smart Search]:::core
+                InputMethod -->|Speaking| Voice[🎙️ Voice Search]:::magic
+                
+                Fuzzy --> Engine[Dimension Math Engine]:::core
+                Voice --> Engine
+                
+                Engine --> Finalize[Finalize Bill]:::core
+                
+                %% Magic Moment: Sharing
+                Finalize --> Output[Generate Branded Image]:::export
+                Output --> WhatsApp[📱 WhatsApp Share]:::magic
+                
+                %% Automation
+                Finalize -->|Convert to Estimate| AutoStock[(Deduct Stock)]:::data
+                Finalize -->|Save to Ledger| AutoLedger[(Update Client Balance)]:::data
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 CCAI Estimate. Built for modern materials management.</p>
+    </footer>
+
+    <script>
+        // Initialize mermaid
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+</html>

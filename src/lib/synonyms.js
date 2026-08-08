@@ -19,6 +19,38 @@ export const SYNONYM_DICTIONARY = {
   'sut': 'mm', // Usually sut is 1/8 of an inch, sometimes referred in mm loosely, but keeping it as mm if requested, or leave out. Let's keep sut -> sut for now unless explicitly asked.
 }
 
+export const VOICE_PHONETIC_MAP = {
+  // Voice transcription errors for "ply"
+  'fly': 'ply',
+  'play': 'ply',
+  'apply': 'ply',
+  'flywood': 'plywood',
+  'applywood': 'plywood',
+  'pie': 'ply',
+
+  // Voice transcription errors for dimensions/measurements
+  'by': 'x',
+  'into': 'x',
+  'for': '4',
+  'cross': 'x',
+  'm m': 'mm',
+  'inches': 'inch',
+
+  // Brands / common words
+  'sentry': 'century',
+  'sunmica': 'mica',
+  'mike': 'mica',
+  'my car': 'mica',
+  'fabric call': 'fevicol',
+  'heavy call': 'fevicol',
+  'fivikol': 'fevicol',
+  'fibric': 'fabric',
+
+  // Other typos
+  'ad': 'add',
+  'addd': 'add'
+}
+
 export function normalizeSearchQuery(query) {
   if (!query) return ''
   let normalized = query.toLowerCase()

@@ -7,7 +7,7 @@ import { syncOfflineCache } from '../lib/offlineStorage'
 
 export default function Home() {
   const navigate = useNavigate()
-  const { role } = useAuth()
+  const { user, role } = useAuth()
   const [connOk, setConnOk] = useState(null)
   const [lowStockCount, setLowStockCount] = useState(0)
   const [downloadingBackup, setDownloadingBackup] = useState(false)
@@ -54,7 +54,12 @@ export default function Home() {
             </span>
           )}
           <button
-            onClick={async () => await supabase.auth.signOut()}
+            onClick={async () => {
+              if (user?.id) {
+                await supabase.from('user_roles').update({ current_session_token: null }).eq('id', user.id)
+              }
+              await supabase.auth.signOut()
+            }}
             style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: '0.875rem' }}
           >
             Logout
@@ -78,14 +83,6 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/estimate/new?type=RETURN')}>
-          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
-          <div>
-            <div className="home-btn-text">CREATE NEW SALES RETURN</div>
-            <div className="home-btn-sub">Log returned items and issue a credit note</div>
-          </div>
-        </button>
-
         <button className="home-btn" onClick={() => navigate('/products')}>
           <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
           <div>
@@ -102,6 +99,23 @@ export default function Home() {
           </div>
         </button>
 
+
+        <button className="home-btn" onClick={() => navigate('/selection-sheets')}>
+          <div className="home-btn-icon" style={{ background: '#e0f2fe' }}>📝</div>
+          <div>
+            <div className="home-btn-text">SELECTION SHEETS</div>
+            <div className="home-btn-sub">Create and view client notes and images</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate('/client-sites')}>
+          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
+          <div>
+            <div className="home-btn-text">SITE DETAILS</div>
+            <div className="home-btn-sub">Manage client sites and material requirements</div>
+          </div>
+        </button>
+
         <button className="home-btn" onClick={() => navigate('/stock-report?tab=reorder')}>
           <div className="home-btn-icon" style={{ background: '#fee2e2' }}>⚠️</div>
           <div>
@@ -111,6 +125,14 @@ export default function Home() {
             <div className="home-btn-sub">
               {lowStockCount > 0 ? `${lowStockCount} items below minimum stock level` : 'View items below minimum stock level'}
             </div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate('/estimate/new?type=RETURN')}>
+          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
+          <div>
+            <div className="home-btn-text">CREATE NEW SALES RETURN</div>
+            <div className="home-btn-sub">Log returned items and issue a credit note</div>
           </div>
         </button>
 

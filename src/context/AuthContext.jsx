@@ -68,6 +68,11 @@ export function AuthProvider({ children }) {
       // Skip INITIAL_SESSION since getSession below handles it better (including token refresh)
       if (event === 'INITIAL_SESSION') return;
       
+      // Prevent race condition: Give Login.jsx time to write the new session token to localStorage and the database
+      if (event === 'SIGNED_IN') {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
       if (session?.user) {
         const allowed = await fetchRole(session.user.id)
         if (allowed) {

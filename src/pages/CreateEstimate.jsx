@@ -825,7 +825,9 @@ export default function CreateEstimate() {
                     product_id: p.id,
                     change_type: isEdit ? (isReturn ? 'RETURN_UPDATE' : 'ESTIMATE_UPDATE') : (isReturn ? 'RETURN_ADD' : 'ESTIMATE_DEDUCT'),
                     quantity_changed: stockDelta,
-                    estimate_id: id
+                    estimate_id: id,
+                    bill_number: existingBillNumber?.toString(),
+                    site_name: siteName
                   })
                 }
               }
@@ -930,7 +932,9 @@ export default function CreateEstimate() {
                     product_id: p.id,
                     change_type: isReturn ? 'RETURN_ADD' : 'ESTIMATE_DEDUCT',
                     quantity_changed: stockDelta,
-                    estimate_id: est.id
+                    estimate_id: est.id,
+                    bill_number: billNumber?.toString(),
+                    site_name: siteName
                   })
                 }
               }

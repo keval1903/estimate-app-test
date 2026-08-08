@@ -1,12 +1,19 @@
 import { useState, useCallback, useRef } from 'react'
+import { VOICE_PHONETIC_MAP } from '../lib/synonyms'
 
 function cleanTranscript(text) {
   if (!text) return text;
   let cleaned = text.toLowerCase();
+  
+  // Apply all phonetic corrections from our map
+  for (const [misheard, correct] of Object.entries(VOICE_PHONETIC_MAP)) {
+    // We use word boundaries \b so we don't accidentally replace parts of words
+    // e.g. replacing 'for' -> '4' shouldn't turn 'format' into '4mat'
+    const regex = new RegExp(`\\b${misheard}\\b`, 'g');
+    cleaned = cleaned.replace(regex, correct);
+  }
+
   // Common phonetic errors for hardware/plywood industry
-  cleaned = cleaned.replace(/\bfly\b/g, 'ply');
-  cleaned = cleaned.replace(/\bad\b/g, 'add');
-  cleaned = cleaned.replace(/\baddd\b/g, 'add');
   cleaned = cleaned.replace(/\bmm\b/g, ' mm '); // ensure spacing around mm
   // Collapse multiple spaces
   cleaned = cleaned.replace(/\s+/g, ' ').trim();

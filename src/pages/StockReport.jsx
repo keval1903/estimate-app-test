@@ -51,7 +51,7 @@ export default function StockReport() {
       
       const hist = await fetchAll('stock_history', '*, products(product_name, unit, calculation_type), estimates(bill_number, site_name, type)', q => q.order('created_at', { ascending: false }))
       
-      const sales = await fetchAll('estimate_items', 'product_id, quantity, estimates!inner(created_at, type)', q => q.eq('estimates.type', 'ESTIMATE'))
+      const sales = await fetchAll('estimate_items', 'product_id, quantity, nos, calculation_type_snapshot, estimates!inner(created_at, type)', q => q.eq('estimates.type', 'ESTIMATE'))
 
       setProducts(prods || [])
       setHistory(hist || [])
@@ -151,13 +151,25 @@ export default function StockReport() {
 
   for (const h of dateFilteredHistory) {
     const qty = Number(h.quantity_changed || 0)
+    const type = h.change_type
+    
     if (productStats[h.product_id]) {
-      if (qty > 0) {
-        productStats[h.product_id].added += qty
-      } else if (qty < 0) {
-        const p = trackedProducts.find(x => x.id === h.product_id)
-        if (p && p.has_stock) {
+      const p = trackedProducts.find(x => x.id === h.product_id)
+      if (p && p.has_stock) {
+        if (type === 'MANUAL_ADJUST' && qty > 0) {
+          productStats[h.product_id].added += qty
+        } else if (type === 'ESTIMATE_DEDUCT' || type === 'QUOTATION_CONVERT') {
           productStats[h.product_id].sold += Math.abs(qty)
+        } else if (type === 'RETURN_ADD' || type === 'ESTIMATE_DELETED_RESTORE' || type === 'REVERT_TO_QUOTATION') {
+          productStats[h.product_id].sold -= Math.abs(qty) // Net sales reduced by return
+        } else if (type === 'MANUAL_ADJUST' && qty < 0) {
+          productStats[h.product_id].sold += Math.abs(qty) // Manual deduction
+        } else if (type === 'RETURN_UPDATE' || type === 'ESTIMATE_UPDATE') {
+          if (qty < 0) {
+            productStats[h.product_id].sold += Math.abs(qty)
+          } else {
+            productStats[h.product_id].sold -= Math.abs(qty)
+          }
         }
       }
     }
@@ -170,7 +182,9 @@ export default function StockReport() {
     if (productStats[s.product_id]) {
       const p = trackedProducts.find(x => x.id === s.product_id)
       if (p && !p.has_stock) {
-        productStats[s.product_id].sold += Number(s.quantity || 0)
+        const isPieceBased = s.calculation_type_snapshot === 'SQFT' || s.calculation_type_snapshot === 'INCH' || s.calculation_type_snapshot === 'FEET'
+        const qty = isPieceBased ? (Number(s.nos) || 0) : (Number(s.quantity) || 0)
+        productStats[s.product_id].sold += qty
       }
     }
   }
@@ -203,8 +217,8 @@ export default function StockReport() {
   const filteredHistory = dateFilteredHistory.filter(h => {
     const matchesProduct = selectedProductId === 'ALL' || h.product_id === selectedProductId
     const pName = h.products?.product_name || ''
-    const bNum = h.estimates?.bill_number?.toString() || ''
-    const site = h.estimates?.site_name || ''
+    const bNum = h.bill_number || h.estimates?.bill_number?.toString() || ''
+    const site = h.site_name || h.estimates?.site_name || ''
     const matchesAllTerms = searchTerms.every(term => pName.toLowerCase().includes(term) || bNum.includes(term) || site.toLowerCase().includes(term))
     const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.toLowerCase().includes(term) || bNum.includes(term) || site.toLowerCase().includes(term))
     const sNoSpace = s.replace(/\s+/g, '')
@@ -222,13 +236,16 @@ export default function StockReport() {
   }
 
   function getChangeLabel(h) {
-    const type = h.change_type
+    const type = h.change_type;
+    const b = h.bill_number || h.estimates?.bill_number || '';
     if (type === 'MANUAL_ADJUST') return h.quantity_changed > 0 ? 'Stock Added' : 'Manual Adjustment'
-    if (type === 'ESTIMATE_DEDUCT') return `Estimate #${h.estimates?.bill_number || ''}`
-    if (type === 'QUOTATION_CONVERT') return `Quote Converted #${h.estimates?.bill_number || ''}`
-    if (type === 'ESTIMATE_UPDATE') return `Estimate Updated #${h.estimates?.bill_number || ''}`
-    if (type === 'RETURN_ADD') return `Sales Return #${h.estimates?.bill_number || ''}`
-    if (type === 'RETURN_UPDATE') return `Sales Return Updated #${h.estimates?.bill_number || ''}`
+    if (type === 'ESTIMATE_DEDUCT') return `Estimate #${b}`
+    if (type === 'QUOTATION_CONVERT') return `Quote Converted #${b}`
+    if (type === 'ESTIMATE_UPDATE') return `Estimate Updated #${b}`
+    if (type === 'RETURN_ADD') return `Sales Return #${b}`
+    if (type === 'RETURN_UPDATE') return `Sales Return Updated #${b}`
+    if (type === 'ESTIMATE_DELETED_RESTORE') return `Estimate Deleted - Stock Restored #${b}`
+    if (type === 'REVERT_TO_QUOTATION') return `Reverted to Quote - Stock Restored #${b}`
     return type
   }
 
@@ -308,7 +325,7 @@ export default function StockReport() {
           formatDate(h.created_at),
           h.products?.product_name || '',
           getChangeLabel(h),
-          h.estimates?.site_name || '',
+          h.site_name || h.estimates?.site_name || '',
           qty > 0 ? `+${qty}` : qty,
           getDisplayUnit(h.products)
         ])
@@ -517,10 +534,10 @@ export default function StockReport() {
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Unit: {getDisplayUnit(p)}</div>
                         </td>
                         <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, color: '#047857' }}>
-                          +{stats.added}
+                          {stats.added === 0 ? '0' : stats.added > 0 ? `+${stats.added}` : stats.added}
                         </td>
                         <td style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, color: '#b91c1c' }}>
-                          -{stats.sold}
+                          {stats.sold === 0 ? '0' : stats.sold > 0 ? `-${stats.sold}` : `+${Math.abs(stats.sold)}`}
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                           {!p.has_stock ? (
@@ -640,7 +657,7 @@ export default function StockReport() {
                         {h.products?.product_name || 'Product'}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                        {getChangeLabel(h)} {h.estimates?.site_name ? `(${h.estimates.site_name})` : ''}
+                        {getChangeLabel(h)} {h.site_name || h.estimates?.site_name ? `(${h.site_name || h.estimates.site_name})` : ''}
                       </div>
                       <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                         {formatDate(h.created_at)}

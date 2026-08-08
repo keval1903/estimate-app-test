@@ -11,6 +11,12 @@ import Clients from './pages/Clients'
 import ClientLedger from './pages/ClientLedger'
 import UserManagement from './pages/UserManagement'
 import SalesReport from './pages/SalesReport'
+import SelectionSheetList from './pages/SelectionSheetList'
+import SelectionSheetEditor from './pages/SelectionSheetEditor'
+
+import ClientSitesList from './pages/ClientSitesList'
+import ClientSitesView from './pages/ClientSitesView'
+import SiteDetailsEditor from './pages/SiteDetailsEditor'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -34,6 +40,11 @@ export default function App() {
           <Route path="/stock-report" element={<ProtectedRoute><StockReport /></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
           <Route path="/clients/:id" element={<ProtectedRoute><ClientLedger /></ProtectedRoute>} />
+          <Route path="/client-sites" element={<ProtectedRoute><ClientSitesList /></ProtectedRoute>} />
+          <Route path="/client-sites/:clientId" element={<ProtectedRoute><ClientSitesView /></ProtectedRoute>} />
+          <Route path="/client-sites/:clientId/edit/:siteId" element={<ProtectedRoute><SiteDetailsEditor /></ProtectedRoute>} />
+          <Route path="/selection-sheets" element={<ProtectedRoute><SelectionSheetList /></ProtectedRoute>} />
+          <Route path="/selection-sheets/:id" element={<ProtectedRoute><SelectionSheetEditor /></ProtectedRoute>} />
           <Route path="/sales-report" element={<ProtectedRoute><SalesReport /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
         </Routes>

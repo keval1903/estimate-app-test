@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
+import { restoreStockForEstimates } from '../lib/stockUtils.js'
 import { isFuzzyMatch } from '../lib/searchUtils'
 
 export default function EstimateList() {
@@ -79,6 +80,9 @@ export default function EstimateList() {
         fetchEstimates()
       }
     } else {
+      // Restore stock before updating type
+      await restoreStockForEstimates([est.id]);
+      
       const newType = est.type === 'ESTIMATE' ? 'DELETED_ESTIMATE' : 'DELETED_RETURN';
       const { error } = await supabase.from('estimates').update({ type: newType }).eq('id', est.id)
       if (error) showToast('Delete failed: ' + error.message, 'error')
@@ -118,9 +122,11 @@ export default function EstimateList() {
       }
       
       if (softDeleteIds.length > 0) {
+        await restoreStockForEstimates(softDeleteIds);
         await supabase.from('estimates').update({ type: 'DELETED_ESTIMATE' }).in('id', softDeleteIds);
       }
       if (returnSoftDeleteIds.length > 0) {
+        await restoreStockForEstimates(returnSoftDeleteIds);
         await supabase.from('estimates').update({ type: 'DELETED_RETURN' }).in('id', returnSoftDeleteIds);
       }
       if (hardDeleteIds.length > 0) {

@@ -300,7 +300,9 @@ export default function EstimateView() {
               product_id: p.id,
               change_type: 'REVERT_TO_QUOTATION',
               quantity_changed: qty, // positive to add stock back
-              estimate_id: id
+              estimate_id: id,
+              bill_number: estimate?.bill_number?.toString(),
+              site_name: estimate?.site_name
             })
           }
         }
@@ -364,7 +366,9 @@ export default function EstimateView() {
               product_id: p.id,
               change_type: 'QUOTATION_CONVERT',
               quantity_changed: -qty,
-              estimate_id: id
+              estimate_id: id,
+              bill_number: estimate?.bill_number?.toString(),
+              site_name: estimate?.site_name
             })
           }
         }
