@@ -11,6 +11,8 @@ export default function Clients() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedClients, setSelectedClients] = useState(new Set())
+  const [unlinkedNames, setUnlinkedNames] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   // Add Client Modal State
   const [showModal, setShowModal] = useState(false)
@@ -22,7 +24,7 @@ export default function Clients() {
   async function handleAddClient(e) {
     e.preventDefault()
     if (!newName.trim()) return
-    
+
     const payload = {
       name: newName.trim().toUpperCase(),
       mobile: newMobile.trim(),
@@ -30,12 +32,21 @@ export default function Clients() {
     }
 
     let error;
+    let newClientId = editClientId;
+
     if (editClientId) {
       const { error: err } = await supabase.from('clients').update(payload).eq('id', editClientId)
       error = err;
     } else {
-      const { error: err } = await supabase.from('clients').insert([payload])
+      const { data, error: err } = await supabase.from('clients').insert([payload]).select().single()
       error = err;
+      if (data) newClientId = data.id;
+    }
+
+    if (!error && !editClientId && newClientId) {
+      // Auto-Link loose records
+      await supabase.from('estimates').update({ client_id: newClientId }).eq('client_name', payload.name).is('client_id', null)
+      await supabase.from('client_sites').update({ client_id: newClientId }).eq('client_name', payload.name).is('client_id', null)
     }
 
     if (error) {
@@ -63,8 +74,22 @@ export default function Clients() {
     setLoading(true)
     try {
       const { data: clientData } = await supabase.from('clients').select('*').order('name')
-      const { data: estData } = await supabase.from('estimates').select('client_id, grand_total, type').in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
+      const { data: estData } = await supabase.from('estimates').select('client_id, client_name, grand_total, type').in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
       const { data: payData } = await supabase.from('payments').select('client_id, amount')
+      const { data: siteNamesData } = await supabase.from('client_sites').select('client_name').is('client_id', null)
+
+      const unlinkedSet = new Set()
+      if (estData) {
+        estData.forEach(e => {
+          if (!e.client_id && e.client_name) unlinkedSet.add(e.client_name.trim().toUpperCase())
+        })
+      }
+      if (siteNamesData) {
+        siteNamesData.forEach(s => {
+          if (s.client_name) unlinkedSet.add(s.client_name.trim().toUpperCase())
+        })
+      }
+      setUnlinkedNames(Array.from(unlinkedSet).sort())
 
       const combined = (clientData || []).map(c => {
         const clientEsts = (estData || []).filter(e => e.client_id === c.id)
@@ -86,7 +111,7 @@ export default function Clients() {
 
   async function handleDeleteClient(id, name) {
     if (!window.confirm(`Are you sure you want to delete ${name}?\n\nThis will permanently delete all their payment records. Their estimates will NOT be deleted, but they will no longer be linked to a client account.`)) return
-    
+
     try {
       const { error } = await supabase.from('clients').delete().eq('id', id)
       if (error) throw error
@@ -98,13 +123,13 @@ export default function Clients() {
 
   async function handleDeleteAllClients() {
     if (!window.confirm('WARNING: Are you absolutely sure you want to delete ALL clients?\n\nThis will permanently delete EVERY ledger account and EVERY payment record in the system. This cannot be undone!')) return
-    
+
     const verify = window.prompt("Type 'DELETE' to confirm wiping all ledgers.")
     if (verify !== 'DELETE') {
       if (verify !== null) alert("Deletion cancelled.")
       return
     }
-    
+
     try {
       const { error } = await supabase.from('clients').delete().not('id', 'is', null)
       if (error) throw error
@@ -134,7 +159,7 @@ export default function Clients() {
   async function handleDeleteSelected() {
     if (selectedClients.size === 0) return
     if (!window.confirm(`Are you sure you want to delete ${selectedClients.size} selected clients?\n\nThis will permanently delete all their payment records.`)) return
-    
+
     try {
       const { error } = await supabase.from('clients').delete().in('id', Array.from(selectedClients))
       if (error) throw error
@@ -195,7 +220,7 @@ export default function Clients() {
                 </button>
               </div>
             </div>
-            
+
             {(() => {
               const filteredClients = clients.filter(c => {
                 const s = search.trim().toLowerCase()
@@ -203,24 +228,24 @@ export default function Clients() {
                 const searchTerms = s.split(/\s+/);
                 const smartTerms = s.match(/[a-z]+|[0-9]+/g) || []
                 const targetStr = `${c.name || ''} ${c.mobile || ''}`.toLowerCase();
-                
+
                 const matchesAllTerms = searchTerms.every(term => targetStr.includes(term));
                 const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => targetStr.includes(term));
                 const sNoSpace = s.replace(/\s+/g, '');
-                
-                return targetStr.includes(s) || 
-                       targetStr.replace(/\s+/g, '').includes(sNoSpace) ||
-                       matchesAllTerms || 
-                       matchesSmartTerms || 
-                       isFuzzyMatch(sNoSpace, c.name.toLowerCase()) ||
-                       isFuzzyMatch(sNoSpace, (c.mobile || '').toLowerCase())
+
+                return targetStr.includes(s) ||
+                  targetStr.replace(/\s+/g, '').includes(sNoSpace) ||
+                  matchesAllTerms ||
+                  matchesSmartTerms ||
+                  isFuzzyMatch(sNoSpace, c.name.toLowerCase()) ||
+                  isFuzzyMatch(sNoSpace, (c.mobile || '').toLowerCase())
               });
 
               return (
                 <>
                   {role === 'ADMIN' && filteredClients.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px 8px', gap: 12 }}>
-                      <input 
+                      <input
                         type="checkbox"
                         style={{ width: 18, height: 18, cursor: 'pointer' }}
                         checked={selectedClients.size === filteredClients.length && filteredClients.length > 0}
@@ -267,7 +292,7 @@ export default function Clients() {
                       </div>
                     </div>
                   ))}
-                  
+
                   {filteredClients.length === 0 && (
                     <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
                       No clients found.
@@ -285,9 +310,37 @@ export default function Clients() {
           <div className="modal-content">
             <h3 style={{ marginTop: 0 }}>{editClientId ? 'Edit Client' : 'Add New Client'}</h3>
             <form onSubmit={handleAddClient} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600 }}>Client Name <span style={{color: 'red'}}>*</span></label>
-                <input type="text" value={newName} onChange={e => setNewName(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: 4, textTransform: 'uppercase' }} />
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: 12, fontWeight: 600 }}>Client Name <span style={{ color: 'red' }}>*</span></label>
+                <input type="text" value={newName}
+                  onChange={e => {
+                    setNewName(e.target.value.toUpperCase())
+                    setShowSuggestions(true)
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  required style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: 4, textTransform: 'uppercase' }}
+                />
+
+                {showSuggestions && !editClientId && unlinkedNames.filter(name => name.includes(newName.trim().toUpperCase())).length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ccc', zIndex: 10, maxHeight: 150, overflowY: 'auto', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', borderRadius: '0 0 4px 4px' }}>
+                    {unlinkedNames
+                      .filter(name => name.includes(newName.trim().toUpperCase()))
+                      .map((name, idx) => (
+                        <div key={idx} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: 14 }}
+                          onMouseDown={() => {
+                            setNewName(name)
+                            setShowSuggestions(false)
+                          }}
+                          onMouseEnter={e => e.target.style.backgroundColor = '#f1f5f9'}
+                          onMouseLeave={e => e.target.style.backgroundColor = 'white'}
+                        >
+                          {name} <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>(Auto-Link)</span>
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600 }}>Mobile Number</label>

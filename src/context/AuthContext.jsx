@@ -42,11 +42,19 @@ export function AuthProvider({ children }) {
     const localToken = localStorage.getItem('active_session_token')
     if (data.current_session_token) {
       if (localToken !== data.current_session_token) {
-        await supabase.auth.signOut()
-        localStorage.removeItem('active_session_token')
-        alert('You have been logged out because your account was accessed from another device.')
-        setRole(null)
-        return false
+        // Wait 3 seconds to see if a delayed login script is about to update the token
+        await new Promise(resolve => setTimeout(resolve, 3000))
+        
+        // Check database one more time
+        const retry = await supabase.from('user_roles').select('current_session_token').eq('id', userId).single()
+        
+        if (retry.data?.current_session_token && localToken !== retry.data.current_session_token) {
+          await supabase.auth.signOut()
+          localStorage.removeItem('active_session_token')
+          alert('You have been logged out because your account was accessed from another device.')
+          setRole(null)
+          return false
+        }
       }
     } else {
       // Legacy session without a token, generate one to prevent getting immediately kicked out by future logins

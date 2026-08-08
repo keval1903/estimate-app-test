@@ -14,7 +14,8 @@ export default async function handler(req, res) {
     }
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    // CRITICAL: Use the service role key to bypass RLS since this is a server-side cron job
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     console.log('[Backup Engine] Generating Excel Workbook...');

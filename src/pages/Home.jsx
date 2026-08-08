@@ -32,6 +32,27 @@ export default function Home() {
       })
   }, [])
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const buttons = Array.from(document.querySelectorAll('.home-btn:not([disabled])'))
+        if (!buttons.length) return
+        const activeIdx = buttons.indexOf(document.activeElement)
+        
+        e.preventDefault()
+        if (e.key === 'ArrowDown') {
+          const nextIdx = activeIdx < buttons.length - 1 ? activeIdx + 1 : 0
+          buttons[nextIdx].focus()
+        } else {
+          const prevIdx = activeIdx > 0 ? activeIdx - 1 : (activeIdx === -1 ? 0 : buttons.length - 1)
+          buttons[prevIdx].focus()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   async function handleBackupDownload() {
     setDownloadingBackup(true)
     try {
@@ -100,19 +121,11 @@ export default function Home() {
         </button>
 
 
-        <button className="home-btn" onClick={() => navigate('/selection-sheets')}>
-          <div className="home-btn-icon" style={{ background: '#e0f2fe' }}>📝</div>
-          <div>
-            <div className="home-btn-text">SELECTION SHEETS</div>
-            <div className="home-btn-sub">Create and view client notes and images</div>
-          </div>
-        </button>
-
         <button className="home-btn" onClick={() => navigate('/client-sites')}>
           <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
           <div>
-            <div className="home-btn-text">SITE DETAILS</div>
-            <div className="home-btn-sub">Manage client sites and material requirements</div>
+            <div className="home-btn-text">SITE DETAILS & SELECTION SHEETS</div>
+            <div className="home-btn-sub">Manage client sites, material details, and selection sheets</div>
           </div>
         </button>
 

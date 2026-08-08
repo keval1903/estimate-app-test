@@ -54,7 +54,7 @@ export default function Login() {
       const newToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
       localStorage.setItem('active_session_token', newToken)
       if (data?.user?.id) {
-        await supabase.from('user_roles').update({ current_session_token: newToken }).eq('id', data.user.id)
+        await supabase.rpc('update_my_session_token', { new_token: newToken })
       }
       
       navigate('/', { replace: true })

@@ -455,11 +455,11 @@ export default function CreateEstimate() {
       setSuggestionIdx(prev => (prev > 0 ? prev - 1 : 0))
     } else if (e.key === 'Enter') {
       e.preventDefault()
+      let selected = productSuggestions[0]
       if (suggestionIdx >= 0 && suggestionIdx < productSuggestions.length) {
-        selectProduct(productSuggestions[suggestionIdx])
-      } else {
-        selectProduct(productSuggestions[0])
+        selected = productSuggestions[suggestionIdx]
       }
+      if (selected) selectProduct(selected)
     }
   }
 
