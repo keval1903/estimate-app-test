@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 import { isFuzzyMatch } from '../lib/searchUtils'
+import { extractImageUrls, deleteImagesFromStorage } from '../lib/imageCleanup'
 
 export default function SelectionSheetList() {
   const navigate = useNavigate()
@@ -34,8 +35,18 @@ export default function SelectionSheetList() {
   async function handleDelete(id, clientName) {
     if (!window.confirm(`Are you sure you want to delete the selection sheet for ${clientName}?`)) return
     try {
+      const sheetToDelete = sheets.find(s => s.id === id)
+      
       const { error } = await supabase.from('selection_sheets').delete().eq('id', id)
       if (error) throw error
+      
+      if (sheetToDelete && sheetToDelete.content) {
+        const urls = extractImageUrls(sheetToDelete.content)
+        if (urls.length > 0) {
+          await deleteImagesFromStorage(urls)
+        }
+      }
+
       setSheets(sheets.filter(s => s.id !== id))
       setSelected(selected.filter(sId => sId !== id))
     } catch (e) {
@@ -48,8 +59,17 @@ export default function SelectionSheetList() {
     if (!window.confirm(`Are you sure you want to delete ${selected.length} selected sheets?`)) return
     try {
       setLoading(true)
+      
+      const sheetsToDelete = sheets.filter(s => selected.includes(s.id))
+      
       const { error } = await supabase.from('selection_sheets').delete().in('id', selected)
       if (error) throw error
+      
+      const allUrls = sheetsToDelete.flatMap(s => extractImageUrls(s.content))
+      if (allUrls.length > 0) {
+        await deleteImagesFromStorage(allUrls)
+      }
+
       setSheets(sheets.filter(s => !selected.includes(s.id)))
       setSelected([])
     } catch (e) {
@@ -67,6 +87,12 @@ export default function SelectionSheetList() {
       const allIds = sheets.map(s => s.id)
       const { error } = await supabase.from('selection_sheets').delete().in('id', allIds)
       if (error) throw error
+      
+      const allUrls = sheets.flatMap(s => extractImageUrls(s.content))
+      if (allUrls.length > 0) {
+        await deleteImagesFromStorage(allUrls)
+      }
+
       setSheets([])
       setSelected([])
     } catch (e) {

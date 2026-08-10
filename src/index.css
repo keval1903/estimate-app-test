@@ -639,6 +639,13 @@ body {
   }
 }
 
+.tiptap-editor img {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-user-drag: none !important;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

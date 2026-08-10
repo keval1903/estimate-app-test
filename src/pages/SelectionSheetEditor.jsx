@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import ReactCrop from 'react-image-crop'
-import 'react-image-crop/dist/ReactCrop.css'
+import PerspectiveCropper from '../components/PerspectiveCropper'
+import { applyPerspectiveCrop } from '../lib/perspectiveCrop'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
+import { cleanupRemovedImages } from '../lib/imageCleanup'
 
 // Helper to compress image
 function compressImage(file, maxWidth = 1200) {
@@ -47,14 +48,14 @@ export default function SelectionSheetEditor() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(id !== 'new')
   const [exporting, setExporting] = useState(null)
+  const [initialHtml, setInitialHtml] = useState('')
   
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const imgRef = useRef(null)
   
   const [cropSrc, setCropSrc] = useState(null)
-  const [crop, setCrop] = useState()
-  const [completedCrop, setCompletedCrop] = useState(null)
+  const [cropperRef, setCropperRef] = useState(null)
   const [uploadingCrop, setUploadingCrop] = useState(false)
   const [fileNameForCrop, setFileNameForCrop] = useState('')
 
@@ -74,6 +75,7 @@ export default function SelectionSheetEditor() {
     editorProps: {
       attributes: {
         class: 'tiptap-editor',
+        style: 'min-height: 300px; outline: none;'
       },
       handlePaste: (view, event) => {
         const items = (event.clipboardData || event.originalEvent?.clipboardData)?.items
@@ -109,6 +111,7 @@ export default function SelectionSheetEditor() {
       if (error) throw error
       if (data) {
         setClientName(data.client_name || '')
+        setInitialHtml(data.content || '')
         if (editor && !editor.isDestroyed) {
           editor.commands.setContent(data.content || '')
         }
@@ -143,6 +146,7 @@ export default function SelectionSheetEditor() {
           updated_at: new Date().toISOString()
         }).eq('id', id)
         if (error) throw error
+        await cleanupRemovedImages(initialHtml, content)
       }
       navigate('/selection-sheets', { replace: true })
     } catch (e) {
@@ -187,8 +191,7 @@ export default function SelectionSheetEditor() {
 
   function startCropping(file) {
     if (!file.type.startsWith('image/')) return
-    setCrop(undefined)
-    setCompletedCrop(null)
+    setCropperRef(null)
     setFileNameForCrop(file.name)
     const reader = new FileReader()
     reader.addEventListener('load', () => setCropSrc(reader.result?.toString() || ''))
@@ -196,66 +199,44 @@ export default function SelectionSheetEditor() {
   }
 
   function rotateImage(degrees) {
-    if (!imgRef.current) return
-    const image = imgRef.current
-    const canvas = document.createElement('canvas')
-    
-    if (Math.abs(degrees) % 180 !== 0) {
-      canvas.width = image.naturalHeight
-      canvas.height = image.naturalWidth
-    } else {
-      canvas.width = image.naturalWidth
-      canvas.height = image.naturalHeight
+    if (!cropSrc) return
+    const image = new window.Image()
+    image.onload = () => {
+      const canvas = document.createElement('canvas')
+      
+      if (Math.abs(degrees) % 180 !== 0) {
+        canvas.width = image.naturalHeight
+        canvas.height = image.naturalWidth
+      } else {
+        canvas.width = image.naturalWidth
+        canvas.height = image.naturalHeight
+      }
+      
+      const ctx = canvas.getContext('2d')
+      ctx.translate(canvas.width / 2, canvas.height / 2)
+      ctx.rotate((degrees * Math.PI) / 180)
+      ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2)
+      
+      setCropSrc(canvas.toDataURL('image/jpeg', 1.0))
+      setCropperRef(null)
     }
-    
-    const ctx = canvas.getContext('2d')
-    ctx.translate(canvas.width / 2, canvas.height / 2)
-    ctx.rotate((degrees * Math.PI) / 180)
-    ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2)
-    
-    setCropSrc(canvas.toDataURL('image/jpeg', 1.0))
-    setCrop(undefined)
-    setCompletedCrop(null)
+    image.src = cropSrc
   }
 
   async function finishCropping() {
-    if (!completedCrop || !imgRef.current) return
+    if (!cropperRef) return
     setUploadingCrop(true)
     
     try {
-      const image = imgRef.current
-      const canvas = document.createElement('canvas')
-      const scaleX = image.naturalWidth / image.width
-      const scaleY = image.naturalHeight / image.height
-      canvas.width = completedCrop.width
-      canvas.height = completedCrop.height
-      const ctx = canvas.getContext('2d')
-
-      ctx.drawImage(
-        image,
-        completedCrop.x * scaleX,
-        completedCrop.y * scaleY,
-        completedCrop.width * scaleX,
-        completedCrop.height * scaleY,
-        0,
-        0,
-        completedCrop.width,
-        completedCrop.height
-      )
-
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          alert('Canvas is empty')
-          setUploadingCrop(false)
-          return
-        }
+      const img = cropperRef.getImageElement()
+      const corners = cropperRef.getCorners()
+      
+      const blob = await applyPerspectiveCrop(img, corners)
+      const croppedFile = new File([blob], fileNameForCrop, { type: 'image/jpeg' })
+      await processAndInsertImage(croppedFile)
         
-        const croppedFile = new File([blob], fileNameForCrop, { type: 'image/jpeg' })
-        await processAndInsertImage(croppedFile)
-        
-        setCropSrc(null)
-        setUploadingCrop(false)
-      }, 'image/jpeg', 0.8)
+      setCropSrc(null)
+      setUploadingCrop(false)
       
     } catch (e) {
       alert('Error cropping: ' + e.message)
@@ -515,29 +496,18 @@ export default function SelectionSheetEditor() {
           display: 'flex', flexDirection: 'column'
         }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '1rem' }}>
-            <ReactCrop 
-              crop={crop} 
-              onChange={c => setCrop(c)} 
-              onComplete={c => setCompletedCrop(c)}
-            >
-              <img 
-                ref={imgRef} 
-                src={cropSrc} 
-                style={{ maxHeight: '70vh', maxWidth: '100%' }}
-                alt="Crop preview" 
-              />
-            </ReactCrop>
+            <PerspectiveCropper 
+              src={cropSrc} 
+              onComplete={setCropperRef}
+            />
           </div>
           <div style={{ padding: '0.5rem 1rem', background: '#333', display: 'flex', gap: '1rem', justifyContent: 'center', flexShrink: 0, width: '100%' }}>
              <button className="btn btn-ghost" style={{ color: '#fff', fontSize: '0.9rem' }} onClick={() => rotateImage(-90)}>↺ Rotate Left</button>
              <button className="btn btn-ghost" style={{ color: '#fff', fontSize: '0.9rem' }} onClick={() => rotateImage(90)}>↻ Rotate Right</button>
           </div>
           <div style={{ padding: '1rem', background: '#222', display: 'flex', justifyContent: 'space-between', flexShrink: 0, width: '100%' }}>
-            <button className="btn btn-ghost" style={{ color: '#aaa' }} onClick={() => { setCrop(undefined); setCompletedCrop(null); setCropSrc(null); }}>Cancel</button>
+            <button className="btn btn-ghost" style={{ color: '#aaa' }} onClick={() => { setCropperRef(null); setCropSrc(null); }}>Cancel</button>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button className="btn btn-ghost" style={{ color: '#fff', border: '1px solid #555' }} onClick={() => { setCrop(undefined); setCompletedCrop(null); }} disabled={uploadingCrop}>
-                Reset Crop
-              </button>
               <button className="btn btn-ghost" style={{ color: '#fff', border: '1px solid #555' }} onClick={skipCropping} disabled={uploadingCrop}>
                 Skip
               </button>

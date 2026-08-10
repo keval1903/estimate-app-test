@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import SelectionSheetTab from '../components/SelectionSheetTab'
+import { cleanupRemovedImages } from '../lib/imageCleanup'
 
 const DEFAULT_DYNAMIC_FIELDS = [
   'Ply Grade', 'Inner Laminate', 'Hardware'
@@ -40,6 +41,7 @@ export default function SiteDetailsEditor() {
   const [activeTab, setActiveTab] = useState('details') // 'details' or 'selection_sheet'
 
   const [details, setDetails] = useState({})
+  const [initialSelectionSheetHtml, setInitialSelectionSheetHtml] = useState('')
   const [newFieldName, setNewFieldName] = useState('')
 
   const [isDraftRestored, setIsDraftRestored] = useState(false)
@@ -99,6 +101,7 @@ export default function SiteDetailsEditor() {
         if (mergedDetails[f] === undefined) mergedDetails[f] = ''
       })
       setDetails(mergedDetails)
+      setInitialSelectionSheetHtml(mergedDetails.selectionSheetHtml || '')
 
       const savedDraft = localStorage.getItem(draftKey)
       if (savedDraft) {
@@ -202,6 +205,8 @@ export default function SiteDetailsEditor() {
         if (error) throw error
         localStorage.removeItem(draftKey)
         setIsEditing(false)
+        await cleanupRemovedImages(initialSelectionSheetHtml, details.selectionSheetHtml || '')
+        setInitialSelectionSheetHtml(details.selectionSheetHtml || '')
       }
     } catch (e) {
       alert('Error saving site: ' + e.message)

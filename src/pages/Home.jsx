@@ -77,7 +77,11 @@ export default function Home() {
           <button
             onClick={async () => {
               if (user?.id) {
-                await supabase.from('user_roles').update({ current_session_token: null }).eq('id', user.id)
+                const { error: rpcErr } = await supabase.rpc('update_my_session_token', { new_token: null })
+                if (rpcErr) {
+                  // Fallback for Admin if RPC is missing
+                  await supabase.from('user_roles').update({ current_session_token: null }).eq('id', user.id)
+                }
               }
               await supabase.auth.signOut()
             }}

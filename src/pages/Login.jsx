@@ -28,6 +28,9 @@ export default function Login() {
     // Simulate username login by trying @estimateapp.local first (for older users)
     const emailLocal = `${username}@estimateapp.local`
     
+    // Set flag so AuthContext waits for us to finish DB updates before checking the token
+    localStorage.setItem('login_in_progress', 'true')
+    
     let { data, error } = await supabase.auth.signInWithPassword({
       email: emailLocal,
       password,
@@ -45,6 +48,7 @@ export default function Login() {
     }
 
     if (error) {
+      localStorage.removeItem('login_in_progress')
       setError(error.message)
       setLoading(false)
     } else {
@@ -54,9 +58,18 @@ export default function Login() {
       const newToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
       localStorage.setItem('active_session_token', newToken)
       if (data?.user?.id) {
-        await supabase.rpc('update_my_session_token', { new_token: newToken })
+        const { error: rpcErr } = await supabase.rpc('update_my_session_token', { new_token: newToken })
+        if (rpcErr) {
+          console.warn('RPC failed, falling back to direct update:', rpcErr.message)
+          // Fallback for Admins who bypass RLS
+          const { error: fbErr } = await supabase.from('user_roles').update({ current_session_token: newToken }).eq('id', data.user.id)
+          if (fbErr) {
+            alert('Database error updating session token. Please ensure you ran fix_session_rpc.sql. Error: ' + fbErr.message)
+          }
+        }
       }
       
+      localStorage.removeItem('login_in_progress')
       navigate('/', { replace: true })
     }
   }

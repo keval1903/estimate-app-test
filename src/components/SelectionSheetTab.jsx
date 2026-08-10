@@ -1,7 +1,8 @@
 import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import ReactCrop from 'react-image-crop'
-import 'react-image-crop/dist/ReactCrop.css'
+import PerspectiveCropper from './PerspectiveCropper'
+import { applyPerspectiveCrop } from '../lib/perspectiveCrop'
+import 'react-image-crop/dist/ReactCrop.css' // We can keep it if other places use it, or just leave it
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
@@ -44,8 +45,7 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
   const imgRef = useRef(null)
   
   const [cropSrc, setCropSrc] = useState(null)
-  const [crop, setCrop] = useState()
-  const [completedCrop, setCompletedCrop] = useState(null)
+  const [cropperRef, setCropperRef] = useState(null)
   const [uploadingCrop, setUploadingCrop] = useState(false)
   const [fileNameForCrop, setFileNameForCrop] = useState('')
   const [exporting, setExporting] = useState(null)
@@ -67,6 +67,7 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
     editorProps: {
       attributes: {
         class: 'tiptap-editor',
+        style: 'min-height: 300px; outline: none;'
       },
       handlePaste: (view, event) => {
         if (!isEditing) return false
@@ -145,8 +146,7 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
 
   function startCropping(file) {
     if (!file.type.startsWith('image/')) return
-    setCrop(undefined)
-    setCompletedCrop(null)
+    setCropperRef(null)
     setFileNameForCrop(file.name)
     const reader = new FileReader()
     reader.addEventListener('load', () => setCropSrc(reader.result?.toString() || ''))
@@ -154,66 +154,44 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
   }
 
   function rotateImage(degrees) {
-    if (!imgRef.current) return
-    const image = imgRef.current
-    const canvas = document.createElement('canvas')
-    
-    if (Math.abs(degrees) % 180 !== 0) {
-      canvas.width = image.naturalHeight
-      canvas.height = image.naturalWidth
-    } else {
-      canvas.width = image.naturalWidth
-      canvas.height = image.naturalHeight
+    if (!cropSrc) return
+    const image = new window.Image()
+    image.onload = () => {
+      const canvas = document.createElement('canvas')
+      
+      if (Math.abs(degrees) % 180 !== 0) {
+        canvas.width = image.naturalHeight
+        canvas.height = image.naturalWidth
+      } else {
+        canvas.width = image.naturalWidth
+        canvas.height = image.naturalHeight
+      }
+      
+      const ctx = canvas.getContext('2d')
+      ctx.translate(canvas.width / 2, canvas.height / 2)
+      ctx.rotate((degrees * Math.PI) / 180)
+      ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2)
+      
+      setCropSrc(canvas.toDataURL('image/jpeg', 1.0))
+      setCropperRef(null)
     }
-    
-    const ctx = canvas.getContext('2d')
-    ctx.translate(canvas.width / 2, canvas.height / 2)
-    ctx.rotate((degrees * Math.PI) / 180)
-    ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2)
-    
-    setCropSrc(canvas.toDataURL('image/jpeg', 1.0))
-    setCrop(undefined)
-    setCompletedCrop(null)
+    image.src = cropSrc
   }
 
   async function finishCropping() {
-    if (!completedCrop || !imgRef.current) return
+    if (!cropperRef) return
     setUploadingCrop(true)
     
     try {
-      const image = imgRef.current
-      const canvas = document.createElement('canvas')
-      const scaleX = image.naturalWidth / image.width
-      const scaleY = image.naturalHeight / image.height
-      canvas.width = completedCrop.width
-      canvas.height = completedCrop.height
-      const ctx = canvas.getContext('2d')
-
-      ctx.drawImage(
-        image,
-        completedCrop.x * scaleX,
-        completedCrop.y * scaleY,
-        completedCrop.width * scaleX,
-        completedCrop.height * scaleY,
-        0,
-        0,
-        completedCrop.width,
-        completedCrop.height
-      )
-
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          alert('Canvas is empty')
-          setUploadingCrop(false)
-          return
-        }
+      const img = cropperRef.getImageElement()
+      const corners = cropperRef.getCorners()
+      
+      const blob = await applyPerspectiveCrop(img, corners)
+      const croppedFile = new File([blob], fileNameForCrop, { type: 'image/jpeg' })
+      await processAndInsertImage(croppedFile)
         
-        const croppedFile = new File([blob], fileNameForCrop, { type: 'image/jpeg' })
-        await processAndInsertImage(croppedFile)
-        
-        setCropSrc(null)
-        setUploadingCrop(false)
-      }, 'image/jpeg', 0.8)
+      setCropSrc(null)
+      setUploadingCrop(false)
       
     } catch (e) {
       alert('Error cropping: ' + e.message)
@@ -433,18 +411,18 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
           display: 'flex', flexDirection: 'column'
         }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '1rem' }}>
-            <ReactCrop crop={crop} onChange={c => setCrop(c)} onComplete={c => setCompletedCrop(c)}>
-              <img ref={imgRef} src={cropSrc} style={{ maxHeight: '70vh', maxWidth: '100%' }} alt="Crop preview" />
-            </ReactCrop>
+            <PerspectiveCropper 
+              src={cropSrc} 
+              onComplete={setCropperRef}
+            />
           </div>
           <div style={{ padding: '0.5rem 1rem', background: '#333', display: 'flex', gap: '1rem', justifyContent: 'center', flexShrink: 0, width: '100%' }}>
              <button className="btn btn-ghost" style={{ color: '#fff', fontSize: '0.9rem' }} onClick={() => rotateImage(-90)}>↺ Rotate Left</button>
              <button className="btn btn-ghost" style={{ color: '#fff', fontSize: '0.9rem' }} onClick={() => rotateImage(90)}>↻ Rotate Right</button>
           </div>
           <div style={{ padding: '1rem', background: '#222', display: 'flex', justifyContent: 'space-between', flexShrink: 0, width: '100%' }}>
-            <button className="btn btn-ghost" style={{ color: '#aaa' }} onClick={() => { setCrop(undefined); setCompletedCrop(null); setCropSrc(null); }}>Cancel</button>
+            <button className="btn btn-ghost" style={{ color: '#aaa' }} onClick={() => { setCropperRef(null); setCropSrc(null); }}>Cancel</button>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button className="btn btn-ghost" style={{ color: '#fff', border: '1px solid #555' }} onClick={() => { setCrop(undefined); setCompletedCrop(null); }} disabled={uploadingCrop}>Reset Crop</button>
               <button className="btn btn-ghost" style={{ color: '#fff', border: '1px solid #555' }} onClick={skipCropping} disabled={uploadingCrop}>Skip</button>
               <button className="btn btn-primary" onClick={finishCropping} disabled={uploadingCrop}>{uploadingCrop ? 'Uploading...' : 'Confirm Crop'}</button>
             </div>

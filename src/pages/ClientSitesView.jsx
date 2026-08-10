@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 import { isFuzzyMatch } from '../lib/searchUtils'
+import { extractImageUrls, deleteImagesFromStorage } from '../lib/imageCleanup'
 
 export default function ClientSitesView() {
   const navigate = useNavigate()
@@ -49,8 +50,18 @@ export default function ClientSitesView() {
   async function handleDelete(id, siteName) {
     if (!window.confirm(`Are you sure you want to delete ${siteName}?`)) return
     try {
+      const siteToDelete = sites.find(s => s.id === id)
+
       const { error } = await supabase.from('client_sites').delete().eq('id', id)
       if (error) throw error
+      
+      if (siteToDelete && siteToDelete.details && siteToDelete.details.selectionSheetHtml) {
+        const urls = extractImageUrls(siteToDelete.details.selectionSheetHtml)
+        if (urls.length > 0) {
+          await deleteImagesFromStorage(urls)
+        }
+      }
+
       setSites(sites.filter(s => s.id !== id))
     } catch (e) {
       alert('Error deleting site: ' + e.message)

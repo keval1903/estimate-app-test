@@ -48,10 +48,13 @@ export function AuthProvider({ children }) {
         // Check database one more time
         const retry = await supabase.from('user_roles').select('current_session_token').eq('id', userId).single()
         
-        if (retry.data?.current_session_token && localToken !== retry.data.current_session_token) {
+        // Re-read localToken in case Login.jsx was delayed by IndexedDB or network operations
+        const freshLocalToken = localStorage.getItem('active_session_token')
+        
+        if (retry.data?.current_session_token && freshLocalToken !== retry.data.current_session_token) {
           await supabase.auth.signOut()
           localStorage.removeItem('active_session_token')
-          alert('You have been logged out because your account was accessed from another device.')
+          alert(`You have been logged out because your account was accessed from another device.\n\nDebug Info: Local(${freshLocalToken}) !== DB(${retry.data.current_session_token})`)
           setRole(null)
           return false
         }
@@ -71,28 +74,39 @@ export function AuthProvider({ children }) {
     let mounted = true;
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       // Skip INITIAL_SESSION since getSession below handles it better (including token refresh)
       if (event === 'INITIAL_SESSION') return;
       
-      // Prevent race condition: Give Login.jsx time to write the new session token to localStorage and the database
-      if (event === 'SIGNED_IN') {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-      
-      if (session?.user) {
-        const allowed = await fetchRole(session.user.id)
-        if (allowed) {
-          setUser(session.user)
-        } else {
-          setUser(null)
+      const processAuthChange = async () => {
+        // Prevent race condition: Wait for Login.jsx to finish its DB updates
+        if (event === 'SIGNED_IN') {
+          while (localStorage.getItem('login_in_progress') === 'true') {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
         }
-      } else {
-        setUser(null)
-        setRole(null)
-      }
-      setLoading(false)
+        
+        if (session?.user) {
+          const allowed = await fetchRole(session.user.id)
+          if (mounted) {
+            if (allowed) {
+              setUser(session.user)
+            } else {
+              setUser(null)
+            }
+          }
+        } else {
+          if (mounted) {
+            setUser(null)
+            setRole(null)
+          }
+        }
+        if (mounted) setLoading(false)
+      };
+
+      // Run asynchronously to prevent deadlocking signInWithPassword
+      processAuthChange();
     })
 
     // Get initial session
