@@ -447,14 +447,15 @@ export default function EstimateView() {
     let currentQty = 0;
     let currentAmt = 0;
 
-    for (let i = 0; i < items.length;) {
+    let i = 0;
+    let isLast = false;
+    while (!isLast) {
       const isFirst = result.length === 0;
       let availableRowsForItems = maxRows;
 
       if (!isFirst) availableRowsForItems -= 1; // Room for Brought Forward
 
       const remainingItems = items.length - i;
-      let isLast = false;
 
       let extraRows = (estimate?.type === 'ESTIMATE' && estimate?.client_id) ? 4 : 2;
       if (Number(estimate?.gst_percent) > 0) {
@@ -468,6 +469,8 @@ export default function EstimateView() {
       } else {
         // Doesn't fit, we need room for Carried Forward
         availableRowsForItems -= 1;
+        // Cap available rows to remaining items, so we don't try to take more items than we have
+        availableRowsForItems = Math.min(availableRowsForItems, remainingItems);
       }
 
       const chunk = items.slice(i, i + availableRowsForItems);
@@ -492,7 +495,7 @@ export default function EstimateView() {
       };
 
       let emptyRowsCount = 0;
-      if (isLast) {
+      if (isLast && layoutMode === 'full') {
         const standardMaxRows = paperSize === 'a5' ? A5_ROWS : A4_ROWS;
         const occupied = chunk.length + (!isFirst ? 1 : 0) + extraRows;
         if (occupied < standardMaxRows) {
@@ -507,7 +510,7 @@ export default function EstimateView() {
     }
 
     return result;
-  }, [items, paperSize, isExportingSingleImage]);
+  }, [items, paperSize, isExportingSingleImage, layoutMode]);
 
   if (loading) return <div className="app-container"><div className="spinner" /></div>
   if (!estimate) return (
