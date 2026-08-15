@@ -112,6 +112,8 @@ export default function CreateEstimate() {
 
   // item modal state
   const [itemForm, setItemForm] = useState(EMPTY_ITEM)
+  const [bulkAddMode, setBulkAddMode] = useState(false)
+  const [bulkSelectedItems, setBulkSelectedItems] = useState([])
   const [productSearch, setProductSearch] = useState('')
   const [productSuggestions, setProductSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -407,6 +409,42 @@ export default function CreateEstimate() {
     const isPieceBased = p.calculation_type === 'SQFT' || p.calculation_type === 'INCH' || p.calculation_type === 'FEET'
     const baseRate = parseFloat(p.rate) || 0
 
+    if (bulkAddMode) {
+      if (bulkSelectedItems.some(it => it.product_id === p.id)) {
+        showToast(`${p.product_name} is already selected`, 'error')
+        return
+      }
+      const nextItem = {
+        product_id: p.id,
+        product_name_snapshot: p.product_name,
+        length_snapshot: p.length,
+        width_snapshot: p.width,
+        unit_snapshot: p.unit,
+        base_rate: baseRate,
+        discount_percent: '',
+        rate: baseRate,
+        calculation_type_snapshot: p.calculation_type,
+        nos: isPieceBased ? '1' : '',
+        quantity: p.calculation_type === 'QUANTITY' ? '1' : '',
+        amount: 0,
+        has_stock: p.has_stock || false,
+        stock: p.stock || 0,
+        has_remark: p.has_remark || false,
+        has_discount: p.has_discount || false,
+        keyword_snapshot: p.keyword || ''
+      }
+      const { quantity, amount } = calcItem(nextItem)
+      nextItem.quantity = quantity || 1
+      nextItem.amount = amount
+
+      setBulkSelectedItems(prev => [...prev, nextItem])
+      setProductSearch('')
+      setProductSuggestions([])
+      setSuggestionIdx(-1)
+      setTimeout(() => productInputRef.current?.focus(), 50)
+      return
+    }
+
     setItemForm(f => {
       const next = {
         ...f,
@@ -566,6 +604,8 @@ export default function CreateEstimate() {
 
   function openAddItem() {
     setItemForm(EMPTY_ITEM)
+    setBulkAddMode(false)
+    setBulkSelectedItems([])
     setProductSearch('')
     setEditingItemIdx(null)
     setShowItemModal(true)
@@ -728,6 +768,69 @@ export default function CreateEstimate() {
       setEditingItemIdx(null)
       setTimeout(() => productInputRef.current?.focus(), 100)
     }
+  }
+
+  function saveBulkItems() {
+    if (bulkSelectedItems.length === 0) return
+
+    for (let i = 0; i < bulkSelectedItems.length; i++) {
+      const item = bulkSelectedItems[i]
+      const rate = parseFloat(item.rate)
+      if (isNaN(rate) || rate < 0 || item.rate === '') {
+        showToast(`Product "${item.product_name_snapshot}" has an invalid rate`, 'error')
+        return
+      }
+
+      const isPieceBased = item.calculation_type_snapshot === 'SQFT' || item.calculation_type_snapshot === 'INCH' || item.calculation_type_snapshot === 'FEET'
+      if (isPieceBased) {
+        if (!item.nos || parseFloat(item.nos) <= 0) {
+          showToast(`Enter valid Nos. for "${item.product_name_snapshot}"`, 'error')
+          return
+        }
+      } else {
+        if (!item.quantity || parseFloat(item.quantity) <= 0) {
+          showToast(`Enter valid Quantity for "${item.product_name_snapshot}"`, 'error')
+          return
+        }
+      }
+
+      if (item.has_stock) {
+        const availStock = Number(item.stock || 0)
+        const requestedQty = isPieceBased ? (parseFloat(item.nos) || 0) : (parseFloat(item.quantity) || 0)
+
+        const otherItemsQty = items
+          .filter(it => it.product_id === item.product_id)
+          .reduce((sum, it) => {
+            const itPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET'
+            return sum + (itPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0))
+          }, 0)
+
+        const totalRequested = otherItemsQty + requestedQty
+        if (totalRequested > availStock) {
+          const unit = item.unit_snapshot || 'units'
+          if (otherItemsQty > 0) {
+            showToast(`Cannot add! ${item.product_name_snapshot} has ${availStock} ${unit} stock (${otherItemsQty} already added to this bill).`, 'error')
+          } else {
+            showToast(`Cannot add! ${item.product_name_snapshot} has only ${availStock} ${unit} available in stock.`, 'error')
+          }
+          return
+        }
+      }
+    }
+
+    const itemsToAdd = bulkSelectedItems.map(item => {
+      const isPieceBased = item.calculation_type_snapshot === 'SQFT' || item.calculation_type_snapshot === 'INCH' || item.calculation_type_snapshot === 'FEET'
+      const { quantity, amount } = calcItem(item)
+      return {
+        ...item,
+        quantity: isPieceBased ? (item.calculation_type_snapshot === 'SQFT' ? quantity : parseFloat(item.nos)) : parseFloat(item.quantity),
+        amount
+      }
+    })
+
+    setItems(prev => [...prev, ...itemsToAdd])
+    setShowItemModal(false)
+    showToast(`Added ${itemsToAdd.length} item(s) ✓`)
   }
 
   function removeItem(idx) {
@@ -1083,7 +1186,8 @@ export default function CreateEstimate() {
             <div className="field">
               <label>Date</label>
               <input type="text" value={billDate}
-                onChange={e => setBillDate(e.target.value)} />
+                onChange={e => setBillDate(e.target.value)}
+                readOnly={!isEdit} />
             </div>
           </div>
 
@@ -1273,8 +1377,26 @@ export default function CreateEstimate() {
       {showItemModal && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowItemModal(false)}>
           <div className="modal-box">
-            <div className="modal-title">
-              <span>{editingItemIdx !== null ? 'Edit Item' : 'Add Item'}</span>
+            <div className="modal-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {editingItemIdx !== null ? 'Edit Item' : 'Add Item'}
+                {editingItemIdx === null && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', fontWeight: 600, color: 'var(--accent)' }}>
+                    <input
+                      type="checkbox"
+                      checked={bulkAddMode}
+                      onChange={e => {
+                        setBulkAddMode(e.target.checked)
+                        setProductSearch('')
+                        setProductSuggestions([])
+                        setSuggestionIdx(-1)
+                      }}
+                      style={{ margin: 0 }}
+                    />
+                    Select Multiple
+                  </label>
+                )}
+              </span>
               <button className="btn btn-ghost" onClick={() => setShowItemModal(false)}>✕</button>
             </div>
 
@@ -1337,114 +1459,204 @@ export default function CreateEstimate() {
               </div>
             </div>
 
-            {/* Show selected product details */}
-            {itemForm.product_name_snapshot && (
-              <div style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 13 }}>
-                <strong>{itemForm.product_name_snapshot}</strong><br />
-                {itemForm.unit_snapshot} · {itemForm.calculation_type_snapshot}
-                {Boolean(itemForm.length_snapshot && itemForm.width_snapshot) &&
-                  ` · ${itemForm.length_snapshot} × ${itemForm.width_snapshot} ${itemForm.calculation_type_snapshot === 'INCH' || itemForm.calculation_type_snapshot === 'FEET' ? (itemForm.calculation_type_snapshot === 'FEET' ? 'ft' : 'in') : 'ft'}`}
-                {itemForm.has_stock && (
-                  <div style={{ marginTop: 4, color: itemForm.stock > 0 ? 'var(--primary-color)' : 'var(--danger-color)', fontWeight: 600 }}>
-                    Available Stock: {itemForm.stock} {itemForm.unit_snapshot}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {itemForm.keyword_snapshot && (
-              <div style={{ background: '#fff3cd', color: '#856404', border: '1px solid #ffeeba', borderRadius: 8, padding: '8px 12px', marginBottom: 16, fontSize: 13, fontWeight: 700, textAlign: 'center', textTransform: 'uppercase' }}>
-                {itemForm.keyword_snapshot}
-              </div>
-            )}
-
-            {/* Nos (SQFT and INCH/FEET) */}
-            {(itemForm.calculation_type_snapshot === 'SQFT' || itemForm.calculation_type_snapshot === 'INCH' || itemForm.calculation_type_snapshot === 'FEET') && (
-              <div className="field">
-                <label>Nos. (Number of Pieces / Units) *</label>
-                <input name="nos" type="number" inputMode="decimal"
-                  ref={nosInputRef}
-                  value={itemForm.nos} onChange={handleItemChange}
-                  onKeyDown={handleInputKeyDown}
-                  placeholder="e.g. 10" autoFocus={false} />
-                {itemForm.nos && itemForm.length_snapshot && itemForm.width_snapshot && (
-                  <div style={{ fontSize: 13, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
-                    {itemForm.calculation_type_snapshot === 'SQFT' ? (
-                      `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} = ${(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0)).toFixed(2)} Sq.Ft`
-                    ) : (
-                      `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} × ₹${itemForm.rate} = ₹${Math.ceil(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0) * (parseFloat(itemForm.rate) || 0)).toLocaleString('en-IN')} (Qty: ${itemForm.nos} ${itemForm.unit_snapshot})`
+            {!bulkAddMode ? (
+              <>
+                {/* Show selected product details */}
+                {itemForm.product_name_snapshot && (
+                  <div style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 13 }}>
+                    <strong>{itemForm.product_name_snapshot}</strong><br />
+                    {itemForm.unit_snapshot} · {itemForm.calculation_type_snapshot}
+                    {Boolean(itemForm.length_snapshot && itemForm.width_snapshot) &&
+                      ` · ${itemForm.length_snapshot} × ${itemForm.width_snapshot} ${itemForm.calculation_type_snapshot === 'INCH' || itemForm.calculation_type_snapshot === 'FEET' ? (itemForm.calculation_type_snapshot === 'FEET' ? 'ft' : 'in') : 'ft'}`}
+                    {itemForm.has_stock && (
+                      <div style={{ marginTop: 4, color: itemForm.stock > 0 ? 'var(--primary-color)' : 'var(--danger-color)', fontWeight: 600 }}>
+                        Available Stock: {itemForm.stock} {itemForm.unit_snapshot}
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* Quantity (QUANTITY type) */}
-            {itemForm.calculation_type_snapshot === 'QUANTITY' && (
-              <div className="field">
-                <label>Quantity ({itemForm.unit_snapshot || 'units'}) *</label>
-                <input name="quantity" type="number" inputMode="decimal"
-                  ref={qtyInputRef}
-                  value={itemForm.quantity} onChange={handleItemChange}
-                  onKeyDown={handleInputKeyDown}
-                  placeholder="e.g. 5" />
-              </div>
-            )}
-
-            {/* Discount (%) field */}
-            {(itemForm.has_discount || Boolean(parseFloat(itemForm.discount_percent))) && (
-              <div className="field">
-                <label>Discount (%)</label>
-                <input name="discount_percent" type="number" inputMode="decimal"
-                  value={itemForm.discount_percent || ''} onChange={handleItemChange}
-                  onKeyDown={handleInputKeyDown}
-                  placeholder="e.g. 10" />
-                {itemForm.base_rate > 0 && parseFloat(itemForm.discount_percent) > 0 && (
-                  <div style={{ fontSize: 13, color: 'var(--primary-color)', marginTop: 4, fontWeight: 600 }}>
-                    Master Rate: ₹{Number(itemForm.base_rate).toFixed(2)} − {itemForm.discount_percent}% = Rate: ₹{Number(itemForm.rate).toFixed(2)}
+                {itemForm.keyword_snapshot && (
+                  <div style={{ background: '#fff3cd', color: '#856404', border: '1px solid #ffeeba', borderRadius: 8, padding: '8px 12px', marginBottom: 16, fontSize: 13, fontWeight: 700, textAlign: 'center', textTransform: 'uppercase' }}>
+                    {itemForm.keyword_snapshot}
                   </div>
                 )}
+
+                {/* Nos (SQFT and INCH/FEET) */}
+                {(itemForm.calculation_type_snapshot === 'SQFT' || itemForm.calculation_type_snapshot === 'INCH' || itemForm.calculation_type_snapshot === 'FEET') && (
+                  <div className="field">
+                    <label>Nos. (Number of Pieces / Units) *</label>
+                    <input name="nos" type="number" inputMode="decimal"
+                      ref={nosInputRef}
+                      value={itemForm.nos} onChange={handleItemChange}
+                      onKeyDown={handleInputKeyDown}
+                      placeholder="e.g. 10" autoFocus={false} />
+                    {itemForm.nos && itemForm.length_snapshot && itemForm.width_snapshot && (
+                      <div style={{ fontSize: 13, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
+                        {itemForm.calculation_type_snapshot === 'SQFT' ? (
+                          `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} = ${(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0)).toFixed(2)} Sq.Ft`
+                        ) : (
+                          `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} × ₹${itemForm.rate} = ₹${Math.ceil(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0) * (parseFloat(itemForm.rate) || 0)).toLocaleString('en-IN')} (Qty: ${itemForm.nos} ${itemForm.unit_snapshot})`
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Quantity (QUANTITY type) */}
+                {itemForm.calculation_type_snapshot === 'QUANTITY' && (
+                  <div className="field">
+                    <label>Quantity ({itemForm.unit_snapshot || 'units'}) *</label>
+                    <input name="quantity" type="number" inputMode="decimal"
+                      ref={qtyInputRef}
+                      value={itemForm.quantity} onChange={handleItemChange}
+                      onKeyDown={handleInputKeyDown}
+                      placeholder="e.g. 5" />
+                  </div>
+                )}
+
+                {/* Discount (%) field */}
+                {(itemForm.has_discount || Boolean(parseFloat(itemForm.discount_percent))) && (
+                  <div className="field">
+                    <label>Discount (%)</label>
+                    <input name="discount_percent" type="number" inputMode="decimal"
+                      value={itemForm.discount_percent || ''} onChange={handleItemChange}
+                      onKeyDown={handleInputKeyDown}
+                      placeholder="e.g. 10" />
+                    {itemForm.base_rate > 0 && parseFloat(itemForm.discount_percent) > 0 && (
+                      <div style={{ fontSize: 13, color: 'var(--primary-color)', marginTop: 4, fontWeight: 600 }}>
+                        Master Rate: ₹{Number(itemForm.base_rate).toFixed(2)} − {itemForm.discount_percent}% = Rate: ₹{Number(itemForm.rate).toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Rate */}
+                <div className="field">
+                  <label>Rate (₹) *</label>
+                  <input name="rate" type="number" inputMode="decimal"
+                    value={itemForm.rate} onChange={handleItemChange}
+                    onKeyDown={handleInputKeyDown}
+                    placeholder="0.00"
+                    disabled={itemForm.has_discount || Boolean(parseFloat(itemForm.discount_percent))}
+                    title={(itemForm.has_discount || Boolean(parseFloat(itemForm.discount_percent))) ? "Rate is read-only for discounted products. Edit in Product Master." : ""}
+                  />
+                </div>
+
+                {/* Remark (shown if enabled for product or already set) */}
+                {(itemForm.has_remark || Boolean(itemForm.remark)) && (
+                  <div className="field">
+                    <label>Remark / Extra Note (Optional)</label>
+                    <input name="remark" value={itemForm.remark || ''} onChange={handleItemChange}
+                      onKeyDown={handleInputKeyDown}
+                      placeholder="e.g. Soft Close, Gloss Finish (optional)" />
+                  </div>
+                )}
+
+                {/* Calculated amount preview */}
+                {itemForm.amount > 0 && (
+                  <div style={{ textAlign: 'right', fontSize: 20, fontWeight: 700, color: 'var(--accent)', marginBottom: 16 }}>
+                    Amount: ₹{Number(itemForm.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button className="btn btn-secondary btn-full" onClick={() => setShowItemModal(false)}>Cancel</button>
+                  <button className="btn btn-primary btn-full" style={{ background: '#f59e0b', color: '#fff', border: 'none' }} onClick={() => saveItem(false)}>
+                    Add Next
+                  </button>
+                  <button className="btn btn-primary btn-full" onClick={() => saveItem(true)}>
+                    {editingItemIdx !== null ? 'Update Item' : 'Add Item'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ marginTop: 16 }}>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: 8 }}>Selected Products ({bulkSelectedItems.length})</label>
+                {bulkSelectedItems.length === 0 ? (
+                  <div className="empty-state" style={{ padding: '16px', fontSize: 13 }}>
+                    No products selected yet. Search and select above.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '300px', overflowY: 'auto', paddingRight: 4, marginBottom: 16 }}>
+                    {bulkSelectedItems.map((item, idx) => {
+                      const isPieceBased = item.calculation_type_snapshot === 'SQFT' || item.calculation_type_snapshot === 'INCH' || item.calculation_type_snapshot === 'FEET'
+                      return (
+                        <div key={idx} style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <strong style={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: 13 }}>
+                              {item.product_name_snapshot}
+                            </strong>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                              ₹{item.rate} · {item.unit_snapshot}
+                              {Boolean(item.length_snapshot && item.width_snapshot) && ` · ${item.length_snapshot}×${item.width_snapshot}`}
+                              {item.has_stock && ` (Stock: ${item.stock})`}
+                            </span>
+                            {item.amount > 0 && (
+                              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginTop: 2 }}>
+                                ₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 80 }}>
+                              <label style={{ fontSize: 10, display: 'block', color: 'var(--text-muted)', marginBottom: 2 }}>
+                                {isPieceBased ? 'Nos.' : 'Qty'}
+                              </label>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                style={{ width: '100%', padding: '4px 6px', fontSize: 13, height: '30px', border: '1px solid var(--border-light)', borderRadius: 4, boxSizing: 'border-box' }}
+                                value={isPieceBased ? item.nos : item.quantity}
+                                onChange={e => {
+                                  const val = e.target.value
+                                  setBulkSelectedItems(prev => {
+                                    const next = [...prev]
+                                    const target = { ...next[idx] }
+                                    if (isPieceBased) {
+                                      target.nos = val
+                                    } else {
+                                      target.quantity = val
+                                    }
+                                    const { quantity, amount } = calcItem(target)
+                                    target.quantity = quantity || ''
+                                    target.amount = amount
+                                    next[idx] = target
+                                    return next
+                                  })
+                                }}
+                                placeholder="1"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              style={{ color: 'var(--danger)', fontSize: 16, padding: '4px 8px', marginTop: 14 }}
+                              onClick={() => {
+                                setBulkSelectedItems(prev => prev.filter((_, i) => i !== idx))
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button className="btn btn-secondary btn-full" onClick={() => setShowItemModal(false)}>Cancel</button>
+                  <button
+                    className="btn btn-primary btn-full"
+                    onClick={saveBulkItems}
+                    disabled={bulkSelectedItems.length === 0}
+                  >
+                    Add Selected ({bulkSelectedItems.length})
+                  </button>
+                </div>
               </div>
             )}
-
-            {/* Rate */}
-            <div className="field">
-              <label>Rate (₹) *</label>
-              <input name="rate" type="number" inputMode="decimal"
-                value={itemForm.rate} onChange={handleItemChange}
-                onKeyDown={handleInputKeyDown}
-                placeholder="0.00"
-                disabled={itemForm.has_discount || Boolean(parseFloat(itemForm.discount_percent))}
-                title={(itemForm.has_discount || Boolean(parseFloat(itemForm.discount_percent))) ? "Rate is read-only for discounted products. Edit in Product Master." : ""}
-              />
-            </div>
-
-            {/* Remark (shown if enabled for product or already set) */}
-            {(itemForm.has_remark || Boolean(itemForm.remark)) && (
-              <div className="field">
-                <label>Remark / Extra Note (Optional)</label>
-                <input name="remark" value={itemForm.remark || ''} onChange={handleItemChange}
-                  onKeyDown={handleInputKeyDown}
-                  placeholder="e.g. Soft Close, Gloss Finish (optional)" />
-              </div>
-            )}
-
-            {/* Calculated amount preview */}
-            {itemForm.amount > 0 && (
-              <div style={{ textAlign: 'right', fontSize: 20, fontWeight: 700, color: 'var(--accent)', marginBottom: 16 }}>
-                Amount: ₹{Number(itemForm.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-secondary btn-full" onClick={() => setShowItemModal(false)}>Cancel</button>
-              <button className="btn btn-primary btn-full" style={{ background: '#f59e0b', color: '#fff', border: 'none' }} onClick={() => saveItem(false)}>
-                Add Next
-              </button>
-              <button className="btn btn-primary btn-full" onClick={() => saveItem(true)}>
-                {editingItemIdx !== null ? 'Update Item' : 'Add Item'}
-              </button>
-            </div>
           </div>
         </div>
       )}

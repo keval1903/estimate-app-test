@@ -95,7 +95,6 @@ export default function EstimateView() {
     const client = estimate?.client_name || estimate?.transport || ''
     let text = `${isQuote ? 'Quotation' : estimate?.type === 'RETURN' ? 'Sales Return' : 'Estimate'} No. ${estimate?.bill_number}\nDate: ${estimate?.bill_date}\nSite: ${estimate?.site_name}`
     if (client) text += `\nClient: ${client}`
-    if (estimate?.client_mobile) text += `\nM.: ${estimate.client_mobile}`
     if (estimate?.prepared_by) text += `\nPrep. By: ${estimate.prepared_by}`
     text += `\nGrand Total: ₹${Number(estimate?.grand_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
     return text
@@ -620,8 +619,7 @@ export default function EstimateView() {
                         <tbody>
                           {[
                             ['Site', estimate.site_name],
-                            ['Client', estimate.client_name || estimate.transport || ''],
-                            ['Mobile', estimate.client_mobile || ''],
+                            ['Client', estimate.client_name || estimate.transport || '']
                           ].map(([label, val]) => (
                             <tr key={label}>
                               <td style={{ width: 52, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
