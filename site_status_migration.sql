@@ -1,3 +1,0 @@
-ALTER TABLE client_sites RENAME COLUMN area TO location;
-ALTER TABLE client_sites ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ONGOING' CHECK (status IN ('ONGOING', 'COMPLETED'));
-ALTER TABLE client_sites ADD COLUMN IF NOT EXISTS carpenter_phone TEXT;
