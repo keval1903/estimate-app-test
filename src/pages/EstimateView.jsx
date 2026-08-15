@@ -619,10 +619,11 @@ export default function EstimateView() {
                         <tbody>
                           {[
                             ['Site', estimate.site_name],
-                            ['Client', estimate.client_name || estimate.transport || '']
+                            ['Client', estimate.client_name || estimate.transport || ''],
+                            ['Order By', estimate.order_by || '']
                           ].map(([label, val]) => (
                             <tr key={label}>
-                              <td style={{ width: 52, fontWeight: 600, paddingBottom: 2 }}>{label}</td>
+                              <td style={{ width: 65, fontWeight: 600, paddingBottom: 2, whiteSpace: 'nowrap' }}>{label}</td>
                               <td style={{ width: 10, paddingBottom: 2 }}>:</td>
                               <td style={{ fontWeight: label === 'Site' ? 700 : 400, paddingBottom: 2 }}>{val}</td>
                             </tr>

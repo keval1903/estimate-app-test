@@ -93,6 +93,7 @@ export default function CreateEstimate() {
   const [billDate, setBillDate] = useState(todayIST())
   const [clientName, setClientName] = useState('')
   const [clientMobile, setClientMobile] = useState('')
+  const [orderBy, setOrderBy] = useState('')
   const [preparedBy, setPreparedBy] = useState('')
   const [siteName, setSiteName] = useState('')
   const [items, setItems] = useState([])
@@ -186,6 +187,7 @@ export default function CreateEstimate() {
           setBillDate(parsedDraft.billDate)
           setClientName(parsedDraft.clientName || parsedDraft.transport || '')
           setClientMobile(parsedDraft.clientMobile || '')
+          setOrderBy(parsedDraft.orderBy || '')
           setPreparedBy(parsedDraft.preparedBy || '')
           setSiteName(parsedDraft.siteName || '')
           setItems(parsedDraft.items || [])
@@ -196,6 +198,7 @@ export default function CreateEstimate() {
           setBillDate(est.bill_date)
           setClientName(est.client_name || est.transport || '')
           setClientMobile(est.client_mobile || '')
+          setOrderBy(est.order_by || '')
           setPreparedBy(est.prepared_by || '')
           setSiteName(est.site_name || '')
           setDocType(est.type || 'ESTIMATE')
@@ -228,6 +231,7 @@ export default function CreateEstimate() {
           setBillDate(parsedDraft.billDate)
           setClientName(parsedDraft.clientName || parsedDraft.transport || '')
           setClientMobile(parsedDraft.clientMobile || '')
+          setOrderBy(parsedDraft.orderBy || '')
           setPreparedBy(parsedDraft.preparedBy || '')
           setSiteName(parsedDraft.siteName || '')
           setItems(parsedDraft.items || [])
@@ -268,10 +272,10 @@ export default function CreateEstimate() {
         return
       }
       localStorage.setItem(draftKey, JSON.stringify({
-        billDate, clientName, clientMobile, preparedBy, siteName, items, gstPercent
+        billDate, clientName, clientMobile, orderBy, preparedBy, siteName, items, gstPercent
       }))
     }
-  }, [docType, billDate, clientName, clientMobile, preparedBy, siteName, items, gstPercent, draftKey, loading])
+  }, [docType, billDate, clientName, clientMobile, orderBy, preparedBy, siteName, items, gstPercent, draftKey, loading])
 
   // ── Discard Draft & Reset ──
   const handleDiscardDraft = async () => {
@@ -287,6 +291,7 @@ export default function CreateEstimate() {
         setBillDate(est.bill_date)
         setClientName(est.client_name || est.transport || '')
         setClientMobile(est.client_mobile || '')
+        setOrderBy(est.order_by || '')
         setPreparedBy(est.prepared_by || '')
         setSiteName(est.site_name || '')
         setDocType(est.type || 'ESTIMATE')
@@ -316,6 +321,7 @@ export default function CreateEstimate() {
       setBillDate(todayIST())
       setClientName('')
       setClientMobile('')
+      setOrderBy('')
       setPreparedBy('')
       setSiteName('')
       setItems([])
@@ -411,7 +417,7 @@ export default function CreateEstimate() {
 
     if (bulkAddMode) {
       if (bulkSelectedItems.some(it => it.product_id === p.id)) {
-        showToast(`${p.product_name} is already selected`, 'error')
+        setBulkSelectedItems(prev => prev.filter(it => it.product_id !== p.id))
         return
       }
       const nextItem = {
@@ -438,10 +444,6 @@ export default function CreateEstimate() {
       nextItem.amount = amount
 
       setBulkSelectedItems(prev => [...prev, nextItem])
-      setProductSearch('')
-      setProductSuggestions([])
-      setSuggestionIdx(-1)
-      setTimeout(() => productInputRef.current?.focus(), 50)
       return
     }
 
@@ -863,6 +865,7 @@ export default function CreateEstimate() {
           transport: clientName.trim().toUpperCase(),
           client_name: clientName.trim().toUpperCase(),
           client_mobile: clientMobile.trim(),
+          order_by: orderBy.trim().toUpperCase(),
           client_id: finalClientId,
           prepared_by: preparedBy.trim().toUpperCase(),
           site_name: siteName.trim().toUpperCase() || null,
@@ -982,6 +985,7 @@ export default function CreateEstimate() {
           transport: clientName.trim().toUpperCase(),
           client_name: clientName.trim().toUpperCase(),
           client_mobile: clientMobile.trim(),
+          order_by: orderBy.trim().toUpperCase(),
           client_id: finalClientId,
           prepared_by: preparedBy.trim().toUpperCase(),
           site_name: siteName.trim().toUpperCase(),
@@ -1238,6 +1242,12 @@ export default function CreateEstimate() {
               <input type="tel" value={clientMobile} onChange={e => setClientMobile(e.target.value)}
                 placeholder="Mobile number (optional)" />
             </div>
+            
+            <div className="field">
+              <label>Order By</label>
+              <input type="text" value={orderBy} onChange={e => setOrderBy(e.target.value)}
+                placeholder="Order by (optional)" style={{ textTransform: 'uppercase' }} />
+            </div>
           </div>
 
           <div className="field">
@@ -1393,8 +1403,17 @@ export default function CreateEstimate() {
                       }}
                       style={{ margin: 0 }}
                     />
-                    Select Multiple
+                    {bulkAddMode && bulkSelectedItems.length > 0 ? `Select Multiple (${bulkSelectedItems.length} selected)` : 'Select Multiple'}
                   </label>
+                )}
+                {bulkAddMode && bulkSelectedItems.length > 0 && (
+                  <button 
+                    className="btn btn-ghost btn-sm" 
+                    style={{ color: 'var(--danger)', padding: '2px 8px', fontSize: 12, marginLeft: 4 }} 
+                    onClick={() => setBulkSelectedItems([])}
+                  >
+                    Clear
+                  </button>
                 )}
               </span>
               <button className="btn btn-ghost" onClick={() => setShowItemModal(false)}>✕</button>
@@ -1441,11 +1460,26 @@ export default function CreateEstimate() {
                             }
                           }}
                           style={suggestionIdx === i ? { background: 'var(--bg)', borderLeft: '3px solid var(--accent)' } : {}}
-                          onMouseDown={() => selectProduct(p)}>
-                          <div style={{ fontWeight: 600 }}>{p.product_name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                            {p.unit} · ₹{p.rate} · {p.calculation_type}
-                            {(p.calculation_type === 'SQFT' || p.calculation_type === 'INCH' || p.calculation_type === 'FEET') && ` · ${p.length}×${p.width} ${p.calculation_type === 'INCH' || p.calculation_type === 'FEET' ? (p.calculation_type === 'FEET' ? 'ft' : 'in') : 'ft'}`}
+                          onMouseDown={(e) => {
+                            if (bulkAddMode) e.preventDefault();
+                            selectProduct(p);
+                          }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            {bulkAddMode && (
+                              <input 
+                                type="checkbox" 
+                                readOnly 
+                                checked={bulkSelectedItems.some(it => it.product_id === p.id)} 
+                                style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }} 
+                              />
+                            )}
+                            <div>
+                              <div style={{ fontWeight: 600 }}>{p.product_name}</div>
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                {p.unit} · ₹{p.rate} · {p.calculation_type}
+                                {(p.calculation_type === 'SQFT' || p.calculation_type === 'INCH' || p.calculation_type === 'FEET') && ` · ${p.length}×${p.width} ${p.calculation_type === 'INCH' || p.calculation_type === 'FEET' ? (p.calculation_type === 'FEET' ? 'ft' : 'in') : 'ft'}`}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1572,7 +1606,9 @@ export default function CreateEstimate() {
               </>
             ) : (
               <div style={{ marginTop: 16 }}>
-                <label style={{ fontWeight: 600, display: 'block', marginBottom: 8 }}>Selected Products ({bulkSelectedItems.length})</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={{ fontWeight: 600, margin: 0 }}>Selected Products ({bulkSelectedItems.length})</label>
+                </div>
                 {bulkSelectedItems.length === 0 ? (
                   <div className="empty-state" style={{ padding: '16px', fontSize: 13 }}>
                     No products selected yet. Search and select above.
@@ -1645,10 +1681,11 @@ export default function CreateEstimate() {
                   </div>
                 )}
                 
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button className="btn btn-secondary btn-full" onClick={() => setShowItemModal(false)}>Cancel</button>
+                <div style={{ display: 'flex', gap: 10, position: 'sticky', bottom: -24, background: 'white', padding: '16px 0 0 0', borderTop: '1px solid #eee', marginTop: 16, zIndex: 20 }}>
+                  <button className="btn btn-secondary btn-full" style={{ flex: 1 }} onClick={() => setShowItemModal(false)}>Cancel</button>
                   <button
                     className="btn btn-primary btn-full"
+                    style={{ flex: 1 }}
                     onClick={saveBulkItems}
                     disabled={bulkSelectedItems.length === 0}
                   >

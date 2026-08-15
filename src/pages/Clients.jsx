@@ -13,6 +13,7 @@ export default function Clients() {
   const [selectedClients, setSelectedClients] = useState(new Set())
   const [unlinkedNames, setUnlinkedNames] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
 
   // Add Client Modal State
   const [showModal, setShowModal] = useState(false)
@@ -170,6 +171,23 @@ export default function Clients() {
     }
   }
 
+  const searchStr = newName.trim().toUpperCase();
+  const exactMatch = clients.some(c => c.name.toUpperCase() === searchStr && c.id !== editClientId);
+  
+  let clientSuggestions = [];
+  if (showSuggestions && !editClientId && searchStr) {
+    clients.forEach(c => {
+      if (c.name.toUpperCase().includes(searchStr)) {
+        clientSuggestions.push({ name: c.name, type: 'EXISTING' });
+      }
+    });
+    unlinkedNames.forEach(n => {
+      if (n.includes(searchStr) && !clientSuggestions.some(s => s.name === n)) {
+        clientSuggestions.push({ name: n, type: 'UNLINKED' });
+      }
+    });
+  }
+
   return (
     <div className="app-container">
       <div className="header">
@@ -316,31 +334,63 @@ export default function Clients() {
                   onChange={e => {
                     setNewName(e.target.value.toUpperCase())
                     setShowSuggestions(true)
+                    setActiveIndex(-1)
                   }}
-                  onFocus={() => setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  onKeyDown={e => {
+                    if (!showSuggestions || clientSuggestions.length === 0) return
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setActiveIndex(prev => (prev < clientSuggestions.length - 1 ? prev + 1 : prev))
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setActiveIndex(prev => (prev > 0 ? prev - 1 : 0))
+                    } else if (e.key === 'Enter') {
+                      if (activeIndex >= 0 && activeIndex < clientSuggestions.length) {
+                        e.preventDefault()
+                        setNewName(clientSuggestions[activeIndex].name)
+                        setShowSuggestions(false)
+                        setActiveIndex(-1)
+                      }
+                    } else if (e.key === 'Escape') {
+                      setShowSuggestions(false)
+                    }
+                  }}
+                  onFocus={() => { setShowSuggestions(true); setActiveIndex(-1); }}
+                  onBlur={() => setTimeout(() => { setShowSuggestions(false); setActiveIndex(-1); }, 200)}
                   required style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: 4, textTransform: 'uppercase' }}
                 />
 
-                {showSuggestions && !editClientId && unlinkedNames.filter(name => name.includes(newName.trim().toUpperCase())).length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ccc', zIndex: 10, maxHeight: 150, overflowY: 'auto', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', borderRadius: '0 0 4px 4px' }}>
-                    {unlinkedNames
-                      .filter(name => name.includes(newName.trim().toUpperCase()))
-                      .map((name, idx) => (
-                        <div key={idx} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: 14 }}
-                          onMouseDown={() => {
-                            setNewName(name)
-                            setShowSuggestions(false)
-                          }}
-                          onMouseEnter={e => e.target.style.backgroundColor = '#f1f5f9'}
-                          onMouseLeave={e => e.target.style.backgroundColor = 'white'}
-                        >
-                          {name} <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>(Auto-Link)</span>
+                {(() => {
+                  return (
+                    <>
+                      {exactMatch && (
+                        <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 4, fontWeight: 500 }}>
+                          ⚠️ A client with this exact name already exists.
                         </div>
-                      ))
-                    }
-                  </div>
-                )}
+                      )}
+                      {clientSuggestions.length > 0 && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ccc', zIndex: 10, maxHeight: 150, overflowY: 'auto', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', borderRadius: '0 0 4px 4px' }}>
+                          {clientSuggestions.map((s, idx) => (
+                            <div key={idx} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: 14, display: 'flex', justifyContent: 'space-between', backgroundColor: activeIndex === idx ? '#f1f5f9' : 'white' }}
+                              onMouseDown={() => {
+                                setNewName(s.name)
+                                setShowSuggestions(false)
+                                setActiveIndex(-1)
+                              }}
+                              onMouseEnter={() => setActiveIndex(idx)}
+                              onMouseLeave={() => setActiveIndex(-1)}
+                            >
+                              <span>{s.name}</span>
+                              <span style={{ fontSize: 10, color: s.type === 'EXISTING' ? 'var(--danger)' : 'var(--text-muted)', fontWeight: s.type === 'EXISTING' ? 600 : 400 }}>
+                                {s.type === 'EXISTING' ? 'Already Exists' : '(Auto-Link)'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600 }}>Mobile Number</label>

@@ -38,7 +38,7 @@ export default function Home() {
         const buttons = Array.from(document.querySelectorAll('.home-btn:not([disabled])'))
         if (!buttons.length) return
         const activeIdx = buttons.indexOf(document.activeElement)
-        
+
         e.preventDefault()
         if (e.key === 'ArrowDown') {
           const nextIdx = activeIdx < buttons.length - 1 ? activeIdx + 1 : 0
@@ -108,11 +108,28 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/products')}>
-          <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
+        <button className="home-btn" onClick={() => navigate('/estimates?tab=quotations')}>
+          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📜</div>
           <div>
-            <div className="home-btn-text">PRODUCT MASTER</div>
-            <div className="home-btn-sub">Add, edit or update product rates & stock</div>
+            <div className="home-btn-text">PREVIOUS QUOTATIONS</div>
+            <div className="home-btn-sub">View quotes or convert them to estimates</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate('/estimates?tab=estimates')}>
+          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🗂️</div>
+          <div>
+            <div className="home-btn-text">PREVIOUS ESTIMATES</div>
+            <div className="home-btn-sub">View, edit or reprint old bills</div>
+          </div>
+        </button>
+
+
+        <button className="home-btn" onClick={() => navigate('/client-sites')}>
+          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
+          <div>
+            <div className="home-btn-text">SITE DETAILS & SELECTION SHEETS</div>
+            <div className="home-btn-sub">Manage client sites, material details, and selection sheets</div>
           </div>
         </button>
 
@@ -124,12 +141,11 @@ export default function Home() {
           </div>
         </button>
 
-
-        <button className="home-btn" onClick={() => navigate('/client-sites')}>
-          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
+        <button className="home-btn" onClick={() => navigate('/products')}>
+          <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
           <div>
-            <div className="home-btn-text">SITE DETAILS & SELECTION SHEETS</div>
-            <div className="home-btn-sub">Manage client sites, material details, and selection sheets</div>
+            <div className="home-btn-text">PRODUCT MASTER</div>
+            <div className="home-btn-sub">Add, edit or update product rates & stock</div>
           </div>
         </button>
 
@@ -153,21 +169,6 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/estimates?tab=quotations')}>
-          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📜</div>
-          <div>
-            <div className="home-btn-text">PREVIOUS QUOTATIONS</div>
-            <div className="home-btn-sub">View quotes or convert them to estimates</div>
-          </div>
-        </button>
-
-        <button className="home-btn" onClick={() => navigate('/estimates?tab=estimates')}>
-          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🗂️</div>
-          <div>
-            <div className="home-btn-text">PREVIOUS ESTIMATES</div>
-            <div className="home-btn-sub">View, edit or reprint old bills</div>
-          </div>
-        </button>
 
         <button className="home-btn" onClick={() => navigate('/estimates?tab=returns')}>
           <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
