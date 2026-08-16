@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-import { setSessionExpiry } from '../lib/sessionExpiry'
+import { setSessionExpiry, getNext5AM } from '../lib/sessionExpiry'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -54,15 +54,22 @@ export default function Login() {
     } else {
       await setSessionExpiry()
       
-      // Enforce single session
+      // Enforce single session and server-side expiry
       const newToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
       localStorage.setItem('active_session_token', newToken)
       if (data?.user?.id) {
-        const { error: rpcErr } = await supabase.rpc('update_my_session_token', { new_token: newToken })
+        const expiresAt = new Date(getNext5AM()).toISOString();
+        const { error: rpcErr } = await supabase.rpc('update_my_session_token', { 
+          new_token: newToken,
+          expires_at: expiresAt
+        })
         if (rpcErr) {
           console.warn('RPC failed, falling back to direct update:', rpcErr.message)
           // Fallback for Admins who bypass RLS
-          const { error: fbErr } = await supabase.from('user_roles').update({ current_session_token: newToken }).eq('id', data.user.id)
+          const { error: fbErr } = await supabase.from('user_roles').update({ 
+            current_session_token: newToken,
+            session_expires_at: expiresAt
+          }).eq('id', data.user.id)
           if (fbErr) {
             alert('Database error updating session token. Please ensure you ran fix_session_rpc.sql. Error: ' + fbErr.message)
           }

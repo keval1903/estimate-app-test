@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-import { checkSessionExpiry } from '../lib/sessionExpiry'
+import { checkSessionExpiry, getNext5AM } from '../lib/sessionExpiry'
 
 const AuthContext = createContext()
 
@@ -24,11 +24,6 @@ export function AuthProvider({ children }) {
       
     if (error || !data) {
       console.error('Error fetching role:', error)
-      // Fallback to ADMIN if the table doesn't exist yet (e.g. migration hasn't been run)
-      if (error && error.code === '42P01') {
-        setRole('ADMIN')
-        return true
-      }
       return false
     }
 
@@ -63,7 +58,11 @@ export function AuthProvider({ children }) {
       // Legacy session without a token, generate one to prevent getting immediately kicked out by future logins
       const newToken = Math.random().toString(36).substring(2) + Date.now().toString(36)
       localStorage.setItem('active_session_token', newToken)
-      await supabase.from('user_roles').update({ current_session_token: newToken }).eq('id', userId)
+      const expiresAt = new Date(getNext5AM()).toISOString();
+      await supabase.rpc('update_my_session_token', { 
+        new_token: newToken,
+        expires_at: expiresAt
+      })
     }
 
     setRole(data.role)

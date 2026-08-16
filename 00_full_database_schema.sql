@@ -233,8 +233,9 @@ $$;
 -- =============================================================================
 -- File: single_session_migration.sql
 -- =============================================================================
--- Add current_session_token to user_roles
+-- Add current_session_token and session_expires_at to user_roles
 ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS current_session_token TEXT;
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS session_expires_at TIMESTAMPTZ;
 
 
 -- =============================================================================
@@ -507,6 +508,7 @@ AS $$
     SELECT 1 FROM user_roles 
     WHERE id = auth.uid() 
       AND is_active = true
+      AND session_expires_at > now()
   );
 $$;
 
@@ -521,7 +523,23 @@ AS $$
     WHERE id = auth.uid() 
       AND role = 'ADMIN' 
       AND is_active = true
+      AND session_expires_at > now()
   );
+$$;
+
+CREATE OR REPLACE FUNCTION public.update_my_session_token(new_token text, expires_at timestamptz DEFAULT NULL)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE user_roles 
+  SET current_session_token = new_token,
+      session_expires_at = CASE 
+        WHEN new_token IS NULL THEN NULL 
+        ELSE COALESCE(expires_at, now() + interval '1 day') 
+      END
+  WHERE id = auth.uid();
 $$;
 
 -- 2. Enable RLS on all tables
