@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
         if (retry.data?.current_session_token && freshLocalToken !== retry.data.current_session_token) {
           await supabase.auth.signOut()
           localStorage.removeItem('active_session_token')
-          alert(`You have been logged out because your account was accessed from another device.\n\nDebug Info: Local(${freshLocalToken}) !== DB(${retry.data.current_session_token})`)
+          alert('You have been logged out because your account was accessed from another device.')
           setRole(null)
           return false
         }
