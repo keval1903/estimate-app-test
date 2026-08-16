@@ -18,7 +18,7 @@ export function AuthProvider({ children }) {
     }
     const { data, error } = await supabase
       .from('user_roles')
-      .select('role, is_active, current_session_token')
+      .select('role, is_active, current_session_token, session_expires_at')
       .eq('id', userId)
       .single()
       
@@ -30,6 +30,12 @@ export function AuthProvider({ children }) {
     if (!data.is_active) {
       await supabase.auth.signOut()
       alert('Your account has been disabled. Please contact the administrator.')
+      return false
+    }
+    
+    // Enforce server-side session expiry on the frontend
+    if (!data.session_expires_at || new Date(data.session_expires_at).getTime() < Date.now()) {
+      await supabase.auth.signOut()
       return false
     }
 
