@@ -443,10 +443,17 @@ CREATE POLICY "Public Access"
 ON storage.objects FOR SELECT 
 USING (bucket_id = 'selection_images');
 
--- Allow anon/authenticated to insert images
+-- Allow ONLY authenticated users to insert images
 CREATE POLICY "Allow Uploads" 
 ON storage.objects FOR INSERT 
+TO authenticated
 WITH CHECK (bucket_id = 'selection_images');
+
+-- Allow ONLY authenticated users to delete images
+CREATE POLICY "Allow Deletions" 
+ON storage.objects FOR DELETE 
+TO authenticated 
+USING (bucket_id = 'selection_images');
 
 
 -- =============================================================================
