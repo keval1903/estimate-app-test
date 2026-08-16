@@ -3,5 +3,5 @@ dist/
 .env
 diff.txt
 src/pages/test.jsx
-
-
+.agents/
+workflow-templates/

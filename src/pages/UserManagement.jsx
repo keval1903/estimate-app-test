@@ -107,30 +107,40 @@ export default function UserManagement() {
     
     setCreating(true)
     
-    // Create a secondary supabase client that does not persist session
-    // This allows creating a user without logging out the current admin
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-    const adminClient = createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+    // Get the current user's session token to authorize the API call
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      alert("You must be logged in to create a user.")
+      setCreating(false)
+      return
+    }
+
+    try {
+      const response = await fetch('/api/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          email: `${newUsername}@estimateapp.com`,
+          password: newPassword
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        alert(`Error creating user: ${data.error || 'Unknown error'}`)
+      } else {
+        alert('User created successfully! They can now log in.')
+        setNewUsername('')
+        setNewPassword('')
+        // Give the database trigger a moment to run, then refresh
+        setTimeout(fetchUsers, 1000)
       }
-    })
-
-    const { data, error } = await adminClient.auth.signUp({
-      email: `${newUsername}@estimateapp.com`,
-      password: newPassword
-    })
-
-    if (error) {
-      alert(`Error creating user: ${error.message}`)
-    } else {
-      alert('User created successfully! They can now log in.')
-      setNewUsername('')
-      setNewPassword('')
-      // Give the database trigger a moment to run, then refresh
-      setTimeout(fetchUsers, 1000)
+    } catch (err) {
+      alert(`Network error creating user: ${err.message}`)
     }
     
     setCreating(false)
