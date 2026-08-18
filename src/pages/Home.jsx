@@ -80,7 +80,7 @@ export default function Home() {
                 const { error: rpcErr } = await supabase.rpc('update_my_session_token', { new_token: null })
                 if (rpcErr) {
                   // Fallback for Admin if RPC is missing
-                  await supabase.from('user_roles').update({ 
+                  await supabase.from('user_roles').update({
                     current_session_token: null,
                     session_expires_at: null
                   }).eq('id', user.id)
@@ -127,6 +127,14 @@ export default function Home() {
           </div>
         </button>
 
+        <button className="home-btn" onClick={() => navigate('/products')}>
+          <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
+          <div>
+            <div className="home-btn-text">PRODUCT MASTER</div>
+            <div className="home-btn-sub">Add, edit or update product rates & stock</div>
+          </div>
+        </button>
+
 
         <button className="home-btn" onClick={() => navigate('/client-sites')}>
           <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
@@ -141,14 +149,6 @@ export default function Home() {
           <div>
             <div className="home-btn-text">CLIENTS & LEDGER</div>
             <div className="home-btn-sub">Manage client profiles, payments & balances</div>
-          </div>
-        </button>
-
-        <button className="home-btn" onClick={() => navigate('/products')}>
-          <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
-          <div>
-            <div className="home-btn-text">PRODUCT MASTER</div>
-            <div className="home-btn-sub">Add, edit or update product rates & stock</div>
           </div>
         </button>
 

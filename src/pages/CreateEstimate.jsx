@@ -1415,6 +1415,20 @@ export default function CreateEstimate() {
                     Clear
                   </button>
                 )}
+                {bulkAddMode && showSuggestions && (
+                  <button 
+                    type="button"
+                    className="btn btn-primary btn-sm" 
+                    style={{ padding: '2px 12px', fontSize: 12, marginLeft: 8 }} 
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setShowSuggestions(false)
+                      setProductSearch('')
+                    }}
+                  >
+                    Done
+                  </button>
+                )}
               </span>
               <button className="btn btn-ghost" onClick={() => setShowItemModal(false)}>✕</button>
             </div>
@@ -1635,7 +1649,7 @@ export default function CreateEstimate() {
                             )}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 80 }}>
+                            <div style={{ width: 60 }}>
                               <label style={{ fontSize: 10, display: 'block', color: 'var(--text-muted)', marginBottom: 2 }}>
                                 {isPieceBased ? 'Nos.' : 'Qty'}
                               </label>
@@ -1662,6 +1676,31 @@ export default function CreateEstimate() {
                                   })
                                 }}
                                 placeholder="1"
+                              />
+                            </div>
+                            <div style={{ width: 70 }}>
+                              <label style={{ fontSize: 10, display: 'block', color: 'var(--text-muted)', marginBottom: 2 }}>
+                                Rate
+                              </label>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                style={{ width: '100%', padding: '4px 6px', fontSize: 13, height: '30px', border: '1px solid var(--border-light)', borderRadius: 4, boxSizing: 'border-box' }}
+                                value={item.rate}
+                                disabled={item.has_discount || Boolean(parseFloat(item.discount_percent))}
+                                onChange={e => {
+                                  const val = e.target.value
+                                  setBulkSelectedItems(prev => {
+                                    const next = [...prev]
+                                    const target = { ...next[idx], rate: val }
+                                    const { quantity, amount } = calcItem(target)
+                                    target.quantity = quantity || ''
+                                    target.amount = amount
+                                    next[idx] = target
+                                    return next
+                                  })
+                                }}
+                                placeholder="0.00"
                               />
                             </div>
                             <button
