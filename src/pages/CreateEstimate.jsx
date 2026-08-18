@@ -1632,87 +1632,93 @@ export default function CreateEstimate() {
                     {bulkSelectedItems.map((item, idx) => {
                       const isPieceBased = item.calculation_type_snapshot === 'SQFT' || item.calculation_type_snapshot === 'INCH' || item.calculation_type_snapshot === 'FEET'
                       return (
-                        <div key={idx} style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <strong style={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: 13 }}>
-                              {item.product_name_snapshot}
-                            </strong>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              ₹{item.rate} · {item.unit_snapshot}
-                              {Boolean(item.length_snapshot && item.width_snapshot) && ` · ${item.length_snapshot}×${item.width_snapshot}`}
-                              {item.has_stock && ` (Stock: ${item.stock})`}
-                            </span>
-                            {item.amount > 0 && (
-                              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginTop: 2 }}>
-                                ₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 60 }}>
-                              <label style={{ fontSize: 10, display: 'block', color: 'var(--text-muted)', marginBottom: 2 }}>
-                                {isPieceBased ? 'Nos.' : 'Qty'}
-                              </label>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                style={{ width: '100%', padding: '4px 6px', fontSize: 13, height: '30px', border: '1px solid var(--border-light)', borderRadius: 4, boxSizing: 'border-box' }}
-                                value={isPieceBased ? item.nos : item.quantity}
-                                onChange={e => {
-                                  const val = e.target.value
-                                  setBulkSelectedItems(prev => {
-                                    const next = [...prev]
-                                    const target = { ...next[idx] }
-                                    if (isPieceBased) {
-                                      target.nos = val
-                                    } else {
-                                      target.quantity = val
-                                    }
-                                    const { quantity, amount } = calcItem(target)
-                                    target.quantity = quantity || ''
-                                    target.amount = amount
-                                    next[idx] = target
-                                    return next
-                                  })
-                                }}
-                                placeholder="1"
-                              />
-                            </div>
-                            <div style={{ width: 70 }}>
-                              <label style={{ fontSize: 10, display: 'block', color: 'var(--text-muted)', marginBottom: 2 }}>
-                                Rate
-                              </label>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                style={{ width: '100%', padding: '4px 6px', fontSize: 13, height: '30px', border: '1px solid var(--border-light)', borderRadius: 4, boxSizing: 'border-box' }}
-                                value={item.rate}
-                                disabled={item.has_discount || Boolean(parseFloat(item.discount_percent))}
-                                onChange={e => {
-                                  const val = e.target.value
-                                  setBulkSelectedItems(prev => {
-                                    const next = [...prev]
-                                    const target = { ...next[idx], rate: val }
-                                    const { quantity, amount } = calcItem(target)
-                                    target.quantity = quantity || ''
-                                    target.amount = amount
-                                    next[idx] = target
-                                    return next
-                                  })
-                                }}
-                                placeholder="0.00"
-                              />
+                        <div key={idx} style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                              <strong style={{ display: 'block', fontSize: 13 }}>
+                                {item.product_name_snapshot}
+                              </strong>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>
+                                ₹{item.rate} · {item.unit_snapshot}
+                                {Boolean(item.length_snapshot && item.width_snapshot) && ` · ${item.length_snapshot}×${item.width_snapshot}`}
+                                {item.has_stock && ` (Stock: ${item.stock})`}
+                              </span>
                             </div>
                             <button
                               type="button"
                               className="btn btn-ghost"
-                              style={{ color: 'var(--danger)', fontSize: 16, padding: '4px 8px', marginTop: 14 }}
+                              style={{ color: 'var(--danger)', fontSize: 16, padding: '0 4px', marginTop: -4 }}
                               onClick={() => {
                                 setBulkSelectedItems(prev => prev.filter((_, i) => i !== idx))
                               }}
                             >
                               ✕
                             </button>
+                          </div>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ width: 80 }}>
+                                <label style={{ fontSize: 10, display: 'block', color: 'var(--text-muted)', marginBottom: 2 }}>
+                                  {isPieceBased ? 'Nos.' : 'Qty'}
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  style={{ width: '100%', padding: '4px 6px', fontSize: 13, height: '30px', border: '1px solid var(--border-light)', borderRadius: 4, boxSizing: 'border-box' }}
+                                  value={isPieceBased ? item.nos : item.quantity}
+                                  onChange={e => {
+                                    const val = e.target.value
+                                    setBulkSelectedItems(prev => {
+                                      const next = [...prev]
+                                      const target = { ...next[idx] }
+                                      if (isPieceBased) {
+                                        target.nos = val
+                                      } else {
+                                        target.quantity = val
+                                      }
+                                      const { quantity, amount } = calcItem(target)
+                                      target.quantity = quantity || ''
+                                      target.amount = amount
+                                      next[idx] = target
+                                      return next
+                                    })
+                                  }}
+                                  placeholder="1"
+                                />
+                              </div>
+                              <div style={{ width: 90 }}>
+                                <label style={{ fontSize: 10, display: 'block', color: 'var(--text-muted)', marginBottom: 2 }}>
+                                  Rate (₹)
+                                </label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  style={{ width: '100%', padding: '4px 6px', fontSize: 13, height: '30px', border: '1px solid var(--border-light)', borderRadius: 4, boxSizing: 'border-box' }}
+                                  value={item.rate}
+                                  disabled={item.has_discount || Boolean(parseFloat(item.discount_percent))}
+                                  onChange={e => {
+                                    const val = e.target.value
+                                    setBulkSelectedItems(prev => {
+                                      const next = [...prev]
+                                      const target = { ...next[idx], rate: val }
+                                      const { quantity, amount } = calcItem(target)
+                                      target.quantity = quantity || ''
+                                      target.amount = amount
+                                      next[idx] = target
+                                      return next
+                                    })
+                                  }}
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            </div>
+                            
+                            {item.amount > 0 && (
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', alignSelf: 'flex-end', marginBottom: 4 }}>
+                                ₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )

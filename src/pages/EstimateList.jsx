@@ -15,6 +15,7 @@ export default function EstimateList() {
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [convertingId, setConvertingId] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [collapsedDates, setCollapsedDates] = useState(new Set())
   const [activeTab, setActiveTab] = useState(() => {
@@ -28,7 +29,7 @@ export default function EstimateList() {
       let from = 0
       let to = 999
       let allData = []
-      
+
       while (true) {
         let query = supabase
           .from('estimates')
@@ -46,12 +47,12 @@ export default function EstimateList() {
 
         const { data, error } = await query
         if (error) throw error
-        
+
         if (data && data.length > 0) {
           allData = allData.concat(data)
         }
         if (!data || data.length < 1000) break
-        
+
         from += 1000
         to += 1000
       }
@@ -70,7 +71,7 @@ export default function EstimateList() {
 
   async function handleDelete(est) {
     setDeleting(true)
-    
+
     if (est.type === 'QUOTATION' || !est.type) {
       await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number);
       const { error } = await supabase.from('estimates').delete().eq('id', est.id)
@@ -82,7 +83,7 @@ export default function EstimateList() {
     } else {
       // Restore stock before updating type
       await restoreStockForEstimates([est.id]);
-      
+
       const newType = est.type === 'ESTIMATE' ? 'DELETED_ESTIMATE' : 'DELETED_RETURN';
       const { error } = await supabase.from('estimates').update({ type: newType }).eq('id', est.id)
       if (error) showToast('Delete failed: ' + error.message, 'error')
@@ -98,18 +99,18 @@ export default function EstimateList() {
   async function handleDeleteSelected() {
     if (selectedIds.size === 0) return
     if (!window.confirm(`Delete ${selectedIds.size} selected estimates?`)) return
-    
+
     setDeleting(true)
     const arr = Array.from(selectedIds)
-    
+
     const { data: estsToDelete } = await supabase.from('estimates').select('id, type, bill_number').in('id', arr);
-    
+
     if (estsToDelete && estsToDelete.length > 0) {
       const softDeleteIds = [];
       const hardDeleteIds = [];
       const hardDeleteBillNumbers = [];
       const returnSoftDeleteIds = [];
-      
+
       for (const e of estsToDelete) {
         if (e.type === 'QUOTATION' || !e.type) {
           hardDeleteIds.push(e.id);
@@ -120,7 +121,7 @@ export default function EstimateList() {
           softDeleteIds.push(e.id);
         }
       }
-      
+
       if (softDeleteIds.length > 0) {
         await restoreStockForEstimates(softDeleteIds);
         await supabase.from('estimates').update({ type: 'DELETED_ESTIMATE' }).in('id', softDeleteIds);
@@ -141,6 +142,100 @@ export default function EstimateList() {
     setDeleting(false)
   }
 
+  async function handleQuickConvert(est) {
+    if (!window.confirm(`Convert Quotation #${est.bill_number} to an Estimate? Stock will be deducted.`)) return
+    setConvertingId(est.id)
+    try {
+      const { data: items } = await supabase.from('estimate_items').select('*').eq('estimate_id', est.id).order('serial_number')
+      if (!items) throw new Error('Could not load items')
+
+      const { data: allProducts } = await supabase.from('products').select('*')
+      const prodMap = {}
+      for (const p of (allProducts || [])) prodMap[p.id] = p
+
+      for (const it of items) {
+        if (it.product_id && prodMap[it.product_id] && prodMap[it.product_id].has_stock) {
+          const p = prodMap[it.product_id]
+          const reqQty = (it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET') ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
+          const avail = Number(p.stock || 0)
+          if (reqQty > avail) {
+            showToast(`Cannot convert! Insufficient stock for ${p.product_name}. Required: ${reqQty} ${p.unit}, Available: ${avail} ${p.unit}.`, 'error')
+            setConvertingId(null)
+            return
+          }
+        }
+      }
+
+      for (const it of items) {
+        if (it.product_id && prodMap[it.product_id] && prodMap[it.product_id].has_stock) {
+          const qty = (it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET') ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
+          if (qty > 0) {
+            const p = prodMap[it.product_id]
+            const newStock = Number(p.stock) - qty
+            await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
+            await supabase.from('stock_history').insert({
+              product_id: p.id,
+              change_type: 'QUOTATION_CONVERT',
+              quantity_changed: -qty,
+              estimate_id: est.id,
+              bill_number: est.bill_number?.toString(),
+              site_name: est.site_name
+            })
+          }
+        }
+      }
+
+      let finalClientId = est.client_id || null;
+      if (!finalClientId) {
+        const cName = (est.client_name || est.transport || '').trim().toUpperCase();
+        if (cName) {
+          const { data: cData } = await supabase.from('clients').select('id').eq('name', cName).single();
+          if (cData) {
+            finalClientId = cData.id;
+          }
+        }
+      }
+
+      const { error } = await supabase.from('estimates').update({
+        type: 'ESTIMATE',
+        client_id: finalClientId,
+        updated_at: new Date().toISOString()
+      }).eq('id', est.id)
+
+      if (error) throw error
+
+      if (finalClientId) {
+        const purchaseRecords = items.map(it => {
+          const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+          const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
+          return {
+            client_id: finalClientId,
+            product_id: it.product_id || null,
+            product_name: it.product_name_snapshot || 'Manual Item',
+            quantity: qty,
+            unit: isPieceBased ? 'Nos.' : (it.unit_snapshot || ''),
+            rate: Number(it.rate) || 0,
+            amount: Number(it.amount) || 0,
+            bill_number: est.bill_number,
+            bill_date: est.bill_date
+          };
+        }).filter(r => r.quantity > 0 || r.amount > 0);
+
+        if (purchaseRecords.length > 0) {
+          await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number);
+          await supabase.from('client_purchases').insert(purchaseRecords);
+        }
+      }
+
+      showToast('Converted to Estimate & Stock Deducted ✓')
+      fetchEstimates()
+    } catch (e) {
+      showToast('Conversion failed: ' + e.message, 'error')
+    } finally {
+      setConvertingId(null)
+    }
+  }
+
   function formatTotal(val) {
     return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2 })
   }
@@ -156,20 +251,20 @@ export default function EstimateList() {
     const site = (est.site_name || '').toLowerCase()
     const transport = (est.transport || '').toLowerCase()
     const bNum = est.bill_number?.toString() || ''
-    
+
     const targetStr = `${client} ${site} ${transport} ${bNum}`
     const targetNoSpace = targetStr.replace(/\s+/g, '')
 
     const matchesAllTerms = searchTerms.every(term => targetStr.includes(term))
     const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => targetStr.includes(term))
-    
+
     return targetStr.includes(s) ||
-           targetNoSpace.includes(sNoSpace) ||
-           matchesAllTerms ||
-           matchesSmartTerms ||
-           isFuzzyMatch(sNoSpace, client) ||
-           isFuzzyMatch(sNoSpace, site) ||
-           isFuzzyMatch(sNoSpace, bNum)
+      targetNoSpace.includes(sNoSpace) ||
+      matchesAllTerms ||
+      matchesSmartTerms ||
+      isFuzzyMatch(sNoSpace, client) ||
+      isFuzzyMatch(sNoSpace, site) ||
+      isFuzzyMatch(sNoSpace, bNum)
   })
 
   const groupedEstimates = {}
@@ -241,7 +336,7 @@ export default function EstimateList() {
               window.history.replaceState(null, '', '?tab=estimates')
             }}
           >
-            📄 Estimates ({activeTab === 'ESTIMATE' ? estimates.length : 'Bills'})
+            📄 Estimates {activeTab === 'ESTIMATE' && `(${estimates.length})`}
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'QUOTATION' ? 'btn-primary' : 'btn-secondary'}`}
@@ -251,7 +346,7 @@ export default function EstimateList() {
               window.history.replaceState(null, '', '?tab=quotations')
             }}
           >
-            📜 Quotations ({activeTab === 'QUOTATION' ? estimates.length : 'Quotes'})
+            📜 Quotations {activeTab === 'QUOTATION' && `(${estimates.length})`}
           </button>
           <button
             className={`btn btn-sm ${activeTab === 'RETURN' ? 'btn-danger' : 'btn-secondary'}`}
@@ -261,7 +356,7 @@ export default function EstimateList() {
               window.history.replaceState(null, '', '?tab=returns')
             }}
           >
-            ↩️ Returns ({activeTab === 'RETURN' ? estimates.length : 'Returns'})
+            ↩️ Returns {activeTab === 'RETURN' && `(${estimates.length})`}
           </button>
         </div>
 
@@ -351,14 +446,26 @@ export default function EstimateList() {
                         onClick={(e) => { e.stopPropagation(); navigate(`/estimate/edit/${est.id}`); }}>
                         ✏️ Edit
                       </button>
-                      <button className="btn btn-secondary btn-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/estimate/view/${est.id}`)
-                          setTimeout(() => window.print(), 800)
-                        }}>
-                        🖨 Print
-                      </button>
+                      {activeTab === 'QUOTATION' ? (
+                        <button className="btn btn-primary btn-sm"
+                          style={{ background: 'var(--success-color, #10b981)', border: 'none', color: '#fff' }}
+                          disabled={convertingId === est.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickConvert(est);
+                          }}>
+                          {convertingId === est.id ? '🔄...' : '🔄 Estimate'}
+                        </button>
+                      ) : (
+                        <button className="btn btn-secondary btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/estimate/view/${est.id}`)
+                            setTimeout(() => window.print(), 800)
+                          }}>
+                          🖨 Print
+                        </button>
+                      )}
                       {role === 'ADMIN' && (
                         <button className="btn btn-danger btn-sm"
                           onClick={(e) => { e.stopPropagation(); setDeleteConfirm(est); }}>
