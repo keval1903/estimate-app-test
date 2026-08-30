@@ -488,8 +488,8 @@ const SelectionSheetTab = forwardRef(({ initialContent, tableData, clientName, s
         
         {/* The Structured Table */}
         {(!isTableEmpty || isEditing) && (
-          <div className="selection-sheet-table-wrapper" style={{ padding: '1rem 1rem 0 1rem' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
+          <div className="selection-sheet-table-wrapper" style={{ padding: '1rem 1rem 0 1rem', overflowX: 'auto' }}>
+            <table style={{ width: '100%', minWidth: '550px', borderCollapse: 'collapse', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                 <th style={{ padding: '0.75rem', textAlign: 'left', borderRight: '1px solid #e2e8f0', width: '25%' }}>Room Type</th>
@@ -545,7 +545,8 @@ const SelectionSheetTab = forwardRef(({ initialContent, tableData, clientName, s
                         />
                         {activeRoomDropdown === i && (
                           <div style={{
-                            position: 'absolute', top: '100%', left: 0, right: 0,
+                            position: 'absolute', top: '100%', left: 0,
+                            minWidth: '100%', width: 'max-content',
                             background: 'white', border: '1px solid #cbd5e1',
                             borderRadius: 4, zIndex: 50, maxHeight: 150, overflowY: 'auto',
                             boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', marginTop: 4
@@ -555,7 +556,8 @@ const SelectionSheetTab = forwardRef(({ initialContent, tableData, clientName, s
                                   key={rt} 
                                   style={{ 
                                     padding: '0.5rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '0.85rem',
-                                    background: highlightedDropdownIndex === optIdx ? '#f8fafc' : 'transparent'
+                                    background: highlightedDropdownIndex === optIdx ? '#f8fafc' : 'transparent',
+                                    whiteSpace: 'nowrap'
                                   }}
                                   onMouseDown={(e) => {
                                     e.preventDefault();
