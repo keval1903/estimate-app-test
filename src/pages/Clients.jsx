@@ -55,6 +55,12 @@ export default function Clients() {
       if (data) newClientId = data.id;
     }
 
+    if (!error && editClientId) {
+      // Sync denormalized name across tables when name changes
+      await supabase.from('estimates').update({ client_name: payload.name }).eq('client_id', editClientId)
+      await supabase.from('client_sites').update({ client_name: payload.name }).eq('client_id', editClientId)
+    }
+
     if (!error && !editClientId && newClientId) {
       // Auto-Link loose records
       await supabase.from('estimates').update({ client_id: newClientId }).eq('client_name', payload.name).is('client_id', null)
@@ -94,8 +100,8 @@ export default function Clients() {
     setLoading(true)
     try {
       const { data: clientData } = await supabase.from('clients').select('*').order('name')
-      const { data: estData } = await supabase.from('estimates').select('client_id, client_name, grand_total, type').in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
-      const { data: payData } = await supabase.from('payments').select('client_id, amount')
+      const { data: estData } = await supabase.from('estimates').select('client_id, client_name, grand_total, type, is_archived').in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
+      const { data: payData } = await supabase.from('payments').select('client_id, amount, is_archived')
       const { data: siteNamesData } = await supabase.from('client_sites').select('client_name').is('client_id', null)
 
       const unlinkedSet = new Set()
@@ -112,10 +118,10 @@ export default function Clients() {
       setUnlinkedNames(Array.from(unlinkedSet).sort())
 
       const combined = (clientData || []).map(c => {
-        const clientEsts = (estData || []).filter(e => e.client_id === c.id)
+        const clientEsts = (estData || []).filter(e => e.client_id === c.id && !e.is_archived)
         const estTotal = clientEsts.filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE').reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
         const returnTotal = clientEsts.filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN').reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
-        const payTotal = (payData || []).filter(p => p.client_id === c.id).reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+        const payTotal = (payData || []).filter(p => p.client_id === c.id && !p.is_archived).reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
         const balance = Number(c.opening_balance || 0) + estTotal - returnTotal - payTotal
         return { ...c, balance }
       })

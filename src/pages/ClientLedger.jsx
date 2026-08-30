@@ -108,11 +108,13 @@ export default function ClientLedger() {
       const { data: purData, error: purErr } = await supabase.from('client_purchases').select('*').eq('client_id', id).order('created_at', { ascending: false })
       if (!purErr && purData) setPurchases(purData)
 
-      const entries = []
+      const activeEntries = []
+      const archivedEntries = []
 
       // Opening Balance
+      // Opening Balance (only for active ledger)
       if (Number(cData.opening_balance)) {
-        entries.push({
+        activeEntries.push({
           date: cData.created_at,
           description: 'Opening Balance',
           debit: cData.opening_balance > 0 ? cData.opening_balance : 0,
@@ -122,8 +124,10 @@ export default function ClientLedger() {
       }
 
       for (const e of (estData || [])) {
+        const targetArray = e.is_archived ? archivedEntries : activeEntries;
+        
         if (e.type === 'QUOTATION') {
-          entries.push({
+          targetArray.push({
             date: e.bill_date,
             description: `Quotation #${e.bill_number} (₹${Number(e.grand_total).toFixed(2)})`,
             debit: 0,
@@ -133,7 +137,7 @@ export default function ClientLedger() {
             billNumber: e.bill_number
           });
         } else if (e.type === 'RETURN') {
-          entries.push({
+          targetArray.push({
             date: e.bill_date,
             description: `Sales Return #${e.bill_number}`,
             debit: 0,
@@ -143,7 +147,7 @@ export default function ClientLedger() {
             billNumber: e.bill_number
           });
         } else if (e.type === 'DELETED_RETURN') {
-          entries.push({
+          targetArray.push({
             date: e.bill_date,
             description: `Sales Return #${e.bill_number}`,
             debit: 0,
@@ -154,7 +158,7 @@ export default function ClientLedger() {
             isDeleted: true
           });
         } else if (e.type === 'DELETED_ESTIMATE') {
-          entries.push({
+          targetArray.push({
             date: e.bill_date,
             description: `Bill #${e.bill_number}`,
             debit: e.grand_total,
@@ -165,7 +169,7 @@ export default function ClientLedger() {
             isDeleted: true
           });
         } else {
-          entries.push({
+          targetArray.push({
             date: e.bill_date,
             description: `Bill #${e.bill_number}`,
             debit: e.grand_total,
@@ -178,8 +182,10 @@ export default function ClientLedger() {
       }
 
       for (const p of (payData || [])) {
+        const targetArray = p.is_archived ? archivedEntries : activeEntries;
+        
         if (Number(p.amount) < 0) {
-          entries.push({
+          targetArray.push({
             date: p.payment_date,
             description: p.description,
             debit: Math.abs(Number(p.amount)),
@@ -188,7 +194,7 @@ export default function ClientLedger() {
             ref: p.id
           });
         } else {
-          entries.push({
+          targetArray.push({
             date: p.payment_date,
             description: p.description + (p.payment_mode ? ` (${p.payment_mode})` : ''),
             debit: 0,
@@ -199,24 +205,34 @@ export default function ClientLedger() {
         }
       }
 
-      // Sort chronologically, then by bill number if dates match
-      entries.sort((a, b) => {
+      const sortFn = (a, b) => {
         const dateDiff = parseDate(a.date) - parseDate(b.date);
         if (dateDiff !== 0) return dateDiff;
         if (a.billNumber && b.billNumber) {
           return a.billNumber - b.billNumber;
         }
         return 0;
+      };
+
+      activeEntries.sort(sortFn);
+      archivedEntries.sort(sortFn);
+
+      // Calculate running balance for active entries
+      let activeBal = 0
+      const finalActive = activeEntries.map(e => {
+        activeBal = activeBal + Number(e.debit) - Number(e.credit)
+        return { ...e, balance: activeBal, isArchived: false }
       })
 
-      // Calculate running balance
-      let bal = 0
-      const finalEntries = entries.map(e => {
-        bal = bal + Number(e.debit) - Number(e.credit)
-        return { ...e, balance: bal }
+      // We don't necessarily need a strict mathematical running balance for archived entries, 
+      // but we calculate a simple zero-started running balance so the table doesn't look empty.
+      let archivedBal = 0
+      const finalArchived = archivedEntries.map(e => {
+        archivedBal = archivedBal + Number(e.debit) - Number(e.credit)
+        return { ...e, balance: archivedBal, isArchived: true }
       })
 
-      setLedger(finalEntries)
+      setLedger([...finalActive, ...finalArchived])
     } catch (e) {
       console.error("Load Data Error:", e)
       alert("Error loading data: " + (e.message || e.toString()))
@@ -265,13 +281,19 @@ export default function ClientLedger() {
     const fd = fromDate || null
     const td = toDate || null
 
+    const baseLedger = ledger.filter(l => {
+      if (activeTab === 'archived') return l.isArchived;
+      if (activeTab === 'ledger') return !l.isArchived;
+      return true;
+    });
+
     if (fd) {
-      const prior = ledger.filter(l => getNormalizedDateString(l.date) < fd)
+      const prior = baseLedger.filter(l => getNormalizedDateString(l.date) < fd)
       if (prior.length > 0) ob = prior[prior.length - 1].balance
-      else ob = Number(client?.opening_balance || 0)
+      else ob = activeTab === 'archived' ? 0 : Number(client?.opening_balance || 0)
     }
 
-    const currentRows = ledger.filter(l => {
+    const currentRows = baseLedger.filter(l => {
       const dStr = getNormalizedDateString(l.date)
       if (fd && dStr < fd) return false
       if (td && dStr > td) return false
@@ -284,12 +306,12 @@ export default function ClientLedger() {
       return true
     })
 
-    if (fd && ob !== null) {
+    if (fd && ob !== null && activeTab === 'ledger') {
       result.push({
         date: fromDate,
         description: 'Opening Balance (Brought Forward)',
-        debit: 0,
-        credit: 0,
+        debit: ob > 0 ? ob : 0,
+        credit: ob < 0 ? Math.abs(ob) : 0,
         balance: ob,
         type: 'OPENING'
       })
@@ -297,7 +319,7 @@ export default function ClientLedger() {
 
     result = [...result, ...currentRows]
     return result
-  }, [ledger, fromDate, toDate, search, client])
+  }, [ledger, fromDate, toDate, search, client, activeTab])
 
   useEffect(() => { loadData() }, [id])
 
@@ -610,6 +632,40 @@ export default function ClientLedger() {
     }
   }
 
+  async function handleCarryForward() {
+    if (!filteredLedger || filteredLedger.length === 0) {
+      alert("No active entries to carry forward.")
+      return;
+    }
+    const finalBalance = filteredLedger[filteredLedger.length - 1].balance;
+    if (!window.confirm(`Are you sure you want to carry forward the balance of ₹${finalBalance}? All current entries will be moved to the Archived tab, and this will become the new Opening Balance.`)) {
+      return;
+    }
+    
+    setLoading(true)
+    try {
+      const { error: cErr } = await supabase.from('clients').update({ opening_balance: finalBalance }).eq('id', id);
+      if (cErr) throw cErr;
+
+      const { error: estErr } = await supabase.from('estimates').update({ is_archived: true }).eq('client_id', id).neq('is_archived', true);
+      if (estErr) throw estErr;
+
+      const { error: payErr } = await supabase.from('payments').update({ is_archived: true }).eq('client_id', id).neq('is_archived', true);
+      if (payErr) throw payErr;
+
+      const { error: purErr } = await supabase.from('client_purchases').update({ is_archived: true }).eq('client_id', id).neq('is_archived', true);
+      if (purErr) throw purErr;
+
+      await loadData();
+      alert("Ledger successfully carried forward!");
+    } catch (e) {
+      console.error(e)
+      alert("Failed to carry forward: " + e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="app-container">
       <div className="header">
@@ -652,6 +708,9 @@ export default function ClientLedger() {
                   <button className="btn btn-secondary btn-sm" onClick={handleShareWhatsApp} disabled={exporting} style={{ background: '#25D366', color: 'white', border: 'none' }}>
                     💬 WhatsApp
                   </button>
+                  <button className="primary-btn" style={{ padding: '6px 12px', margin: 0, background: '#f59e0b', color: '#fff', border: 'none' }} onClick={handleCarryForward}>
+                    ⏩ Carry Forward
+                  </button>
                   <button className="primary-btn" style={{ padding: '6px 12px', margin: 0 }} onClick={() => {
                     setEditPaymentId(null)
                     setPayAmount('')
@@ -675,7 +734,17 @@ export default function ClientLedger() {
                   color: activeTab === 'ledger' ? 'var(--primary-color)' : 'var(--text-muted)',
                   fontWeight: activeTab === 'ledger' ? 700 : 400
                 }}>
-                Financial Ledger
+                Active Ledger
+              </button>
+              <button
+                onClick={() => setActiveTab('archived')}
+                style={{
+                  background: 'none', border: 'none', padding: '8px 16px', fontSize: 16, cursor: 'pointer',
+                  borderBottom: activeTab === 'archived' ? '2px solid var(--primary-color)' : '2px solid transparent',
+                  color: activeTab === 'archived' ? 'var(--primary-color)' : 'var(--text-muted)',
+                  fontWeight: activeTab === 'archived' ? 700 : 400
+                }}>
+                Archived
               </button>
               <button
                 onClick={() => setActiveTab('history')}
@@ -714,15 +783,17 @@ export default function ClientLedger() {
               {(fromDate || toDate) ? (
                 <button className="btn btn-ghost btn-sm" style={{ padding: 0, color: 'var(--primary-color)' }} onClick={() => { setFromDate(''); setToDate('') }}>Clear Date Filter</button>
               ) : <div />}
-              {activeTab === 'ledger' && selectedRefs.size > 0 && (
+              {(activeTab === 'ledger' || activeTab === 'archived') && selectedRefs.size > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', background: '#fee2e2', padding: '4px 12px', borderRadius: 8, gap: 12 }}>
-                  <span style={{ fontWeight: 600, color: '#991b1b', fontSize: 13 }}>{selectedRefs.size} selected</span>
-                  <button className="btn btn-danger btn-sm" style={{ margin: 0 }} onClick={handleDeleteSelected}>🗑️ Delete</button>
+                  <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{selectedRefs.size} selected</span>
+                  <button className="btn btn-sm" style={{ background: '#dc2626', color: 'white', border: 'none', margin: 0 }} onClick={handleDeleteSelected}>
+                    Delete Selected
+                  </button>
                 </div>
               )}
             </div>
 
-            {activeTab === 'ledger' ? (
+            {(activeTab === 'ledger' || activeTab === 'archived') ? (
               <>
                 <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 550 }}>

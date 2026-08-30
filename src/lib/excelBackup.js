@@ -28,7 +28,7 @@ export async function generateExcelWorkbook(supabase) {
       const openingDebit = openingBal > 0 ? openingBal : 0
       const openingCredit = openingBal < 0 ? Math.abs(openingBal) : 0
 
-      const clientEsts = (estimates || []).filter(e => String(e.client_id) === String(c.id))
+      const clientEsts = (estimates || []).filter(e => String(e.client_id) === String(c.id) && !e.is_archived)
       const estTotal = clientEsts
         .filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE')
         .reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
@@ -37,7 +37,7 @@ export async function generateExcelWorkbook(supabase) {
         .filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN')
         .reduce((sum, e) => sum + (Number(e.grand_total) || 0), 0)
 
-      const clientPayments = (payments || []).filter(p => String(p.client_id) === String(c.id))
+      const clientPayments = (payments || []).filter(p => String(p.client_id) === String(c.id) && !p.is_archived)
       const payTotal = clientPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
 
       const totalDebit = openingDebit + estTotal
