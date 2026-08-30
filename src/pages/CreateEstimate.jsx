@@ -108,6 +108,7 @@ export default function CreateEstimate() {
   const [showItemModal, setShowItemModal] = useState(false)
   const [editingItemIdx, setEditingItemIdx] = useState(null)
   const [isDraftRestored, setIsDraftRestored] = useState(false)
+  const [previousBalance, setPreviousBalance] = useState('')
 
   const skipAutoSaveRef = useRef(false)
 
@@ -202,6 +203,7 @@ export default function CreateEstimate() {
           setPreparedBy(est.prepared_by || '')
           setSiteName(est.site_name || '')
           setDocType(est.type || 'ESTIMATE')
+          setPreviousBalance(est.previous_balance != null ? est.previous_balance : '')
           setGstPercent(est.gst_percent ? String(est.gst_percent) : '')
           const { data: eitems } = await supabase
             .from('estimate_items').select('*')
@@ -263,6 +265,26 @@ export default function CreateEstimate() {
     }
     loadClientNames()
   }, [id])
+
+  async function fetchClientCurrentBalance(clientId) {
+    if (!clientId) {
+      setPreviousBalance('')
+      return
+    }
+    try {
+      const { data: estData } = await supabase.from('estimates').select('grand_total, type').eq('client_id', clientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
+      const { data: payData } = await supabase.from('payments').select('amount').eq('client_id', clientId)
+      const { data: cData } = await supabase.from('clients').select('opening_balance').eq('id', clientId).single()
+
+      const estTotal = (estData || []).filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
+      const returnTotal = (estData || []).filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
+      const payTotal = (payData || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      const bal = Number(cData?.opening_balance || 0) + estTotal - returnTotal - payTotal
+      setPreviousBalance(bal.toString())
+    } catch (e) {
+      console.error('Failed to fetch client balance', e)
+    }
+  }
 
   // ── Auto-save draft ──
   useEffect(() => {
@@ -876,6 +898,7 @@ export default function CreateEstimate() {
           gst_percent: t.gst_percent,
           gst_amount: t.gst_amount,
           grand_total: t.grand_total,
+          previous_balance: Number(previousBalance) || 0,
           updated_at: new Date().toISOString()
         }).eq('id', id)
         if (estErr) throw estErr
@@ -995,7 +1018,8 @@ export default function CreateEstimate() {
           sub_total: t.sub_total,
           gst_percent: t.gst_percent,
           gst_amount: t.gst_amount,
-          grand_total: t.grand_total
+          grand_total: t.grand_total,
+          previous_balance: Number(previousBalance) || 0
         }).select().single()
         if (estErr) throw estErr
 
@@ -1191,7 +1215,10 @@ export default function CreateEstimate() {
               <label>Date</label>
               <input type="text" value={billDate}
                 onChange={e => setBillDate(e.target.value)}
-                readOnly={!isEdit} />
+                readOnly={true} 
+                disabled={isEdit}
+                style={isEdit ? { background: '#f1f5f9', cursor: 'not-allowed' } : {}}
+              />
             </div>
           </div>
 
@@ -1229,6 +1256,7 @@ export default function CreateEstimate() {
                           setClientName(s.name)
                           if (s.mobile && !clientMobile) setClientMobile(s.mobile)
                           setShowClientSuggestions(false)
+                          if (!isEdit && s.id) fetchClientCurrentBalance(s.id)
                         }}>
                         {s.name} {s.mobile ? `(${s.mobile})` : ''}
                       </div>
@@ -1362,6 +1390,22 @@ export default function CreateEstimate() {
             <div className="total-row grand">
               <span>Gr. Total</span>
               <span>₹{totals.grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div className="total-row" style={{ marginTop: 12, alignItems: 'center', background: 'var(--bg)', padding: '12px', borderRadius: '8px', border: '1px dashed var(--border)' }}>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>
+                Prev. Balance (Frozen)
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 4 }}>Locked at generation</div>
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                ₹ <input
+                  type="number"
+                  inputMode="decimal"
+                  value={previousBalance}
+                  onChange={e => setPreviousBalance(e.target.value)}
+                  placeholder="0.00"
+                  style={{ width: 90, padding: '6px 8px', fontSize: 14, textAlign: 'right' }}
+                />
+              </div>
             </div>
           </div>
         )}

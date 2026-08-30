@@ -97,9 +97,11 @@ export default function SiteDetailsEditor() {
 
       const savedDetails = data.details || {}
       const mergedDetails = { ...savedDetails }
-      DEFAULT_DYNAMIC_FIELDS.forEach(f => {
-        if (mergedDetails[f] === undefined) mergedDetails[f] = ''
-      })
+      if (Object.keys(savedDetails).length === 0) {
+        DEFAULT_DYNAMIC_FIELDS.forEach(f => {
+          mergedDetails[f] = ''
+        })
+      }
       setDetails(mergedDetails)
       setInitialSelectionSheetHtml(mergedDetails.selectionSheetHtml || '')
 
@@ -133,6 +135,15 @@ export default function SiteDetailsEditor() {
     }
     setDetails(prev => ({ ...prev, [key]: '' }))
     setNewFieldName('')
+  }
+
+  const handleRemoveField = (fieldKey) => {
+    if (!window.confirm(`Remove "${fieldKey}"?`)) return
+    setDetails(prev => {
+      const newDetails = { ...prev }
+      delete newDetails[fieldKey]
+      return newDetails
+    })
   }
 
   const handlePhoneChange = (e) => {
@@ -392,21 +403,23 @@ export default function SiteDetailsEditor() {
             {activeTab === 'selection_sheet' ? (
               <SelectionSheetTab
                 initialContent={details.selectionSheetHtml || ''}
+                tableData={details.selectionSheetTable}
                 clientName={client?.name || ''}
                 siteName={siteData.site_name}
                 partyName={siteData.party_name}
                 isEditing={false}
                 onUpdate={(html) => handleDetailChange('selectionSheetHtml', html)}
+                onTableUpdate={(table) => handleDetailChange('selectionSheetTable', table)}
               />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {Object.entries(details).filter(([k, val]) => val.trim() !== '' && k !== 'selectionSheetHtml').map(([key, val]) => (
+                {Object.entries(details).filter(([k, val]) => val !== null && typeof val !== 'object' && val.toString().trim() !== '' && k !== 'selectionSheetHtml' && k !== 'selectionSheetTable').map(([key, val]) => (
                   <div key={key} style={{ display: 'flex', padding: '0.75rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
                     <div style={{ flex: '0 0 140px', fontWeight: 'bold', color: 'var(--text-light)' }}>{key}</div>
                     <div style={{ flex: 1 }}>{val}</div>
                   </div>
                 ))}
-                {Object.entries(details).filter(([k, val]) => val.trim() !== '' && k !== 'selectionSheetHtml').length === 0 && (
+                {Object.entries(details).filter(([k, val]) => val !== null && typeof val !== 'object' && val.toString().trim() !== '' && k !== 'selectionSheetHtml' && k !== 'selectionSheetTable').length === 0 && (
                   <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-light)', fontStyle: 'italic', background: '#f8fafc', borderRadius: '6px', border: '1px dashed #cbd5e1' }}>
                     No material details added yet. Click Edit to add some!
                   </div>
@@ -509,18 +522,30 @@ export default function SiteDetailsEditor() {
             {activeTab === 'selection_sheet' ? (
               <SelectionSheetTab
                 initialContent={details.selectionSheetHtml || ''}
+                tableData={details.selectionSheetTable}
                 clientName={client?.name || ''}
                 siteName={siteData.site_name}
                 partyName={siteData.party_name}
                 isEditing={true}
                 onUpdate={(html) => handleDetailChange('selectionSheetHtml', html)}
+                onTableUpdate={(table) => handleDetailChange('selectionSheetTable', table)}
               />
             ) : (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: '#fff', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  {Object.entries(details).filter(([k]) => k !== 'selectionSheetHtml').map(([key, val]) => (
+                  {Object.entries(details).filter(([k]) => k !== 'selectionSheetHtml' && k !== 'selectionSheetTable').map(([key, val]) => (
                     <div key={key}>
-                      <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-light)' }}>{key}</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-light)' }}>{key}</label>
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveField(key)} 
+                          style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '1.25rem', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                          title="Remove field"
+                        >
+                          ×
+                        </button>
+                      </div>
                       <input
                         type="text"
                         className="input nav-input"

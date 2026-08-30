@@ -747,7 +747,17 @@ export default function ClientLedger() {
                           </td>
                           <td style={{ padding: '8px 4px', textAlign: 'left', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-                              <span style={{ wordBreak: 'break-word' }}>{l.description}</span>
+                              {['BILL', 'QUOTE', 'RETURN'].includes(l.type) && l.ref ? (
+                                <span 
+                                  style={{ wordBreak: 'break-word', cursor: 'pointer', color: '#2563eb', textDecoration: 'underline' }}
+                                  onClick={() => navigate(`/estimate/view/${l.ref}`)}
+                                  title="View Document"
+                                >
+                                  {l.description}
+                                </span>
+                              ) : (
+                                <span style={{ wordBreak: 'break-word' }}>{l.description}</span>
+                              )}
                               {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && (
                                 <div style={{ display: 'flex' }}>
                                   <button

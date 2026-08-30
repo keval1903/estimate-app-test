@@ -102,6 +102,16 @@ export function AuthProvider({ children }) {
             }
           }
         } else {
+          // User is logged out or session expired, discard all drafts
+          const keysToRemove = []
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.includes('_draft_')) {
+              keysToRemove.push(key)
+            }
+          }
+          keysToRemove.forEach(k => localStorage.removeItem(k))
+
           if (mounted) {
             setUser(null)
             setRole(null)

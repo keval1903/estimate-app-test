@@ -136,6 +136,14 @@ export default function Home() {
         </button>
 
 
+        <button className="home-btn" onClick={() => navigate('/catalogue')}>
+          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📋</div>
+          <div>
+            <div className="home-btn-text">CATALOGUE</div>
+            <div className="home-btn-sub">Track lent items and inventory returns</div>
+          </div>
+        </button>
+
         <button className="home-btn" onClick={() => navigate('/client-sites')}>
           <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
           <div>

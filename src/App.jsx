@@ -13,6 +13,7 @@ import UserManagement from './pages/UserManagement'
 import SalesReport from './pages/SalesReport'
 import SelectionSheetList from './pages/SelectionSheetList'
 import SelectionSheetEditor from './pages/SelectionSheetEditor'
+import Catalogue from './pages/Catalogue'
 
 import ClientSitesList from './pages/ClientSitesList'
 import ClientSitesView from './pages/ClientSitesView'
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/client-sites/:clientId/edit/:siteId" element={<ProtectedRoute><SiteDetailsEditor /></ProtectedRoute>} />
           <Route path="/selection-sheets" element={<ProtectedRoute><SelectionSheetList /></ProtectedRoute>} />
           <Route path="/selection-sheets/:id" element={<ProtectedRoute><SelectionSheetEditor /></ProtectedRoute>} />
+          <Route path="/catalogue" element={<ProtectedRoute><Catalogue /></ProtectedRoute>} />
           <Route path="/sales-report" element={<ProtectedRoute><SalesReport /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
         </Routes>

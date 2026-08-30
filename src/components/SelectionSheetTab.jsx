@@ -39,7 +39,20 @@ function compressImage(file, maxWidth = 1200) {
   })
 }
 
-const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, partyName, isEditing, onUpdate }, ref) => {
+const ROOM_TYPES = [
+  'LIVING ROOM',
+  'MAIN DOOR',
+  'TV UNIT',
+  'SHOE RACK',
+  'ENTRANCE FOYER',
+  'KITCHEN',
+  'MASTER ROOM',
+  'PARENTS ROOM',
+  'KIDS ROOM',
+  'GUEST ROOM'
+]
+
+const SelectionSheetTab = forwardRef(({ initialContent, tableData, clientName, siteName, partyName, isEditing, onUpdate, onTableUpdate }, ref) => {
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const imgRef = useRef(null)
@@ -49,6 +62,8 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
   const [uploadingCrop, setUploadingCrop] = useState(false)
   const [fileNameForCrop, setFileNameForCrop] = useState('')
   const [exporting, setExporting] = useState(null)
+  const [activeRoomDropdown, setActiveRoomDropdown] = useState(null)
+  const [highlightedDropdownIndex, setHighlightedDropdownIndex] = useState(-1)
 
   const editor = useEditor({
     extensions: [
@@ -89,6 +104,25 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
       if (onUpdate) onUpdate(editor.getHTML())
     }
   })
+
+  const currentTableData = tableData && tableData.length > 0 ? tableData : [
+    { roomType: '', sheetCode: '', remark: '', qty: '' },
+    { roomType: '', sheetCode: '', remark: '', qty: '' },
+    { roomType: '', sheetCode: '', remark: '', qty: '' }
+  ]
+
+  function handleTableChange(index, field, value) {
+    const newData = [...currentTableData]
+    newData[index] = { ...newData[index], [field]: value }
+    if (onTableUpdate) onTableUpdate(newData)
+  }
+
+  function handleAddRow() {
+    const newData = [...currentTableData, { roomType: '', sheetCode: '', remark: '', qty: '' }]
+    if (onTableUpdate) onTableUpdate(newData)
+  }
+
+  const isTableEmpty = currentTableData.every(row => !row.roomType && !row.sheetCode && !row.remark && !row.qty)
 
   useEffect(() => {
     if (editor && editor.isEditable !== isEditing) {
@@ -133,6 +167,52 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
       
     } catch (e) {
       alert('Error uploading image: ' + e.message)
+    }
+  }
+
+  async function handleDownloadSelectedImage() {
+    if (!editor) return
+    const src = editor.getAttributes('image').src
+    if (!src) return
+    try {
+      const res = await fetch(src)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Selection_Image_${Date.now()}.jpg`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('Could not download image. ' + e.message)
+    }
+  }
+
+  async function handleCopySelectedImage() {
+    if (!editor) return
+    const src = editor.getAttributes('image').src
+    if (!src) return
+    try {
+      const res = await fetch(src)
+      const blob = await res.blob()
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob })
+      ])
+      // Just briefly flash something? or alert
+      const btn = document.getElementById('btn-copy-img')
+      if (btn) {
+        const oldText = btn.innerText
+        btn.innerText = 'Copied!'
+        setTimeout(() => btn.innerText = oldText, 2000)
+      }
+    } catch (e) {
+      alert('Could not copy image. ' + e.message)
+    }
+  }
+
+  function handleDeleteSelectedImage() {
+    if (editor) {
+      editor.chain().focus().deleteSelection().run()
     }
   }
 
@@ -220,22 +300,56 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
     const { default: html2canvas } = await import('html2canvas')
     const { default: jsPDF } = await import('jspdf')
 
-    const contentEl = document.querySelector('.tiptap-editor')
-    if (!contentEl) throw new Error('Editor content not found')
+    const contentEl = document.querySelector('.selection-sheet-pdf-container')
+    if (!contentEl) throw new Error('Content not found')
 
     const canvas = await html2canvas(contentEl, {
       scale: 2,
       useCORS: true,
       logging: false,
       onclone: (clonedDoc) => {
-        const el = clonedDoc.querySelector('.tiptap-editor')
+        const el = clonedDoc.querySelector('.selection-sheet-pdf-container')
         if (el) {
           el.style.width = '763px'
           el.style.maxWidth = 'none'
-          el.style.fontSize = '18px'
+          el.style.fontSize = '16px'
           el.style.lineHeight = '1.6'
           el.style.padding = '24px'
           el.style.background = '#fff'
+          el.style.boxSizing = 'border-box'
+
+          // Remove all buttons (like 'Add Row' or formatting toolbar) from the PDF
+          const buttons = el.querySelectorAll('button')
+          buttons.forEach(btn => btn.remove())
+
+          // Hide the table entirely if it's completely empty
+          if (isTableEmpty) {
+            const tableWrapper = el.querySelector('.selection-sheet-table-wrapper')
+            if (tableWrapper) tableWrapper.style.display = 'none'
+          }
+
+          // Adjust inputs in cloned DOM to just show text (no borders) for cleaner PDF table
+          const inputs = el.querySelectorAll('input, select')
+          inputs.forEach(input => {
+            const span = clonedDoc.createElement('span')
+            span.textContent = input.value || (input.options ? input.options[input.selectedIndex]?.text : '') || ''
+            if (!span.textContent.trim()) {
+              span.style.display = 'inline-block'
+              span.style.minHeight = '1.5em'
+              span.style.width = '100%'
+            }
+            input.parentNode.replaceChild(span, input)
+          })
+
+          // Ensure any existing empty spans in view mode also don't collapse
+          const spans = el.querySelectorAll('td span')
+          spans.forEach(span => {
+            if (!span.textContent.trim()) {
+              span.style.display = 'inline-block'
+              span.style.minHeight = '1.5em'
+              span.style.width = '100%'
+            }
+          })
 
           // Inject custom header for PDF
           const headerDiv = clonedDoc.createElement('div')
@@ -370,8 +484,152 @@ const SelectionSheetTab = forwardRef(({ initialContent, clientName, siteName, pa
         </div>
       )}
 
-      <div style={{ flex: 1, overflowY: 'auto', background: '#fff', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column' }}>
-        <EditorContent editor={editor} className="tiptap-wrapper" />
+      <div className="selection-sheet-pdf-container" style={{ flex: 1, overflowY: 'auto', background: '#fff', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column' }}>
+        
+        {/* The Structured Table */}
+        {(!isTableEmpty || isEditing) && (
+          <div className="selection-sheet-table-wrapper" style={{ padding: '1rem 1rem 0 1rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                <th style={{ padding: '0.75rem', textAlign: 'left', borderRight: '1px solid #e2e8f0', width: '25%' }}>Room Type</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left', borderRight: '1px solid #e2e8f0', width: '30%' }}>Sheet Code</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left', borderRight: '1px solid #e2e8f0', width: '35%' }}>Remark</th>
+                <th style={{ padding: '0.75rem', textAlign: 'left', width: '10%' }}>Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentTableData.map((row, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '0.5rem', borderRight: '1px solid #e2e8f0', position: 'relative' }}>
+                    {isEditing ? (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          autoComplete="off"
+                          value={row.roomType} 
+                          onChange={e => {
+                            handleTableChange(i, 'roomType', e.target.value)
+                            setHighlightedDropdownIndex(-1)
+                          }}
+                          onFocus={() => {
+                            setActiveRoomDropdown(i)
+                            setHighlightedDropdownIndex(-1)
+                          }}
+                          onBlur={() => setTimeout(() => setActiveRoomDropdown(null), 200)}
+                          onKeyDown={(e) => {
+                            if (activeRoomDropdown !== i) return
+                            const options = ROOM_TYPES.filter(rt => !row.roomType || rt.toLowerCase().includes(row.roomType.toLowerCase()))
+                            
+                            if (e.key === 'Escape') {
+                              setActiveRoomDropdown(null)
+                              e.stopPropagation()
+                            } else if (e.key === 'ArrowDown') {
+                              e.preventDefault()
+                              setHighlightedDropdownIndex(prev => prev < options.length - 1 ? prev + 1 : prev)
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault()
+                              setHighlightedDropdownIndex(prev => prev > 0 ? prev - 1 : 0)
+                            } else if (e.key === 'Enter') {
+                              e.preventDefault() // prevent jumping to next field immediately
+                              if (highlightedDropdownIndex >= 0 && highlightedDropdownIndex < options.length) {
+                                handleTableChange(i, 'roomType', options[highlightedDropdownIndex])
+                              } else if (options.length > 0) {
+                                handleTableChange(i, 'roomType', options[0])
+                              }
+                              setActiveRoomDropdown(null)
+                            }
+                          }}
+                          style={{ width: '100%', padding: '0.4rem', border: '1px solid #cbd5e1', borderRadius: '4px', boxSizing: 'border-box' }}
+                          placeholder="Select or type..."
+                        />
+                        {activeRoomDropdown === i && (
+                          <div style={{
+                            position: 'absolute', top: '100%', left: 0, right: 0,
+                            background: 'white', border: '1px solid #cbd5e1',
+                            borderRadius: 4, zIndex: 50, maxHeight: 150, overflowY: 'auto',
+                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', marginTop: 4
+                          }}>
+                            {ROOM_TYPES.filter(rt => !row.roomType || rt.toLowerCase().includes(row.roomType.toLowerCase())).map((rt, optIdx) => (
+                                <div 
+                                  key={rt} 
+                                  style={{ 
+                                    padding: '0.5rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '0.85rem',
+                                    background: highlightedDropdownIndex === optIdx ? '#f8fafc' : 'transparent'
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    handleTableChange(i, 'roomType', rt);
+                                    setActiveRoomDropdown(null);
+                                  }}
+                                  onMouseEnter={() => setHighlightedDropdownIndex(optIdx)}
+                                >
+                                  {rt}
+                                </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span>{row.roomType}</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.5rem', borderRight: '1px solid #e2e8f0' }}>
+                    {isEditing ? (
+                      <input 
+                        type="text" 
+                        value={row.sheetCode} 
+                        onChange={e => handleTableChange(i, 'sheetCode', e.target.value)}
+                        style={{ width: '100%', padding: '0.4rem', border: '1px solid #cbd5e1', borderRadius: '4px', boxSizing: 'border-box' }}
+                        placeholder="Sheet Code"
+                      />
+                    ) : (
+                      <span>{row.sheetCode}</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.5rem', borderRight: '1px solid #e2e8f0' }}>
+                    {isEditing ? (
+                      <input 
+                        type="text" 
+                        value={row.remark} 
+                        onChange={e => handleTableChange(i, 'remark', e.target.value)}
+                        style={{ width: '100%', padding: '0.4rem', border: '1px solid #cbd5e1', borderRadius: '4px', boxSizing: 'border-box' }}
+                        placeholder="Remark"
+                      />
+                    ) : (
+                      <span>{row.remark}</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.5rem' }}>
+                    {isEditing ? (
+                      <input 
+                        type="number" 
+                        value={row.qty} 
+                        onChange={e => handleTableChange(i, 'qty', e.target.value)}
+                        style={{ width: '100%', padding: '0.4rem', border: '1px solid #cbd5e1', borderRadius: '4px', boxSizing: 'border-box' }}
+                        placeholder="Qty"
+                      />
+                    ) : (
+                      <span>{row.qty}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {isEditing && (
+            <button className="btn btn-ghost" onClick={handleAddRow} style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}>
+              + Add Row
+            </button>
+          )}
+        </div>
+        )}
+
+        {/* The Rich Text Editor */}
+        <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {/* Image Floating Menu is currently disabled due to Tiptap export issue */}
+          <EditorContent editor={editor} className="tiptap-wrapper" />
+        </div>
       </div>
 
       <style>{`

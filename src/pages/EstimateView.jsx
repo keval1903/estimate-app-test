@@ -13,6 +13,7 @@ export default function EstimateView() {
   const [estimate, setEstimate] = useState(null)
   const [items, setItems] = useState([])
   const [clientBalance, setClientBalance] = useState(0)
+  const [previousEstimateNumber, setPreviousEstimateNumber] = useState(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState('')
   const [paperSize, setPaperSize] = useState('a5')
@@ -36,16 +37,24 @@ export default function EstimateView() {
       setEstimate(est)
       setItems(eitems || [])
 
-      // Fetch ledger balance if this is a final estimate linked to a client
+      // Fetch frozen previous balance from the estimate record
       if (est?.type === 'ESTIMATE' && est?.client_id) {
-        const { data: estData } = await supabase.from('estimates').select('grand_total, type').eq('client_id', est.client_id).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
-        const { data: payData } = await supabase.from('payments').select('amount').eq('client_id', est.client_id)
-        const { data: cData } = await supabase.from('clients').select('opening_balance').eq('id', est.client_id).single()
+        setClientBalance(Number(est.previous_balance || 0))
 
-        const estTotal = (estData || []).filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
-        const returnTotal = (estData || []).filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
-        const payTotal = (payData || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
-        setClientBalance(Number(cData?.opening_balance || 0) + estTotal - returnTotal - payTotal)
+        // Fetch the last estimate number for this client to display as reference
+        const { data: lastEst } = await supabase
+          .from('estimates')
+          .select('bill_number')
+          .eq('client_id', est.client_id)
+          .in('type', ['ESTIMATE', 'DELETED_ESTIMATE'])
+          .lt('created_at', est.created_at)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+        
+        if (lastEst) {
+          setPreviousEstimateNumber(lastEst.bill_number)
+        }
       }
 
       setLoading(false)
@@ -594,14 +603,14 @@ export default function EstimateView() {
             <div id="estimate-preview" ref={previewRef} style={{ display: 'flex', flexDirection: 'column', gap: '32px', width: '100%' }}>
           {pages.map((page, pageIndex) => (
             <div key={pageIndex} className="estimate-page" style={{ pageBreakAfter: page.isLast ? 'auto' : 'always', position: 'relative' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', border: '1.5px solid #000', fontFamily: 'Arial, sans-serif', fontSize: 13, color: '#000', background: '#fff' }}>
+              <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', border: '1.5px solid #000', fontFamily: 'Arial, sans-serif', fontSize: 13, color: '#000', background: '#fff' }}>
                 <colgroup>
                   <col style={{ width: 42 }} />     {/* Sr No */}
                   <col style={{ width: 'auto' }} /> {/* Description */}
                   <col style={{ width: isChallanMode ? 55 : 42 }} />     {/* Nos. */}
                   <col style={{ width: isChallanMode ? 100 : 68 }} />     {/* Quantity */}
-                  {!isChallanMode && <col style={{ width: 72 }} />}     {/* Rate */}
-                  {!isChallanMode && <col style={{ width: 94 }} />}     {/* Amount */}
+                  {!isChallanMode && <col style={{ width: 78 }} />}     {/* Rate */}
+                  {!isChallanMode && <col style={{ width: 110 }} />}     {/* Amount */}
                 </colgroup>
                 <tbody>
                   {/* Title row */}
@@ -811,17 +820,19 @@ export default function EstimateView() {
                       {estimate?.type === 'ESTIMATE' && estimate?.client_id && !isChallanMode && (
                         <>
                           <tr>
-                            <td colSpan={4} style={{ border: '1px solid #000', padding: '4px 8px', borderRight: 'none' }}></td>
-                            <td style={{ border: '1px solid #000', borderLeft: 'none', padding: '4px 4px', textAlign: 'right', fontSize: 13, fontStyle: 'italic' }}>Prev. Bal.</td>
-                            <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13, fontStyle: 'italic' }}>
-                              {fmtMoney(clientBalance - grandTotal)}
+                            <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 8px', borderRight: 'none' }}></td>
+                            <td colSpan={2} style={{ border: '1px solid #000', borderLeft: 'none', padding: '4px 4px', textAlign: 'right', fontSize: 13, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                              Prev. Bal. {previousEstimateNumber ? `(Est #${previousEstimateNumber})` : ''}
+                            </td>
+                            <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                              {fmtMoney(clientBalance)}
                             </td>
                           </tr>
                           <tr style={{ background: '#f1f5f9' }}>
-                            <td colSpan={4} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none', fontWeight: 600, fontSize: 13 }}>Estimate #{estimate.bill_number}</td>
-                            <td style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 14, fontWeight: 700 }}>Total Due</td>
+                            <td colSpan={3} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none', fontWeight: 600, fontSize: 13 }}>Estimate #{estimate.bill_number}</td>
+                            <td colSpan={2} style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 14, fontWeight: 700 }}>Total Due</td>
                             <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                              {fmtMoney(clientBalance)}
+                              {fmtMoney(clientBalance + grandTotal)}
                             </td>
                           </tr>
                         </>

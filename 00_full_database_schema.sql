@@ -628,3 +628,196 @@ CREATE POLICY "Admins can delete roles"
 -- =============================================================================
 
 
+-- ============================================================
+-- ESTIMATE APP - CATALOGUE SETUP
+-- Run this script in Supabase SQL Editor
+-- ============================================================
+
+-- 1. CATALOGUE ITEMS TABLE (for inventory dropdown)
+CREATE TABLE IF NOT EXISTS catalogue_items (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  item_name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE catalogue_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Enable all for authenticated users on catalogue_items" 
+  ON catalogue_items FOR ALL TO authenticated 
+  USING (true) WITH CHECK (true);
+
+-- 2. CATALOGUE TABLE (for lent items)
+CREATE TABLE IF NOT EXISTS catalogue (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  lent_date DATE NOT NULL,
+  client_name TEXT NOT NULL,
+  location TEXT,
+  inventory_item TEXT NOT NULL,
+  quantity NUMERIC(12,2) DEFAULT 1,
+  mobile TEXT,
+  advance_amount NUMERIC(12,2) DEFAULT 0,
+  is_returned BOOLEAN DEFAULT false,
+  return_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE catalogue ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Enable all for authenticated users on catalogue" 
+  ON catalogue FOR ALL TO authenticated 
+  USING (true) WITH CHECK (true);
+
+-- 3. AUTO-UPDATE updated_at TRIGGER FOR CATALOGUE
+CREATE OR REPLACE TRIGGER catalogue_updated_at
+  BEFORE UPDATE ON catalogue
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
+-- DONE! Catalogue tables and policies created.
+-- ============================================================
+-- ============================================================
+-- ESTIMATE APP - CLIENT LEDGER UPGRADES
+-- Run this script in Supabase SQL Editor
+-- ============================================================
+
+-- Add new columns to clients table
+ALTER TABLE clients
+ADD COLUMN IF NOT EXISTS company_name TEXT,
+ADD COLUMN IF NOT EXISTS owner_name TEXT,
+ADD COLUMN IF NOT EXISTS office_location TEXT,
+ADD COLUMN IF NOT EXISTS secondary_mobile TEXT,
+ADD COLUMN IF NOT EXISTS client_type TEXT DEFAULT 'GREEN';
+
+-- ============================================================
+-- DONE! Client tables updated successfully.
+-- ============================================================
+-- ============================================================
+-- ESTIMATE APP - PREVIOUS BALANCE MIGRATION
+-- Run this script in Supabase SQL Editor
+-- ============================================================
+
+-- 1. Add previous_balance column to estimates table
+ALTER TABLE estimates
+ADD COLUMN IF NOT EXISTS previous_balance NUMERIC(12,2) DEFAULT 0;
+
+-- 2. Backfill existing estimates with their historically accurate previous balance
+-- This ensures old bills freeze their ledger totals exactly as they were on their creation day.
+WITH historical_balances AS (
+  SELECT 
+    e.id AS estimate_id,
+    COALESCE(c.opening_balance, 0) 
+    + COALESCE((
+        SELECT SUM(grand_total) 
+        FROM estimates past_e
+        WHERE past_e.client_id = e.client_id 
+          AND past_e.type IN ('ESTIMATE', 'DELETED_ESTIMATE')
+          AND past_e.id != e.id
+          AND (
+            past_e.bill_date < e.bill_date 
+            OR (past_e.bill_date = e.bill_date AND past_e.created_at < e.created_at)
+          )
+    ), 0)
+    - COALESCE((
+        SELECT SUM(grand_total) 
+        FROM estimates past_r
+        WHERE past_r.client_id = e.client_id 
+          AND past_r.type IN ('RETURN', 'DELETED_RETURN')
+          AND past_r.id != e.id
+          AND (
+            past_r.bill_date < e.bill_date 
+            OR (past_r.bill_date = e.bill_date AND past_r.created_at < e.created_at)
+          )
+    ), 0)
+    - COALESCE((
+        SELECT SUM(amount) 
+        FROM payments p
+        WHERE p.client_id = e.client_id 
+          AND (
+            p.payment_date < e.bill_date 
+            OR (p.payment_date = e.bill_date AND p.created_at < e.created_at)
+          )
+    ), 0) AS calculated_prev_balance
+  FROM estimates e
+  LEFT JOIN clients c ON c.id = e.client_id
+  WHERE e.client_id IS NOT NULL
+)
+UPDATE estimates
+SET previous_balance = hb.calculated_prev_balance
+FROM historical_balances hb
+WHERE estimates.id = hb.estimate_id;
+
+-- ============================================================
+-- DONE! Estimates table updated successfully.
+-- ============================================================
+-- ============================================================
+-- ESTIMATE APP - BALANCE FIX MIGRATION (DATE PARSING)
+-- Run this script in Supabase SQL Editor to correctly sort DD/MM/YYYY strings!
+-- ============================================================
+
+-- 1. Create a robust date parsing function to handle mixed date formats
+CREATE OR REPLACE FUNCTION parse_custom_date(d text) RETURNS date AS $$
+BEGIN
+  IF d IS NULL OR d = '' THEN RETURN '1970-01-01'::date; END IF;
+  
+  -- If it starts with YYYY-MM-DD (e.g., 2026-08-14)
+  IF d ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN
+    RETURN substring(d FROM 1 FOR 10)::date;
+  END IF;
+
+  -- Otherwise assume DD/MM/YYYY or DD-MM-YYYY
+  -- REPLACE safely standardizes slashes to dashes, though TO_DATE handles both
+  RETURN TO_DATE(substring(d FROM 1 FOR 10), 'DD/MM/YYYY');
+EXCEPTION WHEN OTHERS THEN
+  -- Fallback to epoch if unparseable
+  RETURN '1970-01-01'::date;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 2. Recalculate historical balances properly using actual date comparisons
+WITH historical_balances AS (
+  SELECT 
+    e.id AS estimate_id,
+    COALESCE(c.opening_balance, 0) 
+    + COALESCE((
+        SELECT SUM(grand_total) 
+        FROM estimates past_e
+        WHERE past_e.client_id = e.client_id 
+          AND past_e.type IN ('ESTIMATE', 'DELETED_ESTIMATE')
+          AND past_e.id != e.id
+          AND (
+            parse_custom_date(past_e.bill_date) < parse_custom_date(e.bill_date)
+            OR (parse_custom_date(past_e.bill_date) = parse_custom_date(e.bill_date) AND past_e.created_at < e.created_at)
+          )
+    ), 0)
+    - COALESCE((
+        SELECT SUM(grand_total) 
+        FROM estimates past_r
+        WHERE past_r.client_id = e.client_id 
+          AND past_r.type IN ('RETURN', 'DELETED_RETURN')
+          AND past_r.id != e.id
+          AND (
+            parse_custom_date(past_r.bill_date) < parse_custom_date(e.bill_date)
+            OR (parse_custom_date(past_r.bill_date) = parse_custom_date(e.bill_date) AND past_r.created_at < e.created_at)
+          )
+    ), 0)
+    - COALESCE((
+        SELECT SUM(amount) 
+        FROM payments p
+        WHERE p.client_id = e.client_id 
+          AND (
+            parse_custom_date(p.payment_date) < parse_custom_date(e.bill_date)
+            OR (parse_custom_date(p.payment_date) = parse_custom_date(e.bill_date) AND p.created_at < e.created_at)
+          )
+    ), 0) AS calculated_prev_balance
+  FROM estimates e
+  LEFT JOIN clients c ON c.id = e.client_id
+  WHERE e.client_id IS NOT NULL
+)
+UPDATE estimates
+SET previous_balance = hb.calculated_prev_balance
+FROM historical_balances hb
+WHERE estimates.id = hb.estimate_id;
+
+-- ============================================================
+-- DONE! All previous_balances have been successfully restored!
+-- ============================================================
+ALTER TABLE catalogue_items DISABLE ROW LEVEL SECURITY;
