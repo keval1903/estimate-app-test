@@ -129,7 +129,8 @@ export default function ClientLedger() {
             debit: 0,
             credit: 0,
             type: 'QUOTE',
-            ref: e.id
+            ref: e.id,
+            billNumber: e.bill_number
           });
         } else if (e.type === 'RETURN') {
           entries.push({
@@ -138,7 +139,8 @@ export default function ClientLedger() {
             debit: 0,
             credit: e.grand_total,
             type: 'RETURN',
-            ref: e.id
+            ref: e.id,
+            billNumber: e.bill_number
           });
         } else if (e.type === 'DELETED_RETURN') {
           entries.push({
@@ -147,7 +149,8 @@ export default function ClientLedger() {
             debit: 0,
             credit: e.grand_total,
             type: 'RETURN',
-            ref: e.id
+            ref: e.id,
+            billNumber: e.bill_number
           });
         } else if (e.type === 'DELETED_ESTIMATE') {
           entries.push({
@@ -156,7 +159,8 @@ export default function ClientLedger() {
             debit: e.grand_total,
             credit: 0,
             type: 'BILL',
-            ref: e.id
+            ref: e.id,
+            billNumber: e.bill_number
           });
         } else {
           entries.push({
@@ -165,7 +169,8 @@ export default function ClientLedger() {
             debit: e.grand_total,
             credit: 0,
             type: 'BILL',
-            ref: e.id
+            ref: e.id,
+            billNumber: e.bill_number
           });
         }
       }
@@ -192,8 +197,15 @@ export default function ClientLedger() {
         }
       }
 
-      // Sort chronologically
-      entries.sort((a, b) => parseDate(a.date) - parseDate(b.date))
+      // Sort chronologically, then by bill number if dates match
+      entries.sort((a, b) => {
+        const dateDiff = parseDate(a.date) - parseDate(b.date);
+        if (dateDiff !== 0) return dateDiff;
+        if (a.billNumber && b.billNumber) {
+          return a.billNumber - b.billNumber;
+        }
+        return 0;
+      })
 
       // Calculate running balance
       let bal = 0
@@ -304,11 +316,15 @@ export default function ClientLedger() {
 
     const paymentIds = []
     const billIds = []
+    const billNumbersToDelete = []
 
     for (const l of filteredLedger) {
       if (selectedRefs.has(l.ref)) {
-        if (l.type === 'BILL' || l.type === 'QUOTE') {
+        if (l.type === 'BILL' || l.type === 'QUOTE' || l.type === 'RETURN') {
           billIds.push(l.ref)
+          if (l.billNumber) {
+            billNumbersToDelete.push(l.billNumber)
+          }
         } else if (l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') {
           paymentIds.push(l.ref)
         }
@@ -323,6 +339,9 @@ export default function ClientLedger() {
       }
       if (billIds.length > 0) {
         await restoreStockForEstimates(billIds);
+        if (billNumbersToDelete.length > 0) {
+          await supabase.from('client_purchases').delete().in('bill_number', billNumbersToDelete);
+        }
         const { error } = await supabase.from('estimates').delete().in('id', billIds)
         if (error) throw error
       }
