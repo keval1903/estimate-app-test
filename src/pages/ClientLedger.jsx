@@ -150,7 +150,8 @@ export default function ClientLedger() {
             credit: e.grand_total,
             type: 'RETURN',
             ref: e.id,
-            billNumber: e.bill_number
+            billNumber: e.bill_number,
+            isDeleted: true
           });
         } else if (e.type === 'DELETED_ESTIMATE') {
           entries.push({
@@ -160,7 +161,8 @@ export default function ClientLedger() {
             credit: 0,
             type: 'BILL',
             ref: e.id,
-            billNumber: e.bill_number
+            billNumber: e.bill_number,
+            isDeleted: true
           });
         } else {
           entries.push({
@@ -766,7 +768,7 @@ export default function ClientLedger() {
                           </td>
                           <td style={{ padding: '8px 4px', textAlign: 'left', fontWeight: l.type === 'BILL' ? 600 : (l.type === 'QUOTE' ? 500 : 400), color: l.type === 'QUOTE' ? '#64748b' : '#000' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-                              {['BILL', 'QUOTE', 'RETURN'].includes(l.type) && l.ref ? (
+                              {['BILL', 'QUOTE', 'RETURN'].includes(l.type) && l.ref && !l.isDeleted ? (
                                 <span 
                                   style={{ wordBreak: 'break-word', cursor: 'pointer', color: '#2563eb', textDecoration: 'underline' }}
                                   onClick={() => navigate(`/estimate/view/${l.ref}`)}
