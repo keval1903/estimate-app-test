@@ -375,7 +375,7 @@ export default function Catalogue() {
 
         {/* Table */}
         <div style={{ overflowX: 'auto', flex: 1 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>
                 <th style={{ padding: '12px 8px' }}>Date</th>
