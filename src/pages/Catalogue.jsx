@@ -15,7 +15,7 @@ export default function Catalogue() {
 
   // Form states
   const [showForm, setShowForm] = useState(false)
-  const defaultItem = { inventory_item: '', quantity: 1, advance_amount: 0 }
+  const defaultItem = { inventory_item: '', quantity: 1, advance_amount: 0, remark: '' }
   const [formData, setFormData] = useState({
     lent_date: new Date().toISOString().split('T')[0],
     client_name: '',
@@ -88,7 +88,8 @@ export default function Catalogue() {
         mobile: formData.mobile,
         inventory_item: item.inventory_item,
         quantity: item.quantity,
-        advance_amount: item.advance_amount
+        advance_amount: item.advance_amount,
+        remark: item.remark
       }))
 
       // Insert into catalogue
@@ -351,6 +352,11 @@ export default function Catalogue() {
                             value={item.advance_amount} onChange={e => handleItemChange(idx, 'advance_amount', e.target.value)} />
                         </div>
                       </div>
+                      <div className="field" style={{ marginTop: '1rem' }}>
+                        <label>Remark</label>
+                        <input type="text"
+                          value={item.remark} onChange={e => handleItemChange(idx, 'remark', e.target.value)} />
+                      </div>
                     </div>
                   ))}
 
@@ -376,6 +382,7 @@ export default function Catalogue() {
                 <th style={{ padding: '12px 8px' }}>Client</th>
                 <th style={{ padding: '12px 8px' }}>Location</th>
                 <th style={{ padding: '12px 8px' }}>Inventory</th>
+                <th style={{ padding: '12px 8px' }}>Remark</th>
                 <th style={{ padding: '12px 8px', textAlign: 'right' }}>Qty</th>
                 <th style={{ padding: '12px 8px' }}>Mobile</th>
                 <th style={{ padding: '12px 8px', textAlign: 'right' }}>Advance</th>
@@ -395,6 +402,7 @@ export default function Catalogue() {
                     <td style={{ padding: '12px 8px' }}>{item.client_name}</td>
                     <td style={{ padding: '12px 8px' }}>{item.location}</td>
                     <td style={{ padding: '12px 8px' }}>{item.inventory_item}</td>
+                    <td style={{ padding: '12px 8px' }}>{item.remark}</td>
                     <td style={{ padding: '12px 8px', textAlign: 'right' }}>{item.quantity}</td>
                     <td style={{ padding: '12px 8px' }}>{item.mobile}</td>
                     <td style={{ padding: '12px 8px', textAlign: 'right' }}>
