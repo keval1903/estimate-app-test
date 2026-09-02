@@ -1002,6 +1002,18 @@ export default function CreateEstimate() {
         if (seqErr) throw seqErr
         const billNumber = seqData
 
+        let saveBalance = Number(previousBalance) || 0;
+        if (finalClientId) {
+          const { data: estData } = await supabase.from('estimates').select('grand_total, type').eq('client_id', finalClientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
+          const { data: payData } = await supabase.from('payments').select('amount').eq('client_id', finalClientId)
+          const { data: cData } = await supabase.from('clients').select('opening_balance').eq('id', finalClientId).single()
+          
+          const estTotal = (estData || []).filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
+          const returnTotal = (estData || []).filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
+          const payTotal = (payData || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
+          saveBalance = Number(cData?.opening_balance || 0) + estTotal - returnTotal - payTotal
+        }
+
         const { data: est, error: estErr } = await supabase.from('estimates').insert({
           bill_number: billNumber,
           bill_date: billDate,
@@ -1019,7 +1031,7 @@ export default function CreateEstimate() {
           gst_percent: t.gst_percent,
           gst_amount: t.gst_amount,
           grand_total: t.grand_total,
-          previous_balance: Number(previousBalance) || 0
+          previous_balance: saveBalance
         }).select().single()
         if (estErr) throw estErr
 

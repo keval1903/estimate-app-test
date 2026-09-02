@@ -13,7 +13,6 @@ export default function EstimateView() {
   const [estimate, setEstimate] = useState(null)
   const [items, setItems] = useState([])
   const [clientBalance, setClientBalance] = useState(0)
-  const [previousEstimateNumber, setPreviousEstimateNumber] = useState(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState('')
   const [paperSize, setPaperSize] = useState('a5')
@@ -40,21 +39,6 @@ export default function EstimateView() {
       // Fetch frozen previous balance from the estimate record
       if (est?.type === 'ESTIMATE' && est?.client_id) {
         setClientBalance(Number(est.previous_balance || 0))
-
-        // Fetch the last estimate number for this client to display as reference
-        const { data: lastEst } = await supabase
-          .from('estimates')
-          .select('bill_number')
-          .eq('client_id', est.client_id)
-          .in('type', ['ESTIMATE', 'DELETED_ESTIMATE'])
-          .lt('created_at', est.created_at)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
-        
-        if (lastEst) {
-          setPreviousEstimateNumber(lastEst.bill_number)
-        }
       }
 
       setLoading(false)
@@ -822,7 +806,7 @@ export default function EstimateView() {
                           <tr>
                             <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 8px', borderRight: 'none' }}></td>
                             <td colSpan={2} style={{ border: '1px solid #000', borderLeft: 'none', padding: '4px 4px', textAlign: 'right', fontSize: 13, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
-                              Prev. Bal. {previousEstimateNumber ? `(Est #${previousEstimateNumber})` : ''}
+                              Prev. Bal.
                             </td>
                             <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
                               {fmtMoney(clientBalance)}
