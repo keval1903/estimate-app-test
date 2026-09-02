@@ -1004,13 +1004,13 @@ export default function CreateEstimate() {
 
         let saveBalance = Number(previousBalance) || 0;
         if (finalClientId) {
-          const { data: estData } = await supabase.from('estimates').select('grand_total, type').eq('client_id', finalClientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
-          const { data: payData } = await supabase.from('payments').select('amount').eq('client_id', finalClientId)
+          const { data: estData } = await supabase.from('estimates').select('grand_total, type, is_archived').eq('client_id', finalClientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
+          const { data: payData } = await supabase.from('payments').select('amount, is_archived').eq('client_id', finalClientId)
           const { data: cData } = await supabase.from('clients').select('opening_balance').eq('id', finalClientId).single()
           
-          const estTotal = (estData || []).filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
-          const returnTotal = (estData || []).filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
-          const payTotal = (payData || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
+          const estTotal = (estData || []).filter(e => !e.is_archived && (e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE')).reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
+          const returnTotal = (estData || []).filter(e => !e.is_archived && (e.type === 'RETURN' || e.type === 'DELETED_RETURN')).reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
+          const payTotal = (payData || []).filter(p => !p.is_archived).reduce((sum, p) => sum + Number(p.amount || 0), 0)
           saveBalance = Number(cData?.opening_balance || 0) + estTotal - returnTotal - payTotal
         }
 

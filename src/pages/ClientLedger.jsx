@@ -134,7 +134,8 @@ export default function ClientLedger() {
             credit: 0,
             type: 'QUOTE',
             ref: e.id,
-            billNumber: e.bill_number
+            billNumber: e.bill_number,
+            isArchived: e.is_archived
           });
         } else if (e.type === 'RETURN') {
           targetArray.push({
@@ -144,7 +145,8 @@ export default function ClientLedger() {
             credit: e.grand_total,
             type: 'RETURN',
             ref: e.id,
-            billNumber: e.bill_number
+            billNumber: e.bill_number,
+            isArchived: e.is_archived
           });
         } else if (e.type === 'DELETED_RETURN') {
           targetArray.push({
@@ -155,7 +157,8 @@ export default function ClientLedger() {
             type: 'RETURN',
             ref: e.id,
             billNumber: e.bill_number,
-            isDeleted: true
+            isDeleted: true,
+            isArchived: e.is_archived
           });
         } else if (e.type === 'DELETED_ESTIMATE') {
           targetArray.push({
@@ -166,7 +169,8 @@ export default function ClientLedger() {
             type: 'BILL',
             ref: e.id,
             billNumber: e.bill_number,
-            isDeleted: true
+            isDeleted: true,
+            isArchived: e.is_archived
           });
         } else {
           targetArray.push({
@@ -176,7 +180,8 @@ export default function ClientLedger() {
             credit: 0,
             type: 'BILL',
             ref: e.id,
-            billNumber: e.bill_number
+            billNumber: e.bill_number,
+            isArchived: e.is_archived
           });
         }
       }
@@ -191,7 +196,8 @@ export default function ClientLedger() {
             debit: Math.abs(Number(p.amount)),
             credit: 0,
             type: 'MANUAL_DEBIT',
-            ref: p.id
+            ref: p.id,
+            isArchived: p.is_archived
           });
         } else {
           targetArray.push({
@@ -200,7 +206,8 @@ export default function ClientLedger() {
             debit: 0,
             credit: p.amount,
             type: 'PAYMENT',
-            ref: p.id
+            ref: p.id,
+            isArchived: p.is_archived
           });
         }
       }
@@ -637,8 +644,19 @@ export default function ClientLedger() {
       alert("No active entries to carry forward.")
       return;
     }
-    const finalBalance = filteredLedger[filteredLedger.length - 1].balance;
-    if (!window.confirm(`Are you sure you want to carry forward the balance of ₹${finalBalance}? All current entries will be moved to the Archived tab, and this will become the new Opening Balance.`)) {
+    const defaultBalance = filteredLedger[filteredLedger.length - 1].balance;
+    const userInput = window.prompt(
+      `All current entries will be moved to the Archived tab.\n\nEnter the new Opening Balance to carry forward (default is ₹${defaultBalance}):`,
+      defaultBalance
+    );
+
+    if (userInput === null) {
+      return; // user clicked cancel
+    }
+
+    const finalBalance = Number(userInput);
+    if (isNaN(finalBalance)) {
+      alert("Invalid amount entered. Carry forward cancelled.");
       return;
     }
     
@@ -661,6 +679,65 @@ export default function ClientLedger() {
     } catch (e) {
       console.error(e)
       alert("Failed to carry forward: " + e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleUnarchive() {
+    const userInput = window.prompt(
+      "This will bring back ALL historical estimates and payments into the active running ledger.\n\nPlease enter the original Opening Balance for this client from before you ever used Carry Forward (enter 0 if they had no prior balance):",
+      "0"
+    );
+
+    if (userInput === null) {
+      return;
+    }
+
+    const originalBalance = Number(userInput);
+    if (isNaN(originalBalance)) {
+      alert("Invalid amount entered. Unarchive cancelled.");
+      return;
+    }
+
+    setLoading(true)
+    try {
+      const { error: cErr } = await supabase.from('clients').update({ opening_balance: originalBalance }).eq('id', id);
+      if (cErr) throw cErr;
+
+      const { error: estErr } = await supabase.from('estimates').update({ is_archived: false }).eq('client_id', id).eq('is_archived', true);
+      if (estErr) throw estErr;
+
+      const { error: payErr } = await supabase.from('payments').update({ is_archived: false }).eq('client_id', id).eq('is_archived', true);
+      if (payErr) throw payErr;
+
+      const { error: purErr } = await supabase.from('client_purchases').update({ is_archived: false }).eq('client_id', id).eq('is_archived', true);
+      if (purErr) throw purErr;
+
+      await loadData();
+      alert("Successfully unarchived all records!");
+    } catch (e) {
+      console.error(e)
+      alert("Failed to unarchive: " + e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleToggleArchive(refId, type, currentArchiveState) {
+    if (!refId) return;
+    if (!window.confirm(`Are you sure you want to ${currentArchiveState ? 'unarchive' : 'archive'} this entry?\n\nNote: This will change the running balance. You may need to manually adjust the Opening Balance to compensate.`)) {
+      return;
+    }
+    setLoading(true)
+    try {
+      const isEst = ['BILL', 'QUOTE', 'RETURN'].includes(type)
+      const table = isEst ? 'estimates' : 'payments'
+      const { error } = await supabase.from(table).update({ is_archived: !currentArchiveState }).eq('id', refId)
+      if (error) throw error;
+      await loadData();
+    } catch (e) {
+      alert("Failed to toggle archive: " + e.message)
     } finally {
       setLoading(false)
     }
@@ -710,6 +787,9 @@ export default function ClientLedger() {
                   </button>
                   <button className="primary-btn" style={{ padding: '6px 12px', margin: 0, background: '#f59e0b', color: '#fff', border: 'none' }} onClick={handleCarryForward}>
                     ⏩ Carry Forward
+                  </button>
+                  <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px', margin: 0, background: '#e2e8f0', color: '#334155', border: 'none' }} onClick={handleUnarchive}>
+                    ⏪ Undo Carry Forward
                   </button>
                   <button className="primary-btn" style={{ padding: '6px 12px', margin: 0 }} onClick={() => {
                     setEditPaymentId(null)
@@ -850,8 +930,8 @@ export default function ClientLedger() {
                               ) : (
                                 <span style={{ wordBreak: 'break-word' }}>{l.description}</span>
                               )}
-                              {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && (
-                                <div style={{ display: 'flex' }}>
+                              <div style={{ display: 'flex' }}>
+                                {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && (
                                   <button
                                     className="btn btn-ghost btn-sm"
                                     style={{ padding: '2px 4px', margin: 0, color: 'var(--text-muted)' }}
@@ -860,18 +940,28 @@ export default function ClientLedger() {
                                   >
                                     ✏️
                                   </button>
-                                  {role === 'ADMIN' && (
-                                    <button
-                                      className="btn btn-ghost btn-sm"
-                                      style={{ padding: '2px 4px', margin: 0, color: '#dc2626' }}
-                                      onClick={() => handleDeletePayment(l.ref)}
-                                      title="Delete Payment"
-                                    >
-                                      🗑️
-                                    </button>
-                                  )}
-                                </div>
-                              )}
+                                )}
+                                {l.ref && (
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ padding: '2px 4px', margin: 0, color: 'var(--text-muted)' }}
+                                    onClick={() => handleToggleArchive(l.ref, l.type, l.isArchived)}
+                                    title={l.isArchived ? "Unarchive Entry" : "Archive Entry"}
+                                  >
+                                    {l.isArchived ? "⏪" : "📁"}
+                                  </button>
+                                )}
+                                {(l.type === 'PAYMENT' || l.type === 'MANUAL_DEBIT') && role === 'ADMIN' && (
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ padding: '2px 4px', margin: 0, color: '#dc2626' }}
+                                    onClick={() => handleDeletePayment(l.ref)}
+                                    title="Delete Payment"
+                                  >
+                                    🗑️
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td style={{ padding: '8px 4px', textAlign: 'right', color: '#ef4444', whiteSpace: 'nowrap' }}>{l.debit > 0 ? l.debit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
