@@ -435,7 +435,7 @@ export default function ClientLedger() {
   }
 
   async function handleEditClick(paymentId) {
-    const { data } = await supabase.from('payments').select('*').eq('id', paymentId).single()
+    const { data } = await supabase.from('payments').select('*').eq('id', paymentId).eq('platform', activePlatform).single()
     if (data) {
       setEditPaymentId(data.id)
       setPayDate(data.payment_date)
@@ -665,7 +665,7 @@ export default function ClientLedger() {
     
     setLoading(true)
     try {
-      const { error: cErr } = await supabase.from('clients').update({ opening_balance: finalBalance }).eq('id', id);
+      const { error: cErr } = await supabase.from('clients').update({ opening_balance: finalBalance }).eq('id', id).eq('platform', activePlatform);
       if (cErr) throw cErr;
 
       const { error: estErr } = await supabase.from('estimates').update({ is_archived: true }).eq('client_id', id).eq('platform', activePlatform).neq('is_archived', true);
@@ -705,7 +705,7 @@ export default function ClientLedger() {
 
     setLoading(true)
     try {
-      const { error: cErr } = await supabase.from('clients').update({ opening_balance: originalBalance }).eq('id', id);
+      const { error: cErr } = await supabase.from('clients').update({ opening_balance: originalBalance }).eq('id', id).eq('platform', activePlatform);
       if (cErr) throw cErr;
 
       const { error: estErr } = await supabase.from('estimates').update({ is_archived: false }).eq('client_id', id).eq('platform', activePlatform).eq('is_archived', true);

@@ -60,8 +60,8 @@ export default function Clients() {
 
     if (!error && editClientId) {
       // Sync denormalized name across tables when name changes
-      await supabase.from('estimates').update({ client_name: payload.name }).eq('client_id', editClientId)
-      await supabase.from('client_sites').update({ client_name: payload.name }).eq('client_id', editClientId)
+      await supabase.from('estimates').update({ client_name: payload.name }).eq('client_id', editClientId).eq('platform', activePlatform)
+      await supabase.from('client_sites').update({ client_name: payload.name }).eq('client_id', editClientId).eq('platform', activePlatform)
     }
 
     if (!error && !editClientId && newClientId) {

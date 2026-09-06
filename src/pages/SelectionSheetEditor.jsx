@@ -100,7 +100,7 @@ export default function SelectionSheetEditor() {
     if (id !== 'new' && editor) {
       fetchSheet()
     }
-  }, [id, editor])
+  }, [id, editor, activePlatform])
 
   async function fetchSheet() {
     try {
@@ -144,7 +144,7 @@ export default function SelectionSheetEditor() {
           client_name: clientName.trim(),
           content: content,
           updated_at: new Date().toISOString()
-        }).eq('id', id)
+        }).eq('id', id).eq('platform', activePlatform)
         if (error) throw error
         await cleanupRemovedImages(initialHtml, content)
       }

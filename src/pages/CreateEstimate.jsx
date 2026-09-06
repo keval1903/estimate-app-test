@@ -171,7 +171,7 @@ export default function CreateEstimate() {
     })
     supabase.from('sites').select('*').eq('platform', activePlatform).order('site_name')
       .then(({ data }) => setAllSites(data || []))
-  }, [])
+    }, [activePlatform])
 
 
   const draftKey = isEdit ? `estimate_draft_${activePlatform}_${id}` : `estimate_draft_new_${activePlatform}`
@@ -907,7 +907,7 @@ export default function CreateEstimate() {
           grand_total: t.grand_total,
           previous_balance: Number(previousBalance) || 0,
           updated_at: new Date().toISOString()
-        }).eq('id', id)
+        }).eq('id', id).eq('platform', activePlatform)
         if (estErr) throw estErr
 
         // delete old items, reinsert
@@ -1023,6 +1023,8 @@ export default function CreateEstimate() {
 
         const { data: est, error: estErr } = await supabase.from('estimates').insert({
           bill_number: billNumber,
+          platform: activePlatform,
+          platform_estimate_number: billNumber,
           bill_date: billDate,
           transport: clientName.trim().toUpperCase(),
           client_name: clientName.trim().toUpperCase(),
@@ -1084,7 +1086,8 @@ export default function CreateEstimate() {
                     quantity_changed: stockDelta,
                     estimate_id: est.id,
                     bill_number: billNumber?.toString(),
-                    site_name: siteName
+                    site_name: siteName,
+                    platform: activePlatform
                   })
                 }
               }

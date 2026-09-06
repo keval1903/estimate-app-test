@@ -38,11 +38,11 @@ export default async function handler(req, res) {
     const info = await transporter.sendMail({
       from: `"CCAI Backup" <${process.env.GMAIL_USER}>`,
       to: ['darshanloyapune@gmail.com', 'kevaltaank53@gmail.com'],
-      subject: `CCAI Daily Ledger Backup - ${dateStr}`,
-      text: 'Please find the daily ledger and estimate backup attached.',
+      subject: `All Platforms Daily Ledger Backup - ${dateStr}`,
+      text: 'Please find the daily ledger and estimate backup attached for all platforms.',
       attachments: [
         {
-          filename: `CCAI_Ledger_Backup_${dateStr}.xlsx`,
+          filename: `All_Platforms_Ledger_Backup_${dateStr}.xlsx`,
           content: buffer,
         },
       ],

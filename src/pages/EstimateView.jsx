@@ -310,7 +310,7 @@ export default function EstimateView() {
       const { error } = await supabase.from('estimates').update({
         type: 'QUOTATION',
         updated_at: new Date().toISOString()
-      }).eq('id', id)
+      }).eq('id', id).eq('platform', activePlatform)
 
       if (error) throw error
 
@@ -386,7 +386,7 @@ export default function EstimateView() {
         type: 'ESTIMATE',
         client_id: finalClientId,
         updated_at: new Date().toISOString()
-      }).eq('id', id)
+      }).eq('id', id).eq('platform', activePlatform)
 
       if (error) throw error
 

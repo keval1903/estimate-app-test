@@ -19,7 +19,7 @@ export default function ClientSitesView() {
 
   useEffect(() => {
     fetchClientAndSites()
-  }, [clientId])
+  }, [clientId, activePlatform])
 
   async function fetchClientAndSites() {
     setLoading(true)
@@ -28,17 +28,17 @@ export default function ClientSitesView() {
       const decodedName = decodeURIComponent(clientId)
 
       if (isUuid) {
-        const { data: cData, error: cErr } = await supabase.from('clients').select('name').eq('id', clientId).single()
+        const { data: cData, error: cErr } = await supabase.from('clients').select('name').eq('id', clientId).eq('platform', activePlatform).single()
         if (cErr) throw cErr
         setClient(cData)
 
-        const { data: sData, error: sErr } = await supabase.from('client_sites').select('*').eq('client_id', clientId).order('created_at', { ascending: false })
+        const { data: sData, error: sErr } = await supabase.from('client_sites').select('*').eq('client_id', clientId).eq('platform', activePlatform).order('created_at', { ascending: false })
         if (sErr) throw sErr
         setSites(sData || [])
       } else {
         setClient({ name: decodedName })
 
-        const { data: sData, error: sErr } = await supabase.from('client_sites').select('*').eq('client_name', decodedName).is('client_id', null).order('created_at', { ascending: false })
+        const { data: sData, error: sErr } = await supabase.from('client_sites').select('*').eq('client_name', decodedName).is('client_id', null).eq('platform', activePlatform).order('created_at', { ascending: false })
         if (sErr) throw sErr
         setSites(sData || [])
       }
@@ -54,7 +54,7 @@ export default function ClientSitesView() {
     try {
       const siteToDelete = sites.find(s => s.id === id)
 
-      const { error } = await supabase.from('client_sites').delete().eq('id', id)
+      const { error } = await supabase.from('client_sites').delete().eq('id', id).eq('platform', activePlatform)
       if (error) throw error
       
       if (siteToDelete && siteToDelete.details && siteToDelete.details.selectionSheetHtml) {

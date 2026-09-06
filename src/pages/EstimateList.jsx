@@ -37,7 +37,6 @@ export default function EstimateList() {
           .from('estimates')
           .select('*')
           .eq('platform', activePlatform)
-          .eq('platform', activePlatform)
           .order('bill_number', { ascending: false })
           .range(from, to)
 
@@ -69,8 +68,11 @@ export default function EstimateList() {
   }, [activeTab, activePlatform])
 
   useEffect(() => {
-    const t = setTimeout(fetchEstimates, 300)
-    return () => clearTimeout(t)
+    setAllEstimates([])
+    setSelectedIds(new Set())
+    setCollapsedDates(new Set())
+    const timer = setTimeout(fetchEstimates, 300)
+    return () => clearTimeout(timer)
   }, [fetchEstimates])
 
   async function handleDelete(est) {
@@ -78,7 +80,7 @@ export default function EstimateList() {
 
     if (est.type === 'QUOTATION' || !est.type) {
       await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number).eq('platform', activePlatform);
-      const { error } = await supabase.from('estimates').delete().eq('id', est.id)
+      const { error } = await supabase.from('estimates').delete().eq('id', est.id).eq('platform', activePlatform)
       if (error) showToast('Delete failed: ' + error.message, 'error')
       else {
         showToast(`${est.type === 'QUOTATION' ? 'Quotation' : 'Bill'} #${est.bill_number} deleted`)
@@ -89,7 +91,7 @@ export default function EstimateList() {
       await restoreStockForEstimates([est.id]);
 
       const newType = est.type === 'ESTIMATE' ? 'DELETED_ESTIMATE' : 'DELETED_RETURN';
-      const { error } = await supabase.from('estimates').update({ type: newType }).eq('id', est.id)
+      const { error } = await supabase.from('estimates').update({ type: newType }).eq('id', est.id).eq('platform', activePlatform)
       if (error) showToast('Delete failed: ' + error.message, 'error')
       else {
         showToast(`Bill #${est.bill_number} marked as deleted`)
@@ -128,15 +130,15 @@ export default function EstimateList() {
 
       if (softDeleteIds.length > 0) {
         await restoreStockForEstimates(softDeleteIds);
-        await supabase.from('estimates').update({ type: 'DELETED_ESTIMATE' }).in('id', softDeleteIds);
+        await supabase.from('estimates').update({ type: 'DELETED_ESTIMATE' }).in('id', softDeleteIds).eq('platform', activePlatform);
       }
       if (returnSoftDeleteIds.length > 0) {
         await restoreStockForEstimates(returnSoftDeleteIds);
-        await supabase.from('estimates').update({ type: 'DELETED_RETURN' }).in('id', returnSoftDeleteIds);
+        await supabase.from('estimates').update({ type: 'DELETED_RETURN' }).in('id', returnSoftDeleteIds).eq('platform', activePlatform);
       }
       if (hardDeleteIds.length > 0) {
         await supabase.from('client_purchases').delete().in('bill_number', hardDeleteBillNumbers).eq('platform', activePlatform);
-        await supabase.from('estimates').delete().in('id', hardDeleteIds);
+        await supabase.from('estimates').delete().in('id', hardDeleteIds).eq('platform', activePlatform);
       }
     }
 
@@ -183,7 +185,8 @@ export default function EstimateList() {
               quantity_changed: -qty,
               estimate_id: est.id,
               bill_number: est.bill_number?.toString(),
-              site_name: est.site_name
+              site_name: est.site_name,
+              platform: activePlatform
             })
           }
         }
@@ -204,7 +207,7 @@ export default function EstimateList() {
         type: 'ESTIMATE',
         client_id: finalClientId,
         updated_at: new Date().toISOString()
-      }).eq('id', est.id)
+      }).eq('id', est.id).eq('platform', activePlatform)
 
       if (error) throw error
 
