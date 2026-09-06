@@ -10,6 +10,9 @@
   ALTER TABLE client_purchases DROP CONSTRAINT IF EXISTS client_purchases_platform_check;
   ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_platform_check;
   ALTER TABLE stock_history DROP CONSTRAINT IF EXISTS stock_history_platform_check;
+ALTER TABLE clients DROP CONSTRAINT IF EXISTS clients_platform_check;
+ALTER TABLE catalogue DROP CONSTRAINT IF EXISTS catalogue_platform_check;
+ALTER TABLE selection_sheets DROP CONSTRAINT IF EXISTS selection_sheets_platform_check;
 
   -- 2. Rename columns and sequences in 'products'
   ALTER TABLE products RENAME COLUMN in_materia TO in_laminea;
@@ -34,6 +37,9 @@
   UPDATE client_purchases SET platform = 'laminea' WHERE platform = 'materia';
   UPDATE payments SET platform = 'laminea' WHERE platform = 'materia';
   UPDATE stock_history SET platform = 'laminea' WHERE platform = 'materia';
+UPDATE clients SET platform = 'laminea' WHERE platform = 'materia';
+UPDATE catalogue SET platform = 'laminea' WHERE platform = 'materia';
+UPDATE selection_sheets SET platform = 'laminea' WHERE platform = 'materia';
 
   -- 4. Re-add the constraints with 'laminea' instead of 'materia'
   ALTER TABLE sites ADD CONSTRAINT sites_platform_check CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
@@ -42,6 +48,9 @@
   ALTER TABLE client_purchases ADD CONSTRAINT client_purchases_platform_check CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
   ALTER TABLE payments ADD CONSTRAINT payments_platform_check CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
   ALTER TABLE stock_history ADD CONSTRAINT stock_history_platform_check CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
+ALTER TABLE clients ADD CONSTRAINT clients_platform_check CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
+ALTER TABLE catalogue ADD CONSTRAINT catalogue_platform_check CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
+ALTER TABLE selection_sheets ADD CONSTRAINT selection_sheets_platform_check CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
   -- 5. Update the RPC function to use 'laminea' instead of 'materia'
   DROP FUNCTION IF EXISTS get_next_bill_number(text);

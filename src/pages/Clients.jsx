@@ -50,7 +50,7 @@ export default function Clients() {
     let newClientId = editClientId;
 
     if (editClientId) {
-      const { error: err } = await supabase.from('clients').update(payload).eq('id', editClientId)
+      const { error: err } = await supabase.from('clients').update(payload).eq('id', editClientId).eq('platform', activePlatform)
       error = err;
     } else {
       const { data, error: err } = await supabase.from('clients').insert([payload]).select().single()
@@ -142,7 +142,7 @@ export default function Clients() {
     if (!window.confirm(`Are you sure you want to delete ${name}?\n\nThis will permanently delete all their payment records. Their estimates will NOT be deleted, but they will no longer be linked to a client account.`)) return
 
     try {
-      const { error } = await supabase.from('clients').delete().eq('id', id)
+      const { error } = await supabase.from('clients').delete().eq('id', id).eq('platform', activePlatform)
       if (error) throw error
       loadClients()
     } catch (e) {
@@ -190,7 +190,7 @@ export default function Clients() {
     if (!window.confirm(`Are you sure you want to delete ${selectedClients.size} selected clients?\n\nThis will permanently delete all their payment records.`)) return
 
     try {
-      const { error } = await supabase.from('clients').delete().in('id', Array.from(selectedClients))
+      const { error } = await supabase.from('clients').delete().in('id', Array.from(selectedClients)).eq('platform', activePlatform)
       if (error) throw error
       setSelectedClients(new Set())
       loadClients()
