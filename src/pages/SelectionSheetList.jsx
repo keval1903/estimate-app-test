@@ -40,7 +40,7 @@ export default function SelectionSheetList() {
     try {
       const sheetToDelete = sheets.find(s => s.id === id)
       
-      const { error } = await supabase.from('selection_sheets').delete().eq('id', id)
+      const { error } = await supabase.from('selection_sheets').delete().eq('id', id).eq('platform', activePlatform)
       if (error) throw error
       
       if (sheetToDelete && sheetToDelete.content) {
@@ -65,7 +65,7 @@ export default function SelectionSheetList() {
       
       const sheetsToDelete = sheets.filter(s => selected.includes(s.id))
       
-      const { error } = await supabase.from('selection_sheets').delete().in('id', selected)
+      const { error } = await supabase.from('selection_sheets').delete().in('id', selected).eq('platform', activePlatform)
       if (error) throw error
       
       const allUrls = sheetsToDelete.flatMap(s => extractImageUrls(s.content))
@@ -88,7 +88,7 @@ export default function SelectionSheetList() {
     try {
       setLoading(true)
       const allIds = sheets.map(s => s.id)
-      const { error } = await supabase.from('selection_sheets').delete().in('id', allIds)
+      const { error } = await supabase.from('selection_sheets').delete().in('id', allIds).eq('platform', activePlatform)
       if (error) throw error
       
       const allUrls = sheets.flatMap(s => extractImageUrls(s.content))

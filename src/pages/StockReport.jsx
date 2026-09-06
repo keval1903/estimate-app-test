@@ -25,7 +25,7 @@ export default function StockReport() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [activePlatform])
 
   async function loadData() {
     setLoading(true)

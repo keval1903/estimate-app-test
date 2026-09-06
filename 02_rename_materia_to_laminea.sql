@@ -58,6 +58,8 @@ ALTER TABLE selection_sheets ADD CONSTRAINT selection_sheets_platform_check CHEC
   CREATE OR REPLACE FUNCTION get_next_bill_number(p_platform TEXT)
   RETURNS BIGINT
   LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
   AS $$
   DECLARE
       next_val INTEGER;
@@ -76,6 +78,9 @@ ALTER TABLE selection_sheets ADD CONSTRAINT selection_sheets_platform_check CHEC
       END CASE;
   END;
   $$;
+  
+  REVOKE ALL ON FUNCTION get_next_bill_number(TEXT) FROM PUBLIC;
+  GRANT EXECUTE ON FUNCTION get_next_bill_number(TEXT) TO authenticated;
 
   -- 6. Update the admin statistics RPC function
   CREATE OR REPLACE FUNCTION get_admin_dashboard_stats()
@@ -95,11 +100,7 @@ ALTER TABLE selection_sheets ADD CONSTRAINT selection_sheets_platform_check CHEC
       'laminea_products', (SELECT COUNT(*) FROM products WHERE in_laminea = TRUE),
       'phs_products', (SELECT COUNT(*) FROM products WHERE in_phs = TRUE),
       'estimates_count', (SELECT COUNT(*) FROM estimates),
-      'clients_count', (SELECT COUNT(*) FROM clients),
-      'next_ccai', (SELECT get_next_bill_number('ccai')),
-      'next_dc', (SELECT get_next_bill_number('dc')),
-      'next_laminea', (SELECT get_next_bill_number('laminea')),
-      'next_phs', (SELECT get_next_bill_number('phs'))
+      'clients_count', (SELECT COUNT(*) FROM clients)
     ) INTO result;
     
     RETURN result;

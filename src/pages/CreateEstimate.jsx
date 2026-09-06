@@ -715,6 +715,7 @@ export default function CreateEstimate() {
 
     if (payload.has_stock) {
       await supabase.from('stock_history').insert({
+        platform: activePlatform,
         product_id: data.id,
         change_type: 'MANUAL_ADJUST',
         quantity_changed: payload.stock
@@ -958,6 +959,7 @@ export default function CreateEstimate() {
                   const newStock = Number(pdata.stock) + stockDelta
                   await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
                   await supabase.from('stock_history').insert({
+                    platform: activePlatform,
                     product_id: p.id,
                     change_type: isEdit ? (isReturn ? 'RETURN_UPDATE' : 'ESTIMATE_UPDATE') : (isReturn ? 'RETURN_ADD' : 'ESTIMATE_DEDUCT'),
                     quantity_changed: stockDelta,

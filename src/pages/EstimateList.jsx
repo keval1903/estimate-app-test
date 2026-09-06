@@ -109,7 +109,7 @@ export default function EstimateList() {
     setDeleting(true)
     const arr = Array.from(selectedIds)
 
-    const { data: estsToDelete } = await supabase.from('estimates').select('id, type, bill_number').in('id', arr);
+    const { data: estsToDelete } = await supabase.from('estimates').select('id, type, bill_number').in('id', arr).eq('platform', activePlatform);
 
     if (estsToDelete && estsToDelete.length > 0) {
       const softDeleteIds = [];

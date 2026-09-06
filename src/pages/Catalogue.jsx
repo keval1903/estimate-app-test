@@ -28,7 +28,7 @@ export default function Catalogue() {
 
   useEffect(() => {
     fetchData()
-  }, [activeTab])
+  }, [activeTab, activePlatform])
 
   // Close modal on Escape
   useEffect(() => {
@@ -157,7 +157,7 @@ export default function Catalogue() {
           is_returned: true,
           return_date: new Date().toISOString().split('T')[0]
         })
-        .eq('id', id)
+        .eq('id', id).eq('platform', activePlatform)
 
       if (error) throw error
       fetchData()
@@ -174,7 +174,7 @@ export default function Catalogue() {
       const { error } = await supabase
         .from('catalogue')
         .delete()
-        .eq('id', id)
+          .eq('id', id).eq('platform', activePlatform)
 
       if (error) throw error
       fetchData()
