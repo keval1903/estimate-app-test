@@ -101,13 +101,13 @@ export default function ClientLedger() {
       setClient(cData)
 
       // Fetch all estimates AND quotations for this client
-      const { data: estData, error: estErr } = await supabase.from('estimates').select('*').eq('client_id', id)
+      const { data: estData, error: estErr } = await supabase.from('estimates').select('*').eq('client_id', id).eq('platform', activePlatform)
       if (estErr) throw estErr;
 
-      const { data: payData, error: payErr } = await supabase.from('payments').select('*').eq('client_id', id)
+      const { data: payData, error: payErr } = await supabase.from('payments').select('*').eq('client_id', id).eq('platform', activePlatform)
       if (payErr) throw payErr;
 
-      const { data: purData, error: purErr } = await supabase.from('client_purchases').select('*').eq('client_id', id).order('created_at', { ascending: false })
+      const { data: purData, error: purErr } = await supabase.from('client_purchases').select('*').eq('client_id', id).eq('platform', activePlatform).order('created_at', { ascending: false })
       if (!purErr && purData) setPurchases(purData)
 
       const activeEntries = []
@@ -330,12 +330,12 @@ export default function ClientLedger() {
     return result
   }, [ledger, fromDate, toDate, search, client, activeTab])
 
-  useEffect(() => { loadData() }, [id])
+  useEffect(() => { loadData() }, [id, activePlatform])
 
   async function handleDeletePayment(paymentId) {
     if (!window.confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) return
     try {
-      const { error } = await supabase.from('payments').delete().eq('id', paymentId)
+      const { error } = await supabase.from('payments').delete().eq('id', paymentId).eq('platform', activePlatform)
       if (error) throw error
       loadData()
     } catch (e) {
@@ -367,15 +367,15 @@ export default function ClientLedger() {
     let hasError = false
     try {
       if (paymentIds.length > 0) {
-        const { error } = await supabase.from('payments').delete().in('id', paymentIds)
+        const { error } = await supabase.from('payments').delete().in('id', paymentIds).eq('platform', activePlatform)
         if (error) throw error
       }
       if (billIds.length > 0) {
         await restoreStockForEstimates(billIds);
         if (billNumbersToDelete.length > 0) {
-          await supabase.from('client_purchases').delete().in('bill_number', billNumbersToDelete);
+          await supabase.from('client_purchases').delete().in('bill_number', billNumbersToDelete).eq('platform', activePlatform);
         }
-        const { error } = await supabase.from('estimates').delete().in('id', billIds)
+        const { error } = await supabase.from('estimates').delete().in('id', billIds).eq('platform', activePlatform)
         if (error) throw error
       }
     } catch (e) {
@@ -404,6 +404,7 @@ export default function ClientLedger() {
     e.preventDefault()
     if (!payAmount) return
     const payload = {
+      platform: activePlatform,
       client_id: id,
       payment_date: payDate,
       amount: payAmount,
@@ -414,7 +415,7 @@ export default function ClientLedger() {
 
     let error;
     if (editPaymentId) {
-      const { error: err } = await supabase.from('payments').update(payload).eq('id', editPaymentId)
+      const { error: err } = await supabase.from('payments').update(payload).eq('id', editPaymentId).eq('platform', activePlatform)
       error = err;
     } else {
       const { error: err } = await supabase.from('payments').insert([payload])
@@ -667,13 +668,13 @@ export default function ClientLedger() {
       const { error: cErr } = await supabase.from('clients').update({ opening_balance: finalBalance }).eq('id', id);
       if (cErr) throw cErr;
 
-      const { error: estErr } = await supabase.from('estimates').update({ is_archived: true }).eq('client_id', id).neq('is_archived', true);
+      const { error: estErr } = await supabase.from('estimates').update({ is_archived: true }).eq('client_id', id).eq('platform', activePlatform).neq('is_archived', true);
       if (estErr) throw estErr;
 
-      const { error: payErr } = await supabase.from('payments').update({ is_archived: true }).eq('client_id', id).neq('is_archived', true);
+      const { error: payErr } = await supabase.from('payments').update({ is_archived: true }).eq('client_id', id).eq('platform', activePlatform).neq('is_archived', true);
       if (payErr) throw payErr;
 
-      const { error: purErr } = await supabase.from('client_purchases').update({ is_archived: true }).eq('client_id', id).neq('is_archived', true);
+      const { error: purErr } = await supabase.from('client_purchases').update({ is_archived: true }).eq('client_id', id).eq('platform', activePlatform).neq('is_archived', true);
       if (purErr) throw purErr;
 
       await loadData();
@@ -707,13 +708,13 @@ export default function ClientLedger() {
       const { error: cErr } = await supabase.from('clients').update({ opening_balance: originalBalance }).eq('id', id);
       if (cErr) throw cErr;
 
-      const { error: estErr } = await supabase.from('estimates').update({ is_archived: false }).eq('client_id', id).eq('is_archived', true);
+      const { error: estErr } = await supabase.from('estimates').update({ is_archived: false }).eq('client_id', id).eq('platform', activePlatform).eq('is_archived', true);
       if (estErr) throw estErr;
 
-      const { error: payErr } = await supabase.from('payments').update({ is_archived: false }).eq('client_id', id).eq('is_archived', true);
+      const { error: payErr } = await supabase.from('payments').update({ is_archived: false }).eq('client_id', id).eq('platform', activePlatform).eq('is_archived', true);
       if (payErr) throw payErr;
 
-      const { error: purErr } = await supabase.from('client_purchases').update({ is_archived: false }).eq('client_id', id).eq('is_archived', true);
+      const { error: purErr } = await supabase.from('client_purchases').update({ is_archived: false }).eq('client_id', id).eq('platform', activePlatform).eq('is_archived', true);
       if (purErr) throw purErr;
 
       await loadData();

@@ -37,6 +37,7 @@ export default function EstimateList() {
           .from('estimates')
           .select('*')
           .eq('platform', activePlatform)
+          .eq('platform', activePlatform)
           .order('bill_number', { ascending: false })
           .range(from, to)
 
@@ -65,7 +66,7 @@ export default function EstimateList() {
     } finally {
       setLoading(false)
     }
-  }, [activeTab])
+  }, [activeTab, activePlatform])
 
   useEffect(() => {
     const t = setTimeout(fetchEstimates, 300)
@@ -76,7 +77,7 @@ export default function EstimateList() {
     setDeleting(true)
 
     if (est.type === 'QUOTATION' || !est.type) {
-      await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number);
+      await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number).eq('platform', activePlatform);
       const { error } = await supabase.from('estimates').delete().eq('id', est.id)
       if (error) showToast('Delete failed: ' + error.message, 'error')
       else {
@@ -134,7 +135,7 @@ export default function EstimateList() {
         await supabase.from('estimates').update({ type: 'DELETED_RETURN' }).in('id', returnSoftDeleteIds);
       }
       if (hardDeleteIds.length > 0) {
-        await supabase.from('client_purchases').delete().in('bill_number', hardDeleteBillNumbers);
+        await supabase.from('client_purchases').delete().in('bill_number', hardDeleteBillNumbers).eq('platform', activePlatform);
         await supabase.from('estimates').delete().in('id', hardDeleteIds);
       }
     }
@@ -212,6 +213,7 @@ export default function EstimateList() {
           const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
           const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
           return {
+            platform: activePlatform,
             client_id: finalClientId,
             product_id: it.product_id || null,
             product_name: it.product_name_snapshot || 'Manual Item',
@@ -225,7 +227,7 @@ export default function EstimateList() {
         }).filter(r => r.quantity > 0 || r.amount > 0);
 
         if (purchaseRecords.length > 0) {
-          await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number);
+          await supabase.from('client_purchases').delete().eq('bill_number', est.bill_number).eq('platform', activePlatform);
           await supabase.from('client_purchases').insert(purchaseRecords);
         }
       }

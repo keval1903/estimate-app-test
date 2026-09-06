@@ -174,7 +174,7 @@ export default function CreateEstimate() {
   }, [])
 
 
-  const draftKey = isEdit ? `estimate_draft_${id}` : 'estimate_draft_new'
+  const draftKey = isEdit ? `estimate_draft_${activePlatform}_${id}` : `estimate_draft_new_${activePlatform}`
 
   // ── Load existing estimate or draft ──
   useEffect(() => {
@@ -188,7 +188,7 @@ export default function CreateEstimate() {
       if (isEdit) {
         setLoading(true)
         const { data: est, error } = await supabase
-          .from('estimates').select('*').eq('id', id).single()
+          .from('estimates').select('*').eq('id', id).eq('platform', activePlatform).single()
         if (error || !est) { showToast('Estimate not found', 'error'); navigate(`/${activePlatform}/estimates`); return }
 
         if (parsedDraft) {
@@ -315,7 +315,7 @@ export default function CreateEstimate() {
     if (isEdit) {
       setLoading(true)
       const { data: est } = await supabase
-        .from('estimates').select('*').eq('id', id).single()
+        .from('estimates').select('*').eq('id', id).eq('platform', activePlatform).single()
       if (est) {
         setBillDate(est.bill_date)
         setClientName(est.client_name || est.transport || '')
@@ -991,7 +991,7 @@ export default function CreateEstimate() {
           }).filter(r => r.quantity !== 0 || r.amount !== 0);
 
           if (purchaseRecords.length > 0) {
-            await supabase.from('client_purchases').delete().eq('bill_number', existingBillNumber);
+            await supabase.from('client_purchases').delete().eq('bill_number', existingBillNumber).eq('platform', activePlatform);
             await supabase.from('client_purchases').insert(purchaseRecords);
           }
         }
@@ -1112,7 +1112,7 @@ export default function CreateEstimate() {
           }).filter(r => r.quantity !== 0 || r.amount !== 0);
 
           if (purchaseRecords.length > 0) {
-            await supabase.from('client_purchases').delete().eq('bill_number', billNumber);
+            await supabase.from('client_purchases').delete().eq('bill_number', billNumber).eq('platform', activePlatform);
             await supabase.from('client_purchases').insert(purchaseRecords);
           }
         }

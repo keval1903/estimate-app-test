@@ -30,7 +30,7 @@ export default function EstimateView() {
   useEffect(() => {
     async function load() {
       const { data: est } = await supabase
-        .from('estimates').select('*').eq('id', id).single()
+        .from('estimates').select('*').eq('id', id).eq('platform', activePlatform).single()
       const { data: eitems } = await supabase
         .from('estimate_items').select('*')
         .eq('estimate_id', id).order('serial_number')
@@ -46,7 +46,7 @@ export default function EstimateView() {
       setLoading(false)
     }
     load()
-  }, [id])
+  }, [id, activePlatform])
 
   useEffect(() => {
     function updateScale() {
@@ -304,7 +304,7 @@ export default function EstimateView() {
       }
 
       // 2. Remove Partywise Stock History (Ledger entries)
-      await supabase.from('client_purchases').delete().eq('bill_number', estimate.bill_number);
+      await supabase.from('client_purchases').delete().eq('bill_number', estimate.bill_number).eq('platform', activePlatform);
 
       // 3. Update the estimate record type
       const { error } = await supabase.from('estimates').update({
@@ -396,6 +396,7 @@ export default function EstimateView() {
           const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
           const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
           return {
+            platform: activePlatform,
             client_id: finalClientId,
             product_id: it.product_id || null,
             product_name: it.product_name_snapshot || 'Manual Item',
@@ -409,7 +410,7 @@ export default function EstimateView() {
         }).filter(r => r.quantity > 0 || r.amount > 0);
 
         if (purchaseRecords.length > 0) {
-          await supabase.from('client_purchases').delete().eq('bill_number', estimate.bill_number);
+          await supabase.from('client_purchases').delete().eq('bill_number', estimate.bill_number).eq('platform', activePlatform);
           await supabase.from('client_purchases').insert(purchaseRecords);
         }
       }

@@ -48,7 +48,7 @@ export default function SiteDetailsEditor() {
 
   const [isDraftRestored, setIsDraftRestored] = useState(false)
   const skipAutoSaveRef = useRef(false)
-  const draftKey = siteId === 'new' ? 'site_draft_new' : `site_draft_${siteId}`
+  const draftKey = siteId === 'new' ? `site_draft_new_${activePlatform}` : `site_draft_${activePlatform}_${siteId}`
 
   useEffect(() => {
     fetchData()
@@ -60,7 +60,7 @@ export default function SiteDetailsEditor() {
       const decodedName = decodeURIComponent(clientId)
 
       if (isUuid) {
-        const { data: clientData } = await supabase.from('clients').select('name').eq('id', clientId).single()
+        const { data: clientData } = await supabase.from('clients').select('name').eq('id', clientId).eq('platform', activePlatform).single()
         if (clientData) setClient(clientData)
       } else {
         setClient({ name: decodedName })
@@ -83,7 +83,7 @@ export default function SiteDetailsEditor() {
         return
       }
 
-      const { data, error } = await supabase.from('client_sites').select('*').eq('id', siteId).single()
+      const { data, error } = await supabase.from('client_sites').select('*').eq('id', siteId).eq('platform', activePlatform).single()
       if (error) throw error
 
       setSiteData({
@@ -191,7 +191,8 @@ export default function SiteDetailsEditor() {
     const decodedName = decodeURIComponent(clientId)
 
     const payload = {
-      client_id: isUuid ? clientId : null,
+        platform: activePlatform,
+        client_id: isUuid ? clientId : null,
       client_name: isUuid ? null : decodedName,
       site_name: siteData.site_name,
       party_name: siteData.party_name,
@@ -212,9 +213,9 @@ export default function SiteDetailsEditor() {
         navigate(-1)
       } else {
         const { error } = await supabase.from('client_sites').update({
-          ...payload,
-          updated_at: new Date().toISOString()
-        }).eq('id', siteId)
+            ...payload,
+            updated_at: new Date().toISOString()
+          }).eq('id', siteId).eq('platform', activePlatform)
         if (error) throw error
         localStorage.removeItem(draftKey)
         setIsEditing(false)
@@ -238,7 +239,7 @@ export default function SiteDetailsEditor() {
         status: 'COMPLETED',
         end_date: today,
         updated_at: new Date().toISOString()
-      }).eq('id', siteId)
+      }).eq('id', siteId).eq('platform', activePlatform)
 
       if (error) throw error
 
@@ -260,7 +261,7 @@ export default function SiteDetailsEditor() {
         status: 'ONGOING',
         end_date: null,
         updated_at: new Date().toISOString()
-      }).eq('id', siteId)
+      }).eq('id', siteId).eq('platform', activePlatform)
 
       if (error) throw error
 

@@ -1,4 +1,4 @@
-export async function generateExcelWorkbook(supabase) {
+export async function generateExcelWorkbook(supabase, activePlatform) {
   try {
     const XLSX = await import('xlsx')
 
@@ -6,18 +6,21 @@ export async function generateExcelWorkbook(supabase) {
     const { data: clients } = await supabase
       .from('clients')
       .select('*')
+      .eq('platform', activePlatform)
       .order('name', { ascending: true })
 
     // 2. Fetch Payments (table: 'payments')
     const { data: payments } = await supabase
       .from('payments')
       .select('*')
+      .eq('platform', activePlatform)
       .order('payment_date', { ascending: false })
 
     // 3. Fetch Estimates & Returns
     const { data: estimates } = await supabase
       .from('estimates')
       .select('*')
+      .eq('platform', activePlatform)
       .order('bill_number', { ascending: false })
 
     const clientMap = new Map((clients || []).map(c => [c.id, c.name]))
@@ -98,9 +101,9 @@ export async function generateExcelWorkbook(supabase) {
   }
 }
 
-export async function downloadExcelBackup(supabase) {
+export async function downloadExcelBackup(supabase, activePlatform) {
   const XLSX = await import('xlsx')
-  const wb = await generateExcelWorkbook(supabase)
+  const wb = await generateExcelWorkbook(supabase, activePlatform)
   const dateStr = new Date().toISOString().split('T')[0]
   XLSX.writeFile(wb, `Ledger_Backup_${dateStr}.xlsx`)
 }

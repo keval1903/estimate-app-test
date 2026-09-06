@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { usePlatform } from '../context/PlatformContext'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { isFuzzyMatch } from '../lib/searchUtils'
 import { useAuth } from '../context/AuthContext'
@@ -35,6 +35,7 @@ export default function Clients() {
     const combinedName = [newCompanyName.trim(), newOwnerName.trim()].filter(Boolean).join(' - ').toUpperCase()
 
     const payload = {
+      platform: activePlatform,
       name: combinedName,
       company_name: newCompanyName.trim().toUpperCase(),
       owner_name: newOwnerName.trim().toUpperCase(),
@@ -65,8 +66,8 @@ export default function Clients() {
 
     if (!error && !editClientId && newClientId) {
       // Auto-Link loose records
-      await supabase.from('estimates').update({ client_id: newClientId }).eq('client_name', payload.name).is('client_id', null)
-      await supabase.from('client_sites').update({ client_id: newClientId }).eq('client_name', payload.name).is('client_id', null)
+      await supabase.from('estimates').update({ client_id: newClientId }).eq('platform', activePlatform).eq('client_name', payload.name).is('client_id', null)
+      await supabase.from('client_sites').update({ client_id: newClientId }).eq('platform', activePlatform).eq('client_name', payload.name).is('client_id', null)
     }
 
     if (error) {
@@ -102,9 +103,9 @@ export default function Clients() {
     setLoading(true)
     try {
       const { data: clientData } = await supabase.from('clients').select('*').eq('platform', activePlatform).order('name')
-      const { data: estData } = await supabase.from('estimates').select('client_id, client_name, grand_total, type, is_archived').in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
-      const { data: payData } = await supabase.from('payments').select('client_id, amount, is_archived')
-      const { data: siteNamesData } = await supabase.from('client_sites').select('client_name').is('client_id', null)
+      const { data: estData } = await supabase.from('estimates').select('client_id, client_name, grand_total, type, is_archived').eq('platform', activePlatform).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
+      const { data: payData } = await supabase.from('payments').select('client_id, amount, is_archived').eq('platform', activePlatform)
+      const { data: siteNamesData } = await supabase.from('client_sites').select('client_name').eq('platform', activePlatform).is('client_id', null)
 
       const unlinkedSet = new Set()
       if (estData) {
@@ -135,7 +136,7 @@ export default function Clients() {
     setLoading(false)
   }
 
-  useEffect(() => { loadClients() }, [])
+  useEffect(() => { loadClients() }, [activePlatform])
 
   async function handleDeleteClient(id, name) {
     if (!window.confirm(`Are you sure you want to delete ${name}?\n\nThis will permanently delete all their payment records. Their estimates will NOT be deleted, but they will no longer be linked to a client account.`)) return
@@ -150,19 +151,19 @@ export default function Clients() {
   }
 
   async function handleDeleteAllClients() {
-    if (!window.confirm('WARNING: Are you absolutely sure you want to delete ALL clients?\n\nThis will permanently delete EVERY ledger account and EVERY payment record in the system. This cannot be undone!')) return
+    if (!window.confirm(`WARNING: Are you absolutely sure you want to delete ALL clients in ${PLATFORM_NAMES[activePlatform]}?\n\nThis will permanently delete EVERY ledger account and EVERY payment record in this platform. This cannot be undone!`)) return
 
-    const verify = window.prompt("Type 'DELETE' to confirm wiping all ledgers.")
+    const verify = window.prompt(`Type 'DELETE' to confirm wiping all ledgers in ${PLATFORM_NAMES[activePlatform]}.`)
     if (verify !== 'DELETE') {
       if (verify !== null) alert("Deletion cancelled.")
       return
     }
 
     try {
-      const { error } = await supabase.from('clients').delete().not('id', 'is', null)
+      const { error } = await supabase.from('clients').delete().eq('platform', activePlatform)
       if (error) throw error
       loadClients()
-      alert("All clients and ledgers have been successfully deleted.")
+      alert(`All clients and ledgers in ${PLATFORM_NAMES[activePlatform]} have been successfully deleted.`)
     } catch (e) {
       alert("Failed to delete all clients: " + e.message)
     }

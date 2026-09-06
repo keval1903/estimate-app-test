@@ -19,7 +19,7 @@ export default function Home() {
       .then(({ error }) => {
         setConnOk(!error)
         if (!error) {
-          syncOfflineCache(supabase)
+          syncOfflineCache(supabase, activePlatform)
         }
       })
 
@@ -58,7 +58,7 @@ export default function Home() {
   async function handleBackupDownload() {
     setDownloadingBackup(true)
     try {
-      await downloadExcelBackup(supabase)
+      await downloadExcelBackup(supabase, activePlatform)
     } catch (e) {
       alert('Failed to download backup: ' + e.message)
     } finally {

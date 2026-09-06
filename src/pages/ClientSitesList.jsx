@@ -15,7 +15,7 @@ export default function ClientSitesList() {
 
   useEffect(() => {
     fetchClients()
-  }, [])
+  }, [activePlatform])
 
   useEffect(() => {
     setSelectedIndex(0)
@@ -26,18 +26,21 @@ export default function ClientSitesList() {
     try {
       const { data: clientsData, error } = await supabase
         .from('clients')
-        .select('id, name')
+          .select('id, name')
+          .eq('platform', activePlatform)
         
       if (error) throw error
 
       const { data: estData } = await supabase
         .from('estimates')
-        .select('client_name')
+          .select('client_name')
+          .eq('platform', activePlatform)
         .is('client_id', null)
 
       const { data: sitesData } = await supabase
         .from('client_sites')
-        .select('client_name')
+          .select('client_name')
+          .eq('platform', activePlatform)
         .is('client_id', null)
 
       const cmap = new Map()
@@ -90,6 +93,7 @@ export default function ClientSitesList() {
     setLoading(true)
     try {
       const payload = {
+          platform: activePlatform,
         name: name.trim().toUpperCase(),
         opening_balance: 0
       }

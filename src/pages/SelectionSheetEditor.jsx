@@ -105,10 +105,7 @@ export default function SelectionSheetEditor() {
   async function fetchSheet() {
     try {
       const { data, error } = await supabase
-        .from('selection_sheets')
-        .select('*')
-        .eq('id', id)
-        .single()
+        .from('selection_sheets').select('*').eq('id', id).eq('platform', activePlatform).single()
         
       if (error) throw error
       if (data) {
@@ -151,7 +148,7 @@ export default function SelectionSheetEditor() {
         if (error) throw error
         await cleanupRemovedImages(initialHtml, content)
       }
-      navigate('/selection-sheets', { replace: true })
+      navigate(`/${activePlatform}/selection-sheets`, { replace: true })
     } catch (e) {
       alert('Error saving sheet: ' + e.message)
       setSaving(false)

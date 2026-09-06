@@ -6,7 +6,7 @@ export async function restoreStockForEstimates(estIds) {
   try {
     const { data: items } = await supabase
       .from('estimate_items')
-      .select('*, estimates(bill_number, site_name, type)')
+      .select('*, estimates(bill_number, site_name, type, platform)')
       .in('estimate_id', estIds);
       
     if (!items || items.length === 0) return;
@@ -36,7 +36,8 @@ export async function restoreStockForEstimates(estIds) {
               quantity_changed: stockDelta,
               estimate_id: it.estimate_id,
               bill_number: it.estimates?.bill_number?.toString(),
-              site_name: it.estimates?.site_name
+              site_name: it.estimates?.site_name,
+              platform: it.estimates?.platform
             });
           }
         }
