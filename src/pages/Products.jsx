@@ -314,6 +314,7 @@ export default function Products() {
       if (col.includes('product')) colMap['product_name'] = idx
       else if (col.includes('keyword')) colMap['keyword'] = idx
         else if (col.includes('group')) colMap['product_group'] = idx
+        else if (col.includes('group')) colMap['product_group'] = idx
       else if (col.includes('length')) colMap['length'] = idx
       else if (col.includes('width')) colMap['width'] = idx
       else if (col === 'unit') colMap['unit'] = idx
@@ -324,6 +325,14 @@ export default function Products() {
       else if (col.includes('min stock')) colMap['min_stock'] = idx
       else if (col.includes('remark')) colMap['has_remark'] = idx
       else if (col.includes('discount')) colMap['has_discount'] = idx
+        else if (col.includes('in ccai')) colMap['in_ccai'] = idx
+        else if (col.includes('rate ccai')) colMap['rate_ccai'] = idx
+        else if (col.includes('in dc')) colMap['in_dc'] = idx
+        else if (col.includes('rate dc')) colMap['rate_dc'] = idx
+        else if (col.includes('in materia')) colMap['in_materia'] = idx
+        else if (col.includes('rate materia')) colMap['rate_materia'] = idx
+        else if (col.includes('in phs')) colMap['in_phs'] = idx
+        else if (col.includes('rate phs')) colMap['rate_phs'] = idx
         else if (col.includes('in ccai')) colMap['in_ccai'] = idx
         else if (col.includes('rate ccai')) colMap['rate_ccai'] = idx
         else if (col.includes('in dc')) colMap['in_dc'] = idx
@@ -347,6 +356,7 @@ export default function Products() {
         if (i === 0) continue // skip header row since we mapped it
         product_name = cols[colMap['product_name']]
         keyword = cols[colMap['keyword']]
+          product_group = cols[colMap['product_group']]
           product_group = cols[colMap['product_group']]
         length = cols[colMap['length']]
         width = cols[colMap['width']]
@@ -414,6 +424,7 @@ export default function Products() {
       rows.push({
         product_name: product_name ? product_name.toUpperCase().trim() : '',
         keyword: keyword ? keyword.trim() : null,
+        product_group: typeof product_group === 'string' ? product_group.trim() : 'Uncategorized',
         length: length ? Number(length) : null,
         width:  width  ? Number(width)  : null,
         unit: unit ? unit.trim() : '', 
@@ -552,9 +563,9 @@ export default function Products() {
     const csvRows = [headers.join(',')]
     for (const p of filtered) {
       csvRows.push([
-          `"${p.product_name}"`,
-          `"${p.keyword || ''}"`,
-          `"${p.product_group || 'Uncategorized'}"`,
+          `"${(p.product_name || '').replace(/"/g, '""')}"`,
+          `"${(p.keyword || '').replace(/"/g, '""')}"`,
+          `"${(p.product_group || 'Uncategorized').replace(/"/g, '""')}"`,
           p.length || '',
           p.width || '',
           p.unit,
@@ -574,7 +585,7 @@ export default function Products() {
           p.rate_phs || 0
         ].join(','))
     }
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' })
+    const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
