@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
 import { isFuzzyMatch } from '../lib/searchUtils'
 
 export default function StockReport() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { showToast, ToastEl } = useToast()
   const [products, setProducts] = useState([])
   const [history, setHistory] = useState([])
@@ -47,11 +49,11 @@ export default function StockReport() {
         return allData
       }
 
-      const prods = await fetchAll('products', '*', q => q.order('product_name'))
+      const prods = await fetchAll('products', '*', q => q.order('product_name').eq(`in_${activePlatform}`, true))
       
-      const hist = await fetchAll('stock_history', '*, products(product_name, unit, calculation_type), estimates(bill_number, site_name, type)', q => q.order('created_at', { ascending: false }))
+      const hist = await fetchAll('stock_history', '*, products(product_name, unit, calculation_type), estimates(bill_number, site_name, type)', q => q.order('created_at', { ascending: false }).eq('platform', activePlatform))
       
-      const sales = await fetchAll('estimate_items', 'product_id, quantity, nos, calculation_type_snapshot, estimates!inner(created_at, type)', q => q.eq('estimates.type', 'ESTIMATE'))
+      const sales = await fetchAll('estimate_items', 'product_id, quantity, nos, calculation_type_snapshot, estimates!inner(created_at, type)', q => q.eq('estimates.type', 'ESTIMATE').eq('estimates.platform', activePlatform))
 
       setProducts(prods || [])
       setHistory(hist || [])
@@ -349,8 +351,8 @@ export default function StockReport() {
       {/* Nav */}
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
-        <span className="nav-title">📊 Stock Movement Report</span>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
+        <span className="nav-title">📊 Stock Movement Report - {PLATFORM_NAMES[activePlatform]}</span>
         <button
           className="btn btn-sm"
           style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
@@ -621,7 +623,7 @@ export default function StockReport() {
                           <button
                             className="btn btn-primary btn-sm"
                             style={{ padding: '4px 8px', fontSize: 11 }}
-                            onClick={() => navigate(`/products?editId=${p.id}`)}
+                            onClick={() => navigate(`/${activePlatform}/products?editId=${p.id}`)}
                           >
                             ➕ Add Stock
                           </button>
@@ -676,7 +678,7 @@ export default function StockReport() {
                         <button
                           className="btn btn-ghost btn-sm"
                           style={{ padding: '2px 6px', fontSize: 11, marginTop: 4 }}
-                          onClick={() => navigate(`/estimate/view/${h.estimate_id}`)}
+                          onClick={() => navigate(`/${activePlatform}/estimate/view/${h.estimate_id}`)}
                         >
                           View Bill →
                         </button>

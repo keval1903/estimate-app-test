@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
 import { getMergedUnits } from '../constants/units.js'
@@ -82,6 +83,7 @@ const UNITS = ['Sq.Ft', 'Nos.', 'Kg.', 'Bundle', 'Rmt', 'Ltr', 'Pkt', 'Box', 'Se
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function CreateEstimate() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { id } = useParams()
   const isEdit = Boolean(id)
   const { showToast, ToastEl } = useToast()
@@ -160,9 +162,14 @@ export default function CreateEstimate() {
       supabase.from('products').select('*').order('product_name').range(0, 999),
       supabase.from('products').select('*').order('product_name').range(1000, 1999)
     ]).then(([batch1, batch2]) => {
-      setAllProducts([...(batch1.data || []), ...(batch2.data || [])])
+      const rawData = [...(batch1.data || []), ...(batch2.data || [])]
+        const mapped = rawData.filter(p => p[`in_${activePlatform}`] === true).map(p => ({
+          ...p,
+          rate: p[`rate_${activePlatform}`] !== undefined && p[`rate_${activePlatform}`] !== null ? p[`rate_${activePlatform}`] : (p.rate || 0)
+        }))
+        setAllProducts(mapped)
     })
-    supabase.from('sites').select('*').order('site_name')
+    supabase.from('sites').select('*').eq('platform', activePlatform).order('site_name')
       .then(({ data }) => setAllSites(data || []))
   }, [])
 
@@ -182,7 +189,7 @@ export default function CreateEstimate() {
         setLoading(true)
         const { data: est, error } = await supabase
           .from('estimates').select('*').eq('id', id).single()
-        if (error || !est) { showToast('Estimate not found', 'error'); navigate('/estimates'); return }
+        if (error || !est) { showToast('Estimate not found', 'error'); navigate(`/${activePlatform}/estimates`); return }
 
         if (parsedDraft) {
           setBillDate(parsedDraft.billDate)
@@ -248,8 +255,8 @@ export default function CreateEstimate() {
 
     // Load clients for autocomplete
     async function loadClientNames() {
-      const { data: cData } = await supabase.from('clients').select('id, name, mobile')
-      const { data: eData } = await supabase.from('estimates').select('client_name, client_mobile')
+      const { data: cData } = await supabase.from('clients').select('id, name, mobile').eq('platform', activePlatform)
+      const { data: eData } = await supabase.from('estimates').select('client_name, client_mobile').eq('platform', activePlatform)
       const cmap = new Map()
       if (cData) cData.forEach(c => {
         if (c.name) cmap.set(c.name.trim().toUpperCase(), { id: c.id, mobile: c.mobile || '' })
@@ -272,9 +279,9 @@ export default function CreateEstimate() {
       return
     }
     try {
-      const { data: estData } = await supabase.from('estimates').select('grand_total, type').eq('client_id', clientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
-      const { data: payData } = await supabase.from('payments').select('amount').eq('client_id', clientId)
-      const { data: cData } = await supabase.from('clients').select('opening_balance').eq('id', clientId).single()
+      const { data: estData } = await supabase.from('estimates').select('grand_total, type').eq('platform', activePlatform).eq('client_id', clientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
+      const { data: payData } = await supabase.from('payments').select('amount').eq('platform', activePlatform).eq('client_id', clientId)
+      const { data: cData } = await supabase.from('clients').select('opening_balance').eq('platform', activePlatform).eq('id', clientId).single()
 
       const estTotal = (estData || []).filter(e => e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
       const returnTotal = (estData || []).filter(e => e.type === 'RETURN' || e.type === 'DELETED_RETURN').reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
@@ -993,20 +1000,20 @@ export default function CreateEstimate() {
         await saveSite(siteName.trim().toUpperCase())
         localStorage.removeItem(draftKey) // clear draft on success
         showToast(`${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'} updated ✓`)
-        navigate(`/estimate/view/${id}`)
+        navigate(`/${activePlatform}/estimate/view/${id}`)
 
       } else {
         // CREATE new estimate — get atomic bill number
         const { data: seqData, error: seqErr } = await supabase
-          .rpc('get_next_bill_number')
+          .rpc('get_next_bill_number', { p_platform: activePlatform })
         if (seqErr) throw seqErr
         const billNumber = seqData
 
         let saveBalance = Number(previousBalance) || 0;
         if (finalClientId) {
-          const { data: estData } = await supabase.from('estimates').select('grand_total, type, is_archived').eq('client_id', finalClientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
-          const { data: payData } = await supabase.from('payments').select('amount, is_archived').eq('client_id', finalClientId)
-          const { data: cData } = await supabase.from('clients').select('opening_balance').eq('id', finalClientId).single()
+          const { data: estData } = await supabase.from('estimates').select('grand_total, type, is_archived').eq('platform', activePlatform).eq('client_id', finalClientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
+          const { data: payData } = await supabase.from('payments').select('amount, is_archived').eq('platform', activePlatform).eq('client_id', finalClientId)
+          const { data: cData } = await supabase.from('clients').select('opening_balance').eq('platform', activePlatform).eq('id', finalClientId).single()
           
           const estTotal = (estData || []).filter(e => !e.is_archived && (e.type === 'ESTIMATE' || e.type === 'DELETED_ESTIMATE')).reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
           const returnTotal = (estData || []).filter(e => !e.is_archived && (e.type === 'RETURN' || e.type === 'DELETED_RETURN')).reduce((sum, e) => sum + Number(e.grand_total || 0), 0)
@@ -1113,7 +1120,7 @@ export default function CreateEstimate() {
         await saveSite(siteName.trim().toUpperCase())
         localStorage.removeItem(draftKey) // clear draft on success
         showToast(`${docType === 'QUOTATION' ? 'Quotation' : docType === 'RETURN' ? 'Sales Return' : 'Estimate'} saved ✓`)
-        navigate(`/estimate/view/${est.id}`)
+        navigate(`/${activePlatform}/estimate/view/${est.id}`)
       }
     } catch (err) {
       showToast('Save failed: ' + (err.message || err), 'error')
@@ -1134,8 +1141,8 @@ export default function CreateEstimate() {
     <div className="app-container">
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)}>←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
-        <span className="nav-title">{isEdit ? 'Edit Estimate' : 'New Estimate'}</span>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
+        <span className="nav-title">{isEdit ? 'Edit Estimate' : 'New Estimate'} - {PLATFORM_NAMES[activePlatform]}</span>
       </div>
       <div className="spinner" />
     </div>
@@ -1145,12 +1152,12 @@ export default function CreateEstimate() {
     <div className="app-container">
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)}>←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
         <span className="nav-title">
           {isEdit
             ? `Edit ${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'} #${existingBillNumber}`
             : `New ${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'}`}
-        </span>
+         - {PLATFORM_NAMES[activePlatform]}</span>
       </div>
 
       <div className="page">

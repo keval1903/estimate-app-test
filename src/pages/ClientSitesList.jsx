@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 
 import { isFuzzyMatch } from '../lib/searchUtils'
 
 export default function ClientSitesList() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -95,7 +97,7 @@ export default function ClientSitesList() {
       if (error) throw error
       
       // Navigate straight to the new client's site page
-      navigate(`/client-sites/${data.id}`)
+      navigate(`/${activePlatform}/client-sites/${data.id}`)
     } catch (e) {
       alert('Error creating client: ' + e.message)
       setLoading(false)
@@ -105,9 +107,9 @@ export default function ClientSitesList() {
   async function handleClientClick(c) {
     const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(c.id)
     if (isUuid) {
-      navigate(`/client-sites/${c.id}`)
+      navigate(`/${activePlatform}/client-sites/${c.id}`)
     } else {
-      navigate(`/client-sites/${encodeURIComponent(c.name)}`)
+      navigate(`/${activePlatform}/client-sites/${encodeURIComponent(c.name)}`)
     }
   }
 
@@ -115,8 +117,8 @@ export default function ClientSitesList() {
     <div className="container" style={{ paddingBottom: '80px' }}>
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
-        <span className="nav-title">Select Client for Site</span>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
+        <span className="nav-title">Select Client for Site - {PLATFORM_NAMES[activePlatform]}</span>
       </div>
 
       <div style={{ padding: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 
 import { isFuzzyMatch } from '../lib/searchUtils'
@@ -7,6 +8,7 @@ import { extractImageUrls, deleteImagesFromStorage } from '../lib/imageCleanup'
 
 export default function SelectionSheetList() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const [sheets, setSheets] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -22,7 +24,8 @@ export default function SelectionSheetList() {
       const { data, error } = await supabase
         .from('selection_sheets')
         .select('*')
-        .order('updated_at', { ascending: false })
+        .eq('platform', activePlatform)
+          .order('updated_at', { ascending: false })
       if (error) throw error
       setSheets(data || [])
     } catch (e) {
@@ -125,8 +128,8 @@ export default function SelectionSheetList() {
     <div className="container" style={{ paddingBottom: '80px' }}>
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
-        <span className="nav-title">Selection Sheets</span>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
+        <span className="nav-title">Selection Sheets - {PLATFORM_NAMES[activePlatform]}</span>
       </div>
 
       <div style={{ padding: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -138,7 +141,7 @@ export default function SelectionSheetList() {
           onChange={e => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: '150px', padding: '0.8rem 1rem', fontSize: '1rem' }}
         />
-        <button className="btn btn-primary" onClick={() => navigate('/selection-sheets/new')}>
+        <button className="btn btn-primary" onClick={() => navigate(`/${activePlatform}/selection-sheets/new`)}>
           + New
         </button>
       </div>
@@ -181,7 +184,7 @@ export default function SelectionSheetList() {
               key={s.id} 
               className="card" 
               style={{ marginBottom: '1rem', cursor: 'pointer', padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'center', background: selected.includes(s.id) ? '#f0f9ff' : '#fff' }}
-              onClick={() => navigate(`/selection-sheets/${s.id}`)}
+              onClick={() => navigate(`/${activePlatform}/selection-sheets/${s.id}`)}
             >
               <div onClick={(e) => e.stopPropagation()}>
                 <input 

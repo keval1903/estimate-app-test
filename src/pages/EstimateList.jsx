@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
@@ -10,6 +11,7 @@ export default function EstimateList() {
   const { role } = useAuth()
   const { showToast, ToastEl } = useToast()
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const [allEstimates, setAllEstimates] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -34,6 +36,7 @@ export default function EstimateList() {
         let query = supabase
           .from('estimates')
           .select('*')
+          .eq('platform', activePlatform)
           .order('bill_number', { ascending: false })
           .range(from, to)
 
@@ -189,7 +192,7 @@ export default function EstimateList() {
       if (!finalClientId) {
         const cName = (est.client_name || est.transport || '').trim().toUpperCase();
         if (cName) {
-          const { data: cData } = await supabase.from('clients').select('id').eq('name', cName).single();
+          const { data: cData } = await supabase.from('clients').select('id').eq('platform', activePlatform).eq('name', cName).single();
           if (cData) {
             finalClientId = cData.id;
           }
@@ -321,8 +324,8 @@ export default function EstimateList() {
     <div className="app-container">
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
-        <span className="nav-title">{activeTab === 'QUOTATION' ? 'Previous Quotations' : activeTab === 'RETURN' ? 'Previous Returns' : 'Previous Estimates'}</span>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
+        <span className="nav-title">{activeTab === 'QUOTATION' ? 'Previous Quotations' : activeTab === 'RETURN' ? 'Previous Returns' : 'Previous Estimates'} - {PLATFORM_NAMES[activePlatform]}</span>
       </div>
 
       <div className="page">
@@ -415,7 +418,7 @@ export default function EstimateList() {
                   </label>
                 </div>
                 {!isCollapsed && dateEsts.map(est => (
-                  <div key={est.id} className="estimate-row" style={{ border: selectedIds.has(est.id) ? '2px solid var(--primary-color)' : '1px solid var(--border-light)', cursor: 'pointer' }} onClick={() => navigate(`/estimate/view/${est.id}`)}>
+                  <div key={est.id} className="estimate-row" style={{ border: selectedIds.has(est.id) ? '2px solid var(--primary-color)' : '1px solid var(--border-light)', cursor: 'pointer' }} onClick={() => navigate(`/${activePlatform}/estimate/view/${est.id}`)}>
                     <div className="est-header">
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <input type="checkbox" checked={selectedIds.has(est.id)} onChange={() => toggleSelect(est.id)} onClick={(e) => e.stopPropagation()} style={{ width: 18, height: 18, marginTop: 4, cursor: 'pointer' }} />
@@ -439,11 +442,11 @@ export default function EstimateList() {
 
                     <div className="est-actions" style={{ marginLeft: 30 }}>
                       <button className="btn btn-secondary btn-sm"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/estimate/view/${est.id}`); }}>
+                        onClick={(e) => { e.stopPropagation(); navigate(`/${activePlatform}/estimate/view/${est.id}`); }}>
                         👁 View
                       </button>
                       <button className="btn btn-primary btn-sm"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/estimate/edit/${est.id}`); }}>
+                        onClick={(e) => { e.stopPropagation(); navigate(`/${activePlatform}/estimate/edit/${est.id}`); }}>
                         ✏️ Edit
                       </button>
                       {activeTab === 'QUOTATION' ? (
@@ -460,7 +463,7 @@ export default function EstimateList() {
                         <button className="btn btn-secondary btn-sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/estimate/view/${est.id}`)
+                            navigate(`/${activePlatform}/estimate/view/${est.id}`)
                             setTimeout(() => window.print(), 800)
                           }}>
                           🖨 Print
@@ -485,7 +488,7 @@ export default function EstimateList() {
       <div className="sticky-bottom">
         <div className="sticky-bottom-inner">
           <button className="btn btn-primary btn-full btn-lg"
-            onClick={() => navigate('/estimate/new')}>
+            onClick={() => navigate(`/${activePlatform}/estimate/new`)}>
             + CREATE NEW ESTIMATE
           </button>
         </div>

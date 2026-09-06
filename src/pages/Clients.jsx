@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { isFuzzyMatch } from '../lib/searchUtils'
 import { useAuth } from '../context/AuthContext'
@@ -7,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 export default function Clients() {
   const { role } = useAuth()
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -99,7 +101,7 @@ export default function Clients() {
   async function loadClients() {
     setLoading(true)
     try {
-      const { data: clientData } = await supabase.from('clients').select('*').order('name')
+      const { data: clientData } = await supabase.from('clients').select('*').eq('platform', activePlatform).order('name')
       const { data: estData } = await supabase.from('estimates').select('client_id, client_name, grand_total, type, is_archived').in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
       const { data: payData } = await supabase.from('payments').select('client_id, amount, is_archived')
       const { data: siteNamesData } = await supabase.from('client_sites').select('client_name').is('client_id', null)
@@ -218,7 +220,7 @@ export default function Clients() {
       <div className="header">
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="back-btn" onClick={() => navigate(-1)}>← Back</button>
-          <button className="back-btn" onClick={() => navigate('/')} title="Home">🏠 Home</button>
+          <button className="back-btn" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠 Home</button>
         </div>
         <h1>Clients & Ledger</h1>
         <div style={{ width: 60 }} />
@@ -305,7 +307,7 @@ export default function Clients() {
                   )}
 
                   {filteredClients.map(c => (
-                    <div key={c.id} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'center', backgroundColor: selectedClients.has(c.id) ? '#f0f9ff' : 'white' }} onClick={() => navigate(`/clients/${c.id}`)}>
+                    <div key={c.id} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between', alignItems: 'center', backgroundColor: selectedClients.has(c.id) ? '#f0f9ff' : 'white' }} onClick={() => navigate(`/${activePlatform}/clients/${c.id}`)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: '150px' }}>
                         {role === 'ADMIN' && (
                           <input

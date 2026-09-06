@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { createClient } from '@supabase/supabase-js'
 
 export default function UserManagement() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { role, onlineUsers } = useAuth()
   
   const [users, setUsers] = useState([])
@@ -17,7 +19,7 @@ export default function UserManagement() {
   useEffect(() => {
     // If not admin, redirect
     if (role && role !== 'ADMIN') {
-      navigate('/')
+      navigate(`/${activePlatform}`)
       return
     }
     fetchUsers()
@@ -151,7 +153,7 @@ export default function UserManagement() {
   return (
     <div className="app-container">
       <div className="top-nav">
-        <button className="btn btn-ghost" onClick={() => navigate('/')}>← Back</button>
+        <button className="btn btn-ghost" onClick={() => navigate(`/${activePlatform}`)}>← Back</button>
         <span className="nav-title" style={{ marginLeft: 8 }}>User Management</span>
         <div style={{ width: 60 }}></div>
       </div>

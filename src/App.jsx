@@ -14,6 +14,8 @@ import SalesReport from './pages/SalesReport'
 import SelectionSheetList from './pages/SelectionSheetList'
 import SelectionSheetEditor from './pages/SelectionSheetEditor'
 import Catalogue from './pages/Catalogue'
+import ChoosePlatform from './pages/ChoosePlatform'
+import { PlatformProvider } from './context/PlatformContext'
 
 import ClientSitesList from './pages/ClientSitesList'
 import ClientSitesView from './pages/ClientSitesView'
@@ -32,23 +34,30 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-          <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-          <Route path="/estimates" element={<ProtectedRoute><EstimateList /></ProtectedRoute>} />
-          <Route path="/estimate/new" element={<ProtectedRoute><CreateEstimate /></ProtectedRoute>} />
-          <Route path="/estimate/edit/:id" element={<ProtectedRoute><CreateEstimate /></ProtectedRoute>} />
-          <Route path="/estimate/view/:id" element={<ProtectedRoute><EstimateView /></ProtectedRoute>} />
-          <Route path="/stock-report" element={<ProtectedRoute><StockReport /></ProtectedRoute>} />
-          <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-          <Route path="/clients/:id" element={<ProtectedRoute><ClientLedger /></ProtectedRoute>} />
-          <Route path="/client-sites" element={<ProtectedRoute><ClientSitesList /></ProtectedRoute>} />
-          <Route path="/client-sites/:clientId" element={<ProtectedRoute><ClientSitesView /></ProtectedRoute>} />
-          <Route path="/client-sites/:clientId/edit/:siteId" element={<ProtectedRoute><SiteDetailsEditor /></ProtectedRoute>} />
-          <Route path="/selection-sheets" element={<ProtectedRoute><SelectionSheetList /></ProtectedRoute>} />
-          <Route path="/selection-sheets/:id" element={<ProtectedRoute><SelectionSheetEditor /></ProtectedRoute>} />
-          <Route path="/catalogue" element={<ProtectedRoute><Catalogue /></ProtectedRoute>} />
-          <Route path="/sales-report" element={<ProtectedRoute><SalesReport /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+          <Route path="/choose-platform" element={<ProtectedRoute><ChoosePlatform /></ProtectedRoute>} />
+          
+          <Route path="/:platform" element={<ProtectedRoute><PlatformProvider /></ProtectedRoute>}>
+            <Route index element={<Home />} />
+            <Route path="products" element={<Products />} />
+            <Route path="estimates" element={<EstimateList />} />
+            <Route path="estimate/new" element={<CreateEstimate />} />
+            <Route path="estimate/edit/:id" element={<CreateEstimate />} />
+            <Route path="estimate/view/:id" element={<EstimateView />} />
+            <Route path="stock-report" element={<StockReport />} />
+            <Route path="clients" element={<Clients />} />
+            <Route path="clients/:id" element={<ClientLedger />} />
+            <Route path="client-sites" element={<ClientSitesList />} />
+            <Route path="client-sites/:clientId" element={<ClientSitesView />} />
+            <Route path="client-sites/:clientId/edit/:siteId" element={<SiteDetailsEditor />} />
+            <Route path="selection-sheets" element={<SelectionSheetList />} />
+            <Route path="selection-sheets/:id" element={<SelectionSheetEditor />} />
+            <Route path="catalogue" element={<Catalogue />} />
+            <Route path="sales-report" element={<SalesReport />} />
+            <Route path="users" element={<UserManagement />} />
+          </Route>
+          
+          <Route path="/" element={<Navigate to="/choose-platform" replace />} />
+          <Route path="*" element={<Navigate to="/choose-platform" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

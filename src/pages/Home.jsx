@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -7,6 +8,7 @@ import { syncOfflineCache } from '../lib/offlineStorage'
 
 export default function Home() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { user, role } = useAuth()
   const [connOk, setConnOk] = useState(null)
   const [lowStockCount, setLowStockCount] = useState(0)
@@ -67,7 +69,7 @@ export default function Home() {
   return (
     <div className="app-container">
       <div className="top-nav" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span className="nav-title">📋 CCAI Estimate App</span>
+        <span className="nav-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>📋 {PLATFORM_NAMES[activePlatform]} Estimate App <button onClick={() => navigate("/choose-platform")} style={{ marginLeft: 10, fontSize: "0.7rem", background: "rgba(255,255,255,0.2)", color: "white", border: "none", padding: "4px 8px", borderRadius: 4, cursor: "pointer" }}>🔄 Switch</button></span>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           {connOk !== null && (
             <span className={`conn-status ${connOk ? 'conn-ok' : 'conn-err'}`}>
@@ -103,7 +105,7 @@ export default function Home() {
           <div style={{ fontSize: 22, fontWeight: 700 }}>What would you like to do?</div>
         </div>
 
-        <button className="home-btn" onClick={() => navigate('/estimate/new')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimate/new`)}>
           <div className="home-btn-icon" style={{ background: '#e8f5ec' }}>📝</div>
           <div>
             <div className="home-btn-text">CREATE NEW QUOTATION / ESTIMATE</div>
@@ -111,7 +113,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/estimates?tab=quotations')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=quotations`)}>
           <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📜</div>
           <div>
             <div className="home-btn-text">PREVIOUS QUOTATIONS</div>
@@ -119,7 +121,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/estimates?tab=estimates')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=estimates`)}>
           <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🗂️</div>
           <div>
             <div className="home-btn-text">PREVIOUS ESTIMATES</div>
@@ -127,7 +129,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/products')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/products`)}>
           <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
           <div>
             <div className="home-btn-text">PRODUCT MASTER</div>
@@ -136,7 +138,7 @@ export default function Home() {
         </button>
 
 
-        <button className="home-btn" onClick={() => navigate('/catalogue')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/catalogue`)}>
           <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📋</div>
           <div>
             <div className="home-btn-text">CATALOGUE</div>
@@ -144,7 +146,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/client-sites')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/client-sites`)}>
           <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
           <div>
             <div className="home-btn-text">SITE DETAILS & SELECTION SHEETS</div>
@@ -152,7 +154,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/clients')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/clients`)}>
           <div className="home-btn-icon" style={{ background: '#e0e7ff' }}>👥</div>
           <div>
             <div className="home-btn-text">CLIENTS & LEDGER</div>
@@ -160,7 +162,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/stock-report?tab=reorder')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/stock-report?tab=reorder`)}>
           <div className="home-btn-icon" style={{ background: '#fee2e2' }}>⚠️</div>
           <div>
             <div className="home-btn-text">
@@ -172,7 +174,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/estimate/new?type=RETURN')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimate/new?type=RETURN`)}>
           <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
           <div>
             <div className="home-btn-text">CREATE NEW SALES RETURN</div>
@@ -181,7 +183,7 @@ export default function Home() {
         </button>
 
 
-        <button className="home-btn" onClick={() => navigate('/estimates?tab=returns')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=returns`)}>
           <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
           <div>
             <div className="home-btn-text">PREVIOUS SALE RETURNS</div>
@@ -189,7 +191,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/stock-report')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/stock-report`)}>
           <div className="home-btn-icon" style={{ background: '#ecfdf5' }}>📊</div>
           <div>
             <div className="home-btn-text">STOCK MOVEMENT REPORT</div>
@@ -197,7 +199,7 @@ export default function Home() {
           </div>
         </button>
 
-        <button className="home-btn" onClick={() => navigate('/sales-report')}>
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/sales-report`)}>
           <div className="home-btn-icon" style={{ background: '#fef08a' }}>📈</div>
           <div>
             <div className="home-btn-text">SALES REPORT</div>
@@ -217,7 +219,7 @@ export default function Home() {
               </div>
             </button>
 
-            <button className="home-btn" onClick={() => navigate('/users')}>
+            <button className="home-btn" onClick={() => navigate(`/${activePlatform}/users`)}>
               <div className="home-btn-icon" style={{ background: '#f3e8ff' }}>🛡️</div>
               <div>
                 <div className="home-btn-text">USER MANAGEMENT</div>

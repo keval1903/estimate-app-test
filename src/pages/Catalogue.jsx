@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { isFuzzyMatch } from '../lib/searchUtils'
 
 export default function Catalogue() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const [activeTab, setActiveTab] = useState('Lent') // 'Lent' or 'Returned'
   const [items, setItems] = useState([])
   const [inventoryList, setInventoryList] = useState([])
@@ -46,7 +48,8 @@ export default function Catalogue() {
       const { data: catData, error: catError } = await supabase
         .from('catalogue')
         .select('*')
-        .eq('is_returned', activeTab === 'Returned')
+          .eq('platform', activePlatform)
+          .eq('is_returned', activeTab === 'Returned')
         .order('lent_date', { ascending: false })
 
       if (catError) throw catError
@@ -60,6 +63,7 @@ export default function Catalogue() {
       const { data: allCatData } = await supabase
         .from('catalogue')
         .select('inventory_item')
+          .eq('platform', activePlatform)
 
       const uniqueNames = new Set()
       if (invData) invData.forEach(d => { if (d.item_name) uniqueNames.add(d.item_name) })
@@ -87,6 +91,7 @@ export default function Catalogue() {
         location: formData.location,
         mobile: formData.mobile,
         inventory_item: item.inventory_item,
+          platform: activePlatform,
         quantity: item.quantity,
         advance_amount: item.advance_amount,
         remark: item.remark
@@ -190,8 +195,8 @@ export default function Catalogue() {
       {/* Navigation */}
       <div className="top-nav" style={{ flexShrink: 0 }}>
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
-        <span className="nav-title">Catalogue</span>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
+        <span className="nav-title">Catalogue - {PLATFORM_NAMES[activePlatform]}</span>
         <button
           className="btn btn-primary"
           style={{ marginLeft: 'auto' }}

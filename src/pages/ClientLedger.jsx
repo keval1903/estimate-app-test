@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { usePlatform } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { restoreStockForEstimates } from '../lib/stockUtils.js'
@@ -29,6 +30,7 @@ function formatLedgerDate(dateStr) {
 export default function ClientLedger() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { role } = useAuth()
 
   const [client, setClient] = useState(null)
@@ -90,7 +92,7 @@ export default function ClientLedger() {
       const { data: pData } = await supabase.from('profile').select('*').single()
       if (pData) setProfile(pData)
 
-      const { data: cData, error: cErr } = await supabase.from('clients').select('*').eq('id', id).single()
+      const { data: cData, error: cErr } = await supabase.from('clients').select('*').eq('platform', activePlatform).eq('id', id).single()
       if (cErr && cErr.code !== 'PGRST116') throw cErr;
       if (!cData) {
         setLoading(false)
@@ -748,7 +750,7 @@ export default function ClientLedger() {
       <div className="header">
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="back-btn" onClick={() => navigate(-1)}>← Back</button>
-          <button className="back-btn" onClick={() => navigate('/')} title="Home">🏠 Home</button>
+          <button className="back-btn" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠 Home</button>
         </div>
         <h1>Statement of Account</h1>
         <div style={{ width: 60 }} />
@@ -922,7 +924,7 @@ export default function ClientLedger() {
                               {['BILL', 'QUOTE', 'RETURN'].includes(l.type) && l.ref && !l.isDeleted ? (
                                 <span 
                                   style={{ wordBreak: 'break-word', cursor: 'pointer', color: '#2563eb', textDecoration: 'underline' }}
-                                  onClick={() => navigate(`/estimate/view/${l.ref}`)}
+                                  onClick={() => navigate(`/${activePlatform}/estimate/view/${l.ref}`)}
                                   title="View Document"
                                 >
                                   {l.description}

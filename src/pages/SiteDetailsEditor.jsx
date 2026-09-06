@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import SelectionSheetTab from '../components/SelectionSheetTab'
 import { cleanupRemovedImages } from '../lib/imageCleanup'
@@ -20,6 +21,7 @@ const DetailItem = ({ label, value }) => {
 
 export default function SiteDetailsEditor() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { clientId, siteId } = useParams()
 
   const [loading, setLoading] = useState(siteId !== 'new')
@@ -305,7 +307,7 @@ export default function SiteDetailsEditor() {
         >
           ←
         </button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
         <span className="nav-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {siteId === 'new' ? 'New Site' : (isEditing ? 'Edit Site' : 'Site Details')}
         </span>

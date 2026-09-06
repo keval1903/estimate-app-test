@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
@@ -9,6 +10,7 @@ export default function EstimateView() {
   const { role } = useAuth()
   const { id } = useParams()
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { showToast, ToastEl } = useToast()
   const [estimate, setEstimate] = useState(null)
   const [items, setItems] = useState([])
@@ -289,6 +291,7 @@ export default function EstimateView() {
             const newStock = Number(p.stock) + qty
             await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
             await supabase.from('stock_history').insert({
+                platform: activePlatform,
               product_id: p.id,
               change_type: 'REVERT_TO_QUOTATION',
               quantity_changed: qty, // positive to add stock back
@@ -355,6 +358,7 @@ export default function EstimateView() {
             const newStock = Number(p.stock) - qty
             await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
             await supabase.from('stock_history').insert({
+                platform: activePlatform,
               product_id: p.id,
               change_type: 'QUOTATION_CONVERT',
               quantity_changed: -qty,
@@ -371,7 +375,7 @@ export default function EstimateView() {
       if (!finalClientId) {
         const cName = (estimate?.client_name || estimate?.transport || '').trim().toUpperCase();
         if (cName) {
-          const { data: cData } = await supabase.from('clients').select('id').eq('name', cName).single();
+          const { data: cData } = await supabase.from('clients').select('id').eq('platform', activePlatform).eq('name', cName).single();
           if (cData) {
             finalClientId = cData.id;
           }
@@ -523,8 +527,8 @@ export default function EstimateView() {
       {/* Nav */}
       <div className="top-nav no-print">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
-        <span className="nav-title">{estimate.type === 'QUOTATION' ? 'Quotation' : estimate.type === 'RETURN' ? 'Sales Return' : 'Estimate'} #{estimate.bill_number}</span>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
+        <span className="nav-title">{estimate.type === 'QUOTATION' ? 'Quotation' : estimate.type === 'RETURN' ? 'Sales Return' : 'Estimate'} #{estimate.bill_number} - {PLATFORM_NAMES[activePlatform]}</span>
       </div>
 
       {/* Action buttons */}
@@ -557,7 +561,7 @@ export default function EstimateView() {
           </button>
         )}
         <button className="btn btn-secondary btn-sm"
-          onClick={() => navigate(`/estimate/edit/${id}`)}>✏️ Edit</button>
+          onClick={() => navigate(`/${activePlatform}/estimate/edit/${id}`)}>✏️ Edit</button>
         <button className="btn btn-primary btn-sm"
           onClick={handlePrint}>🖨 Print</button>
         <button className="btn btn-secondary btn-sm"

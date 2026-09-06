@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 
 import { isFuzzyMatch } from '../lib/searchUtils'
@@ -7,6 +8,7 @@ import { extractImageUrls, deleteImagesFromStorage } from '../lib/imageCleanup'
 
 export default function ClientSitesView() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { clientId } = useParams()
   
   const [client, setClient] = useState(null)
@@ -84,7 +86,7 @@ export default function ClientSitesView() {
     <div className="container" style={{ paddingBottom: '80px' }}>
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
         <span className="nav-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {client ? `${client.name}'s Sites` : 'Client Sites'}
         </span>
@@ -126,7 +128,7 @@ export default function ClientSitesView() {
           onChange={e => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: '150px', padding: '0.8rem 1rem', fontSize: '1rem' }}
         />
-        <button className="btn btn-primary" onClick={() => navigate(`/client-sites/${clientId}/edit/new`)}>
+        <button className="btn btn-primary" onClick={() => navigate(`/${activePlatform}/client-sites/${clientId}/edit/new`)}>
           + Add New
         </button>
       </div>
@@ -144,7 +146,7 @@ export default function ClientSitesView() {
               key={s.id} 
               className="card" 
               style={{ marginBottom: '1rem', cursor: 'pointer', padding: '1rem', borderLeft: s.status === 'COMPLETED' ? '4px solid #10b981' : 'none' }}
-              onClick={() => navigate(`/client-sites/${clientId}/edit/${s.id}`)}
+              onClick={() => navigate(`/${activePlatform}/client-sites/${clientId}/edit/${s.id}`)}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>

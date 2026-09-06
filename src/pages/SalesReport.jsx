@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
 
@@ -24,6 +25,7 @@ function getNormalizedDateString(dateStr) {
 
 export default function SalesReport() {
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { showToast } = useToast()
   
   const [loading, setLoading] = useState(true)
@@ -44,8 +46,9 @@ export default function SalesReport() {
       .select(`
         *,
         clients!inner(name),
-        products(product_group)
-      `)
+          products(product_group)
+        `)
+        .eq('platform', activePlatform)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -129,8 +132,8 @@ export default function SalesReport() {
     <div className="app-container">
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
-        <span className="nav-title">Sales Report</span>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
+        <span className="nav-title">Sales Report - {PLATFORM_NAMES[activePlatform]}</span>
       </div>
 
       <div className="page">

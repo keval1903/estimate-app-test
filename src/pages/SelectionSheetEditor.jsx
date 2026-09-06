@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import PerspectiveCropper from '../components/PerspectiveCropper'
 import { applyPerspectiveCrop } from '../lib/perspectiveCrop'
@@ -43,6 +44,7 @@ function compressImage(file, maxWidth = 1200) {
 export default function SelectionSheetEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   
   const [clientName, setClientName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -135,6 +137,7 @@ export default function SelectionSheetEditor() {
     try {
       if (id === 'new') {
         const { error } = await supabase.from('selection_sheets').insert({
+      platform: activePlatform,
           client_name: clientName.trim(),
           content: content
         })
@@ -362,7 +365,7 @@ export default function SelectionSheetEditor() {
     <div className="container" style={{ paddingBottom: '80px', display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       <div className="top-nav" style={{ flexShrink: 0, gap: '0.25rem', padding: '0.5rem' }}>
         <button className="nav-back" onClick={() => navigate(-1)} title="Back" style={{ padding: '0.5rem' }}>←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home" style={{ padding: '0.5rem' }}>🏠</button>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home" style={{ padding: '0.5rem' }}>🏠</button>
         <span className="nav-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '1rem', marginLeft: '0.25rem' }}>
           {id === 'new' ? 'New Sheet' : 'Edit Sheet'}
         </span>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
@@ -19,10 +20,12 @@ const EMPTY_FORM = {
 export default function Products() {
   const { role } = useAuth()
   const navigate = useNavigate()
+  const { activePlatform } = usePlatform()
   const { showToast, ToastEl } = useToast()
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [showAllProducts, setShowAllProducts] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -66,7 +69,13 @@ export default function Products() {
     if (batch1.error || batch2.error) {
       showToast('Failed to load products', 'error')
     } else {
-      setProducts ([...(batch1.data || []), ...(batch2.data || [])])
+      const allData = [...(batch1.data || []), ...(batch2.data || [])];
+      const mapped = allData.map(p => ({
+        ...p,
+        rate: p[`rate_${activePlatform}`] !== undefined && p[`rate_${activePlatform}`] !== null ? p[`rate_${activePlatform}`] : (p.rate || 0),
+        is_available: p[`in_${activePlatform}`] === true
+      }));
+      setProducts (mapped)
     }
     setLoading(false)
     }
@@ -80,6 +89,7 @@ export default function Products() {
   const smartTerms = s.match(/[a-z]+|[0-9]+/g) || []
 
   const filtered = products.filter(p => {
+    if (!showAllProducts && !p.is_available) return false;
     const pName = p.product_name.toLowerCase()
     const matchesAllTerms = searchTerms.every(term => pName.includes(term))
     const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
@@ -303,6 +313,7 @@ export default function Products() {
     headerCols.forEach((col, idx) => {
       if (col.includes('product')) colMap['product_name'] = idx
       else if (col.includes('keyword')) colMap['keyword'] = idx
+        else if (col.includes('group')) colMap['product_group'] = idx
       else if (col.includes('length')) colMap['length'] = idx
       else if (col.includes('width')) colMap['width'] = idx
       else if (col === 'unit') colMap['unit'] = idx
@@ -313,6 +324,14 @@ export default function Products() {
       else if (col.includes('min stock')) colMap['min_stock'] = idx
       else if (col.includes('remark')) colMap['has_remark'] = idx
       else if (col.includes('discount')) colMap['has_discount'] = idx
+        else if (col.includes('in ccai')) colMap['in_ccai'] = idx
+        else if (col.includes('rate ccai')) colMap['rate_ccai'] = idx
+        else if (col.includes('in dc')) colMap['in_dc'] = idx
+        else if (col.includes('rate dc')) colMap['rate_dc'] = idx
+        else if (col.includes('in materia')) colMap['in_materia'] = idx
+        else if (col.includes('rate materia')) colMap['rate_materia'] = idx
+        else if (col.includes('in phs')) colMap['in_phs'] = idx
+        else if (col.includes('rate phs')) colMap['rate_phs'] = idx
     })
 
     const hasDynamic = ('product_name' in colMap && 'rate' in colMap && 'unit' in colMap)
@@ -322,12 +341,13 @@ export default function Products() {
       const cols = parseCsvLine(lines[i])
       if (cols.length < 3) continue
       
-      let product_name, keyword, length, width, unit, rate, calculation_type, has_stock, stock, min_stock, has_remark, has_discount
+      let product_name, keyword, product_group, length, width, unit, rate, calculation_type, has_stock, stock, min_stock, has_remark, has_discount
       
       if (hasDynamic) {
         if (i === 0) continue // skip header row since we mapped it
         product_name = cols[colMap['product_name']]
         keyword = cols[colMap['keyword']]
+          product_group = cols[colMap['product_group']]
         length = cols[colMap['length']]
         width = cols[colMap['width']]
         unit = cols[colMap['unit']]
@@ -338,7 +358,15 @@ export default function Products() {
         min_stock = cols[colMap['min_stock']]
         has_remark = cols[colMap['has_remark']]
         has_discount = cols[colMap['has_discount']]
-      } else {
+          var in_ccai = cols[colMap['in_ccai']]
+          var rate_ccai = cols[colMap['rate_ccai']]
+          var in_dc = cols[colMap['in_dc']]
+          var rate_dc = cols[colMap['rate_dc']]
+          var in_materia = cols[colMap['in_materia']]
+          var rate_materia = cols[colMap['rate_materia']]
+          var in_phs = cols[colMap['in_phs']]
+          var rate_phs = cols[colMap['rate_phs']]
+        } else {
         if (isNewFormat) {
           [product_name, keyword, length, width, unit, rate, calculation_type, has_stock, stock, min_stock, has_remark, has_discount] = cols
         } else {
@@ -394,6 +422,14 @@ export default function Products() {
         has_stock: parsedHasStock, stock: parsedStock, min_stock: parsedMinStock,
         has_remark: parsedHasRemark, has_discount: parsedHasDiscount,
         raw_rate: rate?.trim(),
+        in_ccai: (typeof in_ccai === 'string' && (in_ccai.toLowerCase() === 'yes' || in_ccai.toLowerCase() === 'true')) || in_ccai === true,
+        rate_ccai: rate_ccai ? Number(rate_ccai) : 0,
+        in_dc: (typeof in_dc === 'string' && (in_dc.toLowerCase() === 'yes' || in_dc.toLowerCase() === 'true')) || in_dc === true,
+        rate_dc: rate_dc ? Number(rate_dc) : 0,
+        in_materia: (typeof in_materia === 'string' && (in_materia.toLowerCase() === 'yes' || in_materia.toLowerCase() === 'true')) || in_materia === true,
+        rate_materia: rate_materia ? Number(rate_materia) : 0,
+        in_phs: (typeof in_phs === 'string' && (in_phs.toLowerCase() === 'yes' || in_phs.toLowerCase() === 'true')) || in_phs === true,
+        rate_phs: rate_phs ? Number(rate_phs) : 0,
         errors
       })
     }
@@ -512,23 +548,31 @@ export default function Products() {
 
   function handleExport() {
     if (!filtered.length) { showToast('No products to export', 'error'); return }
-    const headers = ['Product Name', 'Keyword', 'Length', 'Width', 'Unit', 'Rate', 'Calculation Type', 'Has Stock', 'Stock', 'Min Stock', 'Has Remark', 'Has Discount']
+    const headers = ['Product Name', 'Keyword', 'Product Group', 'Length', 'Width', 'Unit', 'Calculation Type', 'Has Stock', 'Stock', 'Min Stock', 'Has Remark', 'Has Discount', 'In CCAI', 'Rate CCAI', 'In DC', 'Rate DC', 'In Materia', 'Rate Materia', 'In PHS', 'Rate PHS']
     const csvRows = [headers.join(',')]
     for (const p of filtered) {
       csvRows.push([
-        `"${p.product_name}"`,
-        `"${p.keyword || ''}"`,
-        p.length || '',
-        p.width || '',
-        p.unit,
-        p.rate,
-        p.calculation_type,
-        p.has_stock ? 'Yes' : 'No',
-        p.has_stock ? p.stock : '',
-        p.min_stock || '5',
-        p.has_remark ? 'Yes' : 'No',
-        p.has_discount ? 'Yes' : 'No'
-      ].join(','))
+          `"${p.product_name}"`,
+          `"${p.keyword || ''}"`,
+          `"${p.product_group || 'Uncategorized'}"`,
+          p.length || '',
+          p.width || '',
+          p.unit,
+          p.calculation_type,
+          p.has_stock ? 'Yes' : 'No',
+          p.has_stock ? p.stock : '',
+          p.min_stock || '5',
+          p.has_remark ? 'Yes' : 'No',
+          p.has_discount ? 'Yes' : 'No',
+          p.in_ccai ? 'Yes' : 'No',
+          p.rate_ccai || 0,
+          p.in_dc ? 'Yes' : 'No',
+          p.rate_dc || 0,
+          p.in_materia ? 'Yes' : 'No',
+          p.rate_materia || 0,
+          p.in_phs ? 'Yes' : 'No',
+          p.rate_phs || 0
+        ].join(','))
     }
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -573,7 +617,10 @@ export default function Products() {
           )}
         </div>
       </div>
-
+      <div style={{ background: '#f8fafc', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #e2e8f0' }}>
+         <input type="checkbox" id="showAll" checked={showAllProducts} onChange={e => setShowAllProducts(e.target.checked)} />
+         <label htmlFor="showAll" style={{ fontSize: '0.875rem', color: '#475569', cursor: 'pointer' }}>Show products not available in {PLATFORM_NAMES[activePlatform]}</label>
+      </div>
       <div className="page">
         <div className="search-bar" style={{ position: 'relative' }}>
           <span>🔍</span>
