@@ -1135,7 +1135,7 @@ export default function CreateEstimate() {
   async function saveSite(name) {
     const exists = allSites.find(s => s.site_name.toLowerCase() === name.toLowerCase())
     if (!exists) {
-      await supabase.from('sites').insert({ site_name: name })
+      await supabase.from('sites').insert({ site_name: name, platform: activePlatform })
     }
   }
 

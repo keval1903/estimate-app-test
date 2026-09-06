@@ -1,6 +1,6 @@
 -- ============================================================
 -- ESTIMATE APP - MULTI-PLATFORM MIGRATION
--- Platforms: CCAI, DC, Materia, PHS
+-- Platforms: CCAI, DC, Laminea, PHS
 --
 -- Confirmed rules:
 -- 1. Estimates and estimate numbers are platform-specific.
@@ -24,14 +24,14 @@ BEGIN;
 ALTER TABLE products
 ADD COLUMN IF NOT EXISTS in_ccai BOOLEAN NOT NULL DEFAULT TRUE,
 ADD COLUMN IF NOT EXISTS in_dc BOOLEAN NOT NULL DEFAULT FALSE,
-ADD COLUMN IF NOT EXISTS in_materia BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS in_laminea BOOLEAN NOT NULL DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS in_phs BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Platform-specific rates
 ALTER TABLE products
 ADD COLUMN IF NOT EXISTS rate_ccai NUMERIC(12,2),
 ADD COLUMN IF NOT EXISTS rate_dc NUMERIC(12,2),
-ADD COLUMN IF NOT EXISTS rate_materia NUMERIC(12,2),
+ADD COLUMN IF NOT EXISTS rate_laminea NUMERIC(12,2),
 ADD COLUMN IF NOT EXISTS rate_phs NUMERIC(12,2);
 
 -- Existing products belong to CCAI.
@@ -39,7 +39,7 @@ UPDATE products
 SET
     in_ccai = COALESCE(in_ccai, TRUE),
     in_dc = COALESCE(in_dc, FALSE),
-    in_materia = COALESCE(in_materia, FALSE),
+    in_laminea = COALESCE(in_laminea, FALSE),
     in_phs = COALESCE(in_phs, FALSE);
 
 -- Copy the existing product rate to the CCAI rate.
@@ -50,7 +50,7 @@ WHERE rate_ccai IS NULL;
 -- Remove zero defaults if an earlier migration added them.
 ALTER TABLE products
 ALTER COLUMN rate_dc DROP DEFAULT,
-ALTER COLUMN rate_materia DROP DEFAULT,
+ALTER COLUMN rate_laminea DROP DEFAULT,
 ALTER COLUMN rate_phs DROP DEFAULT;
 
 -- Every product must be enabled for at least one platform.
@@ -62,7 +62,7 @@ ADD CONSTRAINT products_platform_required
 CHECK (
     in_ccai
     OR in_dc
-    OR in_materia
+    OR in_laminea
     OR in_phs
 );
 
@@ -75,7 +75,7 @@ ADD CONSTRAINT products_platform_rates_check
 CHECK (
     (NOT in_ccai OR rate_ccai IS NOT NULL)
     AND (NOT in_dc OR rate_dc IS NOT NULL)
-    AND (NOT in_materia OR rate_materia IS NOT NULL)
+    AND (NOT in_laminea OR rate_laminea IS NOT NULL)
     AND (NOT in_phs OR rate_phs IS NOT NULL)
 );
 
@@ -88,7 +88,7 @@ ADD CONSTRAINT products_platform_rates_non_negative
 CHECK (
     (rate_ccai IS NULL OR rate_ccai >= 0)
     AND (rate_dc IS NULL OR rate_dc >= 0)
-    AND (rate_materia IS NULL OR rate_materia >= 0)
+    AND (rate_laminea IS NULL OR rate_laminea >= 0)
     AND (rate_phs IS NULL OR rate_phs >= 0)
 );
 
@@ -116,7 +116,7 @@ DROP CONSTRAINT IF EXISTS clients_platform_check;
 
 ALTER TABLE clients
 ADD CONSTRAINT clients_platform_check
-CHECK (platform IN ('ccai', 'dc', 'materia', 'phs'));
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
 -- Remove the old global name-uniqueness constraint.
 ALTER TABLE clients
@@ -158,7 +158,7 @@ DROP CONSTRAINT IF EXISTS estimates_platform_check;
 
 ALTER TABLE estimates
 ADD CONSTRAINT estimates_platform_check
-CHECK (platform IN ('ccai', 'dc', 'materia', 'phs'));
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
 -- Stop the migration if duplicate CCAI bill numbers already exist.
 DO $$
@@ -206,7 +206,7 @@ DROP CONSTRAINT IF EXISTS payments_platform_check;
 
 ALTER TABLE payments
 ADD CONSTRAINT payments_platform_check
-CHECK (platform IN ('ccai', 'dc', 'materia', 'phs'));
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
 
 -- ============================================================
@@ -232,7 +232,7 @@ DROP CONSTRAINT IF EXISTS client_purchases_platform_check;
 
 ALTER TABLE client_purchases
 ADD CONSTRAINT client_purchases_platform_check
-CHECK (platform IN ('ccai', 'dc', 'materia', 'phs'));
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
 
 -- ============================================================
@@ -258,7 +258,7 @@ DROP CONSTRAINT IF EXISTS client_sites_platform_check;
 
 ALTER TABLE client_sites
 ADD CONSTRAINT client_sites_platform_check
-CHECK (platform IN ('ccai', 'dc', 'materia', 'phs'));
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
 
 -- ============================================================
@@ -286,7 +286,7 @@ DROP CONSTRAINT IF EXISTS stock_history_platform_check;
 
 ALTER TABLE stock_history
 ADD CONSTRAINT stock_history_platform_check
-CHECK (platform IN ('ccai', 'dc', 'materia', 'phs'));
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
 
 -- ============================================================
@@ -312,7 +312,7 @@ DROP CONSTRAINT IF EXISTS selection_sheets_platform_check;
 
 ALTER TABLE selection_sheets
 ADD CONSTRAINT selection_sheets_platform_check
-CHECK (platform IN ('ccai', 'dc', 'materia', 'phs'));
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
 
 -- ============================================================
@@ -339,7 +339,7 @@ DROP CONSTRAINT IF EXISTS catalogue_platform_check;
 
 ALTER TABLE catalogue
 ADD CONSTRAINT catalogue_platform_check
-CHECK (platform IN ('ccai', 'dc', 'materia', 'phs'));
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
 
 
 -- ============================================================
@@ -354,7 +354,7 @@ CREATE SEQUENCE IF NOT EXISTS bill_number_seq_dc
 START WITH 1
 INCREMENT BY 1;
 
-CREATE SEQUENCE IF NOT EXISTS bill_number_seq_materia
+CREATE SEQUENCE IF NOT EXISTS bill_number_seq_laminea
 START WITH 1
 INCREMENT BY 1;
 
@@ -396,8 +396,8 @@ BEGIN
         WHEN 'dc' THEN
             RETURN nextval('public.bill_number_seq_dc'::regclass);
 
-        WHEN 'materia' THEN
-            RETURN nextval('public.bill_number_seq_materia'::regclass);
+        WHEN 'laminea' THEN
+            RETURN nextval('public.bill_number_seq_laminea'::regclass);
 
         WHEN 'phs' THEN
             RETURN nextval('public.bill_number_seq_phs'::regclass);
@@ -454,9 +454,9 @@ CREATE INDEX IF NOT EXISTS products_in_dc_index
 ON products (in_dc)
 WHERE in_dc = TRUE;
 
-CREATE INDEX IF NOT EXISTS products_in_materia_index
-ON products (in_materia)
-WHERE in_materia = TRUE;
+CREATE INDEX IF NOT EXISTS products_in_laminea_index
+ON products (in_laminea)
+WHERE in_laminea = TRUE;
 
 CREATE INDEX IF NOT EXISTS products_in_phs_index
 ON products (in_phs)
@@ -477,7 +477,7 @@ SELECT
     COUNT(*) AS total_products,
     COUNT(*) FILTER (WHERE in_ccai) AS ccai_products,
     COUNT(*) FILTER (WHERE in_dc) AS dc_products,
-    COUNT(*) FILTER (WHERE in_materia) AS materia_products,
+    COUNT(*) FILTER (WHERE in_laminea) AS laminea_products,
     COUNT(*) FILTER (WHERE in_phs) AS phs_products,
     COUNT(*) FILTER (WHERE in_ccai AND rate_ccai IS NULL)
         AS ccai_products_missing_rate
@@ -506,7 +506,7 @@ ORDER BY platform;
 SELECT
     get_next_bill_number('ccai') AS next_ccai,
     get_next_bill_number('dc') AS next_dc,
-    get_next_bill_number('materia') AS next_materia,
+    get_next_bill_number('laminea') AS next_laminea,
     get_next_bill_number('phs') AS next_phs;
 */
 
@@ -522,3 +522,33 @@ FROM estimates
 WHERE platform_estimate_number IS NOT NULL
 GROUP BY platform, platform_estimate_number
 HAVING COUNT(*) > 1;
+
+
+-- ============================================================
+-- 7. SITES TABLE
+-- ============================================================
+
+ALTER TABLE sites
+ADD COLUMN IF NOT EXISTS platform TEXT DEFAULT 'ccai';
+
+UPDATE sites
+SET platform = 'ccai'
+WHERE platform IS NULL;
+
+UPDATE sites
+SET platform = LOWER(platform);
+
+ALTER TABLE sites
+ALTER COLUMN platform SET DEFAULT 'ccai',
+ALTER COLUMN platform SET NOT NULL;
+
+ALTER TABLE sites
+DROP CONSTRAINT IF EXISTS sites_platform_check;
+
+ALTER TABLE sites
+ADD CONSTRAINT sites_platform_check
+CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs'));
+
+CREATE INDEX IF NOT EXISTS sites_platform_index
+ON sites (platform);
+

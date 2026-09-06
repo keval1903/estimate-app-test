@@ -30,9 +30,9 @@ export default function Home() {
         if (data) {
           const count = data.filter(p => Number(p.stock || 0) < Number(p.min_stock ?? 5)).length
           setLowStockCount(count)
-        }
-      })
-  }, [])
+          }
+        })
+    }, [activePlatform])
 
   useEffect(() => {
     const handleKeyDown = (e) => {

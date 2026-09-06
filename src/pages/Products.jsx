@@ -202,7 +202,8 @@ export default function Products() {
         await supabase.from('stock_history').insert({
           product_id: data.id,
           change_type: 'MANUAL_ADJUST',
-          quantity_changed: diff !== 0 ? diff : payload.stock
+          quantity_changed: diff !== 0 ? diff : payload.stock,
+          platform: activePlatform
         })
       }
     }
@@ -238,8 +239,9 @@ export default function Products() {
       await supabase.from('stock_history').insert({
         product_id: p.id,
         change_type: 'MANUAL_ADJUST',
-        quantity_changed: qty
-      });
+          quantity_changed: qty,
+          platform: activePlatform
+        });
       showToast(`Added ${qty} ${displayUnit} to stock ✓`);
       fetchProducts();
     }
@@ -329,16 +331,16 @@ export default function Products() {
         else if (col.includes('rate ccai')) colMap['rate_ccai'] = idx
         else if (col.includes('in dc')) colMap['in_dc'] = idx
         else if (col.includes('rate dc')) colMap['rate_dc'] = idx
-        else if (col.includes('in materia')) colMap['in_materia'] = idx
-        else if (col.includes('rate materia')) colMap['rate_materia'] = idx
+        else if (col.includes('in laminea')) colMap['in_laminea'] = idx
+        else if (col.includes('rate laminea')) colMap['rate_laminea'] = idx
         else if (col.includes('in phs')) colMap['in_phs'] = idx
         else if (col.includes('rate phs')) colMap['rate_phs'] = idx
         else if (col.includes('in ccai')) colMap['in_ccai'] = idx
         else if (col.includes('rate ccai')) colMap['rate_ccai'] = idx
         else if (col.includes('in dc')) colMap['in_dc'] = idx
         else if (col.includes('rate dc')) colMap['rate_dc'] = idx
-        else if (col.includes('in materia')) colMap['in_materia'] = idx
-        else if (col.includes('rate materia')) colMap['rate_materia'] = idx
+        else if (col.includes('in laminea')) colMap['in_laminea'] = idx
+        else if (col.includes('rate laminea')) colMap['rate_laminea'] = idx
         else if (col.includes('in phs')) colMap['in_phs'] = idx
         else if (col.includes('rate phs')) colMap['rate_phs'] = idx
     })
@@ -372,8 +374,8 @@ export default function Products() {
           var rate_ccai = cols[colMap['rate_ccai']]
           var in_dc = cols[colMap['in_dc']]
           var rate_dc = cols[colMap['rate_dc']]
-          var in_materia = cols[colMap['in_materia']]
-          var rate_materia = cols[colMap['rate_materia']]
+          var in_laminea = cols[colMap['in_laminea']]
+          var rate_laminea = cols[colMap['rate_laminea']]
           var in_phs = cols[colMap['in_phs']]
           var rate_phs = cols[colMap['rate_phs']]
         } else {
@@ -437,8 +439,8 @@ export default function Products() {
         rate_ccai: rate_ccai ? Number(rate_ccai) : 0,
         in_dc: (typeof in_dc === 'string' && (in_dc.toLowerCase() === 'yes' || in_dc.toLowerCase() === 'true')) || in_dc === true,
         rate_dc: rate_dc ? Number(rate_dc) : 0,
-        in_materia: (typeof in_materia === 'string' && (in_materia.toLowerCase() === 'yes' || in_materia.toLowerCase() === 'true')) || in_materia === true,
-        rate_materia: rate_materia ? Number(rate_materia) : 0,
+        in_laminea: (typeof in_laminea === 'string' && (in_laminea.toLowerCase() === 'yes' || in_laminea.toLowerCase() === 'true')) || in_laminea === true,
+        rate_laminea: rate_laminea ? Number(rate_laminea) : 0,
         in_phs: (typeof in_phs === 'string' && (in_phs.toLowerCase() === 'yes' || in_phs.toLowerCase() === 'true')) || in_phs === true,
         rate_phs: rate_phs ? Number(rate_phs) : 0,
         errors
@@ -501,7 +503,7 @@ export default function Products() {
             const oldStock = existing ? (existing.stock || 0) : 0;
             const diff = previewRow.stock - oldStock;
             if (diff !== 0) {
-              historyBatch.push({ product_id: r.id, change_type: 'CSV_IMPORT', quantity_changed: diff });
+              historyBatch.push({ product_id: r.id, change_type: 'CSV_IMPORT', quantity_changed: diff, platform: activePlatform });
             }
           }
           if (Number(r.rate) !== Number(previewRow.raw_rate) && !isNaN(Number(previewRow.raw_rate))) {
@@ -532,7 +534,7 @@ export default function Products() {
           const previewRow = chunk.find(p => p.product_name.toLowerCase() === r.product_name.toLowerCase());
           if (previewRow) {
             if (previewRow.has_stock) {
-              historyBatch.push({ product_id: r.id, change_type: 'CSV_IMPORT', quantity_changed: previewRow.stock });
+              historyBatch.push({ product_id: r.id, change_type: 'CSV_IMPORT', quantity_changed: previewRow.stock, platform: activePlatform });
             }
             if (Number(r.rate) !== Number(previewRow.raw_rate) && !isNaN(Number(previewRow.raw_rate))) {
               discrepancies.push({ product_name: r.product_name, field: 'rate', expected: previewRow.raw_rate, saved: r.rate })
@@ -559,7 +561,7 @@ export default function Products() {
 
   function handleExport() {
     if (!filtered.length) { showToast('No products to export', 'error'); return }
-    const headers = ['Product Name', 'Keyword', 'Product Group', 'Length', 'Width', 'Unit', 'Calculation Type', 'Has Stock', 'Stock', 'Min Stock', 'Has Remark', 'Has Discount', 'In CCAI', 'Rate CCAI', 'In DC', 'Rate DC', 'In Materia', 'Rate Materia', 'In PHS', 'Rate PHS']
+    const headers = ['Product Name', 'Keyword', 'Product Group', 'Length', 'Width', 'Unit', 'Calculation Type', 'Has Stock', 'Stock', 'Min Stock', 'Has Remark', 'Has Discount', 'In CCAI', 'Rate CCAI', 'In DC', 'Rate DC', 'In Laminea', 'Rate Laminea', 'In PHS', 'Rate PHS']
     const csvRows = [headers.join(',')]
     for (const p of filtered) {
       csvRows.push([
@@ -579,8 +581,8 @@ export default function Products() {
           p.rate_ccai || 0,
           p.in_dc ? 'Yes' : 'No',
           p.rate_dc || 0,
-          p.in_materia ? 'Yes' : 'No',
-          p.rate_materia || 0,
+          p.in_laminea ? 'Yes' : 'No',
+          p.rate_laminea || 0,
           p.in_phs ? 'Yes' : 'No',
           p.rate_phs || 0
         ].join(','))

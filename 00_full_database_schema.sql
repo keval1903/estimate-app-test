@@ -33,10 +33,11 @@ ALTER TABLE products DROP CONSTRAINT IF EXISTS products_calculation_type_check;
 ALTER TABLE products ADD CONSTRAINT products_calculation_type_check CHECK (calculation_type IN ('QUANTITY', 'SQFT', 'INCH', 'FEET'));
 -- 2. SITES TABLE (for site name autocomplete)
 CREATE TABLE IF NOT EXISTS sites (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  site_name TEXT NOT NULL UNIQUE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    site_name TEXT NOT NULL UNIQUE,
+    platform TEXT NOT NULL DEFAULT 'ccai' CHECK (platform IN ('ccai', 'dc', 'laminea', 'phs')),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
 
 -- 3. BILL NUMBER SEQUENCE (safe atomic increment)
 CREATE SEQUENCE IF NOT EXISTS bill_number_seq START WITH 1;

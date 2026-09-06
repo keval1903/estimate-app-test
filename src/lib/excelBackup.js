@@ -3,7 +3,7 @@ export async function generateExcelWorkbook(supabase, activePlatform) {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
-    const platformsToBackup = activePlatform ? [activePlatform] : ['ccai', 'dc', 'materia', 'phs']
+    const platformsToBackup = activePlatform ? [activePlatform] : ['ccai', 'dc', 'laminea', 'phs']
 
     for (const plat of platformsToBackup) {
       const platPrefix = activePlatform ? '' : `${plat.toUpperCase()} `

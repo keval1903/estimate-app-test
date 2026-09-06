@@ -61,11 +61,11 @@ content = content.replace(
 );
 
 content = content.replace(
-  /var in_dc = cols\[14\]\n\s*var rate_dc = cols\[15\]\n\s*var in_materia = cols\[16\]\n\s*var rate_materia = cols\[17\]\n\s*var in_phs = cols\[18\]\n\s*var rate_phs = cols\[19\]/,
+  /var in_dc = cols\[14\]\n\s*var rate_dc = cols\[15\]\n\s*var in_laminea = cols\[16\]\n\s*var rate_laminea = cols\[17\]\n\s*var in_phs = cols\[18\]\n\s*var rate_phs = cols\[19\]/,
   `var in_dc = cols[15]
             var rate_dc = cols[16]
-            var in_materia = cols[17]
-            var rate_materia = cols[18]
+            var in_laminea = cols[17]
+            var rate_laminea = cols[18]
             var in_phs = cols[19]
             var rate_phs = cols[20]`
 );

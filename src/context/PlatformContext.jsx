@@ -3,12 +3,12 @@ import { useParams, Navigate, Outlet } from 'react-router-dom'
 
 const PlatformContext = createContext()
 
-const VALID_PLATFORMS = ['ccai', 'dc', 'materia', 'phs']
+const VALID_PLATFORMS = ['ccai', 'dc', 'laminea', 'phs']
 
 export const PLATFORM_NAMES = {
   ccai: 'CCAI',
   dc: 'DC',
-  materia: 'Materia',
+  laminea: 'Laminea',
   phs: 'PHS'
 }
 

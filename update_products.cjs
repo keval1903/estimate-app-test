@@ -62,7 +62,7 @@ if (!content.includes('payload[`rate_${activePlatform}`] = Number(form.rate)')) 
 // 6. Update handleExport to include new columns
 content = content.replace(
   /const headers = \['Product Name'[^\]]+\]/,
-  `const headers = ['Product Name', 'Keyword', 'Length', 'Width', 'Unit', 'Calculation Type', 'Has Stock', 'Stock', 'Min Stock', 'Has Remark', 'Has Discount', 'In CCAI', 'Rate CCAI', 'In DC', 'Rate DC', 'In Materia', 'Rate Materia', 'In PHS', 'Rate PHS']`
+  `const headers = ['Product Name', 'Keyword', 'Length', 'Width', 'Unit', 'Calculation Type', 'Has Stock', 'Stock', 'Min Stock', 'Has Remark', 'Has Discount', 'In CCAI', 'Rate CCAI', 'In DC', 'Rate DC', 'In Laminea', 'Rate Laminea', 'In PHS', 'Rate PHS']`
 );
 
 content = content.replace(
@@ -83,8 +83,8 @@ content = content.replace(
           p.rate_ccai || 0,
           p.in_dc ? 'Yes' : 'No',
           p.rate_dc || 0,
-          p.in_materia ? 'Yes' : 'No',
-          p.rate_materia || 0,
+          p.in_laminea ? 'Yes' : 'No',
+          p.rate_laminea || 0,
           p.in_phs ? 'Yes' : 'No',
           p.rate_phs || 0
         ].join(','))`

@@ -9,7 +9,7 @@ export default function ChoosePlatform() {
   const platforms = [
     { id: 'ccai', name: 'CCAI', color: '#3b82f6' },
     { id: 'dc', name: 'DC', color: '#10b981' },
-    { id: 'materia', name: 'Materia', color: '#f59e0b' },
+    { id: 'laminea', name: 'Laminea', color: '#f59e0b' },
     { id: 'phs', name: 'PHS', color: '#ef4444' }
   ]
 
