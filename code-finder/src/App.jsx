@@ -127,7 +127,21 @@ function App() {
       const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
       const file = new File([blob], 'availability.png', { type: 'image/png' })
 
-      const text = `Stock Availability Check - ${checkedAt}`
+      const statusEmoji = s =>
+        s === 'AVAILABLE' ? '✅' : s === 'PLEASE CONFIRM WITH US' ? '⚠️' : '❌'
+
+      const lines = results.map(r =>
+        `${statusEmoji(r.status)} *${r.code}*  Qty: ${r.requestedQuantity}  — ${r.status}`
+      )
+
+      const text = [
+        `🏷️ *Laminate Stock Enquiry*`,
+        `📅 ${checkedAt}`,
+        ``,
+        ...lines,
+        ``,
+        `_Note: Subject to final confirmation._`
+      ].join('\n')
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Stock Check', text })
