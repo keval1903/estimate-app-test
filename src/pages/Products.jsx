@@ -137,7 +137,8 @@ export default function Products() {
     }
     if (form.has_stock) {
       if (editingId && stockMode === 'ADD') {
-        if (form.add_stock === '' || isNaN(form.add_stock) || Number(form.add_stock) <= 0) return 'Valid quantity to add is required'
+        // blank means no change — not required
+        if (form.add_stock !== '' && (isNaN(form.add_stock) || Number(form.add_stock) < 0)) return 'Quantity to add must be a positive number'
       } else {
         if (form.stock === '' || isNaN(form.stock)) return 'Valid stock amount is required'
       }
@@ -165,7 +166,8 @@ export default function Products() {
     let calculatedStock = 0
     if (form.has_stock) {
       if (targetId && stockMode === 'ADD') {
-        calculatedStock = Number(oldStock) + Number(form.add_stock)
+        // blank add_stock = no change to current stock
+        calculatedStock = form.add_stock === '' ? Number(oldStock) : Number(oldStock) + Number(form.add_stock)
       } else {
         calculatedStock = Number(form.stock)
       }
