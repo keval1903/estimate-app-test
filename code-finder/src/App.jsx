@@ -3,33 +3,78 @@ import html2canvas from 'html2canvas'
 import './App.css'
 
 function App() {
-  const [pasteData, setPasteData] = useState('')
+  const [rows, setRows] = useState([
+    { code: '', quantity: '' },
+    { code: '', quantity: '' },
+    { code: '', quantity: '' }
+  ])
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [checkedAt, setCheckedAt] = useState('')
   const resultsRef = useRef(null)
 
+  const handleRowChange = (index, field, value) => {
+    const newRows = [...rows]
+    newRows[index][field] = value
+    setRows(newRows)
+  }
+
+  const addRow = () => {
+    setRows([...rows, { code: '', quantity: '' }])
+  }
+
+  const removeRow = (index) => {
+    const newRows = rows.filter((_, i) => i !== index)
+    if (newRows.length === 0) {
+      newRows.push({ code: '', quantity: '' })
+    }
+    setRows(newRows)
+  }
+
+  const handlePaste = (e, rowIndex) => {
+    const pastedData = e.clipboardData.getData('Text')
+    if (!pastedData || pastedData.indexOf('\n') === -1) return // let default single-cell paste happen
+    
+    e.preventDefault()
+    const lines = pastedData.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    if (lines.length === 0) return
+
+    const newRows = [...rows]
+    let currentRowIdx = rowIndex
+
+    lines.forEach(line => {
+      const parts = line.split(/\t+|\s{2,}/)
+      const code = parts[0] || ''
+      const quantity = parts[1] || ''
+
+      if (currentRowIdx < newRows.length) {
+        newRows[currentRowIdx] = { code, quantity }
+      } else {
+        newRows.push({ code, quantity })
+      }
+      currentRowIdx++
+    })
+
+    setRows(newRows)
+  }
+
   const handleCheck = async () => {
     setError('')
     setResults([])
     setCheckedAt('')
     
-    if (!pasteData.trim()) {
-      setError('Please enter some codes')
+    const requests = rows
+      .filter(r => r.code.trim())
+      .map(r => ({
+        code: r.code.trim(),
+        quantity: Number(r.quantity) || 1
+      }))
+
+    if (requests.length === 0) {
+      setError('Please enter at least one sheet code')
       return
     }
-
-    // Parse input: expects "Code [tab/space] Quantity" or just lines of codes
-    const lines = pasteData.split('\n').map(l => l.trim()).filter(Boolean)
-    const requests = lines.map(line => {
-      // Split by tab or multiple spaces
-      const parts = line.split(/\t+|\s{2,}/)
-      if (parts.length >= 2) {
-        return { code: parts[0].trim(), quantity: Number(parts[1]) || 1 }
-      }
-      return { code: line, quantity: 1 }
-    })
 
     if (requests.length > 25) {
       setError('Maximum 25 codes allowed per request.')
@@ -89,20 +134,56 @@ function App() {
     <div className="container">
       <header>
         <h1>Code Availability Finder</h1>
-        <p>Paste codes from Excel (Code column and Quantity column)</p>
+        <p>Paste from Excel or type your codes below</p>
       </header>
       
       <main>
         <div className="input-section">
-          <textarea 
-            value={pasteData}
-            onChange={(e) => setPasteData(e.target.value)}
-            placeholder="201 SMT    5&#10;202 SMT    15"
-            rows={6}
-          />
-          <button onClick={handleCheck} disabled={loading} className="btn-primary">
-            {loading ? 'Checking...' : 'Check Availability'}
-          </button>
+          <div className="table-container">
+            <table className="input-table">
+              <thead>
+                <tr>
+                  <th>Sheet Name (Code)</th>
+                  <th>Quantity</th>
+                  <th className="action-col"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={i}>
+                    <td>
+                      <input 
+                        type="text" 
+                        value={row.code}
+                        onChange={(e) => handleRowChange(i, 'code', e.target.value)}
+                        onPaste={(e) => handlePaste(e, i)}
+                        placeholder="e.g. 201 SMT"
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="number" 
+                        value={row.quantity}
+                        onChange={(e) => handleRowChange(i, 'quantity', e.target.value)}
+                        placeholder="1"
+                        min="1"
+                      />
+                    </td>
+                    <td className="action-col">
+                      <button className="btn-remove" onClick={() => removeRow(i)} title="Remove row">×</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="form-actions">
+            <button onClick={addRow} className="btn-secondary" type="button">+ Add Row</button>
+            <button onClick={handleCheck} disabled={loading} className="btn-primary">
+              {loading ? 'Checking...' : 'Check Availability'}
+            </button>
+          </div>
           {error && <p className="error">{error}</p>}
         </div>
 

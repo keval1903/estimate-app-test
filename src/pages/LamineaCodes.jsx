@@ -252,11 +252,14 @@ export default function LamineaCodes() {
       </div>
 
       {showAddModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Add Alternative Code</h3>
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAddModal(false)}>
+          <div className="modal-box">
+            <div className="modal-title">
+              <span>Add Alternative Code</span>
+              <button className="btn btn-ghost" type="button" onClick={() => setShowAddModal(false)}>✕</button>
+            </div>
             <form onSubmit={handleAddCode}>
-              <div className="form-group">
+              <div className="field">
                 <label>Alternative Code</label>
                 <input 
                   autoFocus
@@ -267,12 +270,13 @@ export default function LamineaCodes() {
                   style={{ textTransform: 'uppercase' }}
                 />
               </div>
-              <div className="form-group">
+              <div className="field">
                 <label>Target Product</label>
                 <select 
                   required
                   value={selectedProductId}
                   onChange={e => setSelectedProductId(e.target.value)}
+                  style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', fontSize: '14px', fontFamily: 'inherit' }}
                 >
                   <option value="">-- Select Product --</option>
                   {products.map(p => (
@@ -282,9 +286,9 @@ export default function LamineaCodes() {
                   ))}
                 </select>
               </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowAddModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Code</button>
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <button type="button" className="btn btn-secondary btn-full" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary btn-full">Save Code</button>
               </div>
             </form>
           </div>
@@ -292,27 +296,30 @@ export default function LamineaCodes() {
       )}
 
       {showImportModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Import Codes from Excel</h3>
-            <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowImportModal(false)}>
+          <div className="modal-box">
+            <div className="modal-title">
+              <span>Import Codes from Excel</span>
+              <button className="btn btn-ghost" type="button" onClick={() => setShowImportModal(false)}>✕</button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
               Excel file must contain two columns: <strong>AlternativeCode</strong> and <strong>ProductCode</strong>.
             </p>
             
-            <div className="form-group">
+            <div className="field">
               <label>Import Mode</label>
-              <select value={importMode} onChange={e => setImportMode(e.target.value)}>
+              <select value={importMode} onChange={e => setImportMode(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', fontSize: '14px', fontFamily: 'inherit' }}>
                 <option value="add">Add Mode (Only add new codes, keep existing active)</option>
                 <option value="replace">Replace Mode (Deactivate all codes NOT in this file)</option>
               </select>
             </div>
             
-            <div className="form-group" style={{ marginTop: 20 }}>
-              <input type="file" accept=".xlsx,.csv" onChange={handleImport} />
+            <div className="field" style={{ marginTop: 16 }}>
+              <input type="file" accept=".xlsx,.csv" onChange={handleImport} style={{ padding: '10px 0', border: 'none', fontSize: 14 }} />
             </div>
             
-            <div className="modal-actions" style={{ marginTop: 20 }}>
-              <button type="button" className="btn btn-ghost" onClick={() => setShowImportModal(false)}>Close</button>
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button type="button" className="btn btn-secondary btn-full" onClick={() => setShowImportModal(false)}>Close</button>
             </div>
           </div>
         </div>
