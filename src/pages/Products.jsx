@@ -11,7 +11,7 @@ import { normalizeSearchQuery } from '../lib/synonyms.js'
 import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
 
 const EMPTY_FORM = {
-  product_name: '', keyword: '', product_group: '', length: '', width: '',
+  product_name: '', product_code: '', keyword: '', product_group: '', length: '', width: '',
   unit: '', rate: '', calculation_type: 'QUANTITY',
   has_stock: false, stock: '', add_stock: '', min_stock: '5',
   has_remark: false, has_discount: false
@@ -105,7 +105,7 @@ export default function Products() {
 
   function openEdit(p) {
     setForm({
-      product_name: p.product_name, keyword: p.keyword ?? '', product_group: p.product_group ?? '', length: p.length ?? '',
+      product_name: p.product_name, product_code: p.product_code ?? '', keyword: p.keyword ?? '', product_group: p.product_group ?? '', length: p.length ?? '',
       width: p.width ?? '', unit: p.unit, rate: p.rate,
       calculation_type: p.calculation_type,
       has_stock: p.has_stock || false, stock: p.stock ?? '', add_stock: '',
@@ -186,6 +186,7 @@ export default function Products() {
       has_remark: form.has_remark,
       has_discount: form.has_discount,
       updated_at: new Date().toISOString(),
+      product_code: form.product_code ? form.product_code.trim().toUpperCase() : null,
       [`in_${activePlatform}`]: true,
       [`rate_${activePlatform}`]: Number(form.rate)
     }
@@ -764,6 +765,11 @@ export default function Products() {
               <label>Product Name *</label>
               <input name="product_name" value={form.product_name} onChange={handleFormChange}
                 placeholder="e.g. C PLY 4 18 MM 7 x 4" style={{ textTransform:'uppercase' }} />
+            </div>
+            <div className="field">
+              <label>Product Code <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>(Required to use in Alternative Codes)</span></label>
+              <input name="product_code" value={form.product_code || ''} onChange={handleFormChange}
+                placeholder="e.g. 201 SMT" style={{ textTransform:'uppercase' }} />
             </div>
             <div className="field-row">
               <div className="field">
