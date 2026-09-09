@@ -169,7 +169,7 @@ export default function LamineaCodes() {
            if (!error) successCount++
         }
         
-        showToast(`Imported ${successCount} codes. ${errors > 0 ? \`(\${errors} unknown product codes skipped)\` : ''} ✓`, 'success', 5000)
+        showToast(`Imported ${successCount} codes. ${errors > 0 ? `(${errors} unknown product codes skipped)` : ''} ✓`, 'success', 5000)
         setShowImportModal(false)
         loadData()
       } catch (e) {
