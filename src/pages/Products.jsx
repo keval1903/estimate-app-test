@@ -185,7 +185,20 @@ export default function Products() {
       min_stock: form.has_stock ? Number(form.min_stock || 5) : 5,
       has_remark: form.has_remark,
       has_discount: form.has_discount,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      [`in_${activePlatform}`]: true,
+      [`rate_${activePlatform}`]: Number(form.rate)
+    }
+
+    if (!targetId) {
+      // Prevent violating products_platform_rates_check constraint on insert
+      // by explicitly overriding database defaults for other platforms
+      ['ccai', 'dc', 'laminea', 'phs'].forEach(p => {
+        if (p !== activePlatform) {
+          payload[`in_${p}`] = false;
+          payload[`rate_${p}`] = null;
+        }
+      });
     }
 
     if (targetId) {
