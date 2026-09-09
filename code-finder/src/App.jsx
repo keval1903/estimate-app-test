@@ -67,16 +67,29 @@ function App() {
     const requests = rows
       .filter(r => r.code.trim())
       .map(r => ({
-        code: r.code.trim(),
+        code: r.code.trim().toUpperCase(),
         quantity: Number(r.quantity) || 1
       }))
 
-    if (requests.length === 0) {
+    // Auto-combine duplicate codes by summing their quantities
+    const merged = []
+    const seen = {}
+    for (const req of requests) {
+      if (seen[req.code] !== undefined) {
+        merged[seen[req.code]].quantity += req.quantity
+      } else {
+        seen[req.code] = merged.length
+        merged.push({ ...req })
+      }
+    }
+    const deduped = merged
+
+    if (deduped.length === 0) {
       setError('Please enter at least one sheet code')
       return
     }
 
-    if (requests.length > 25) {
+    if (deduped.length > 25) {
       setError('Maximum 25 codes allowed per request.')
       return
     }
@@ -86,7 +99,7 @@ function App() {
       const res = await fetch('/api/check-availability', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests })
+        body: JSON.stringify({ requests: deduped })
       })
 
       const data = await res.json()
