@@ -35,7 +35,7 @@ function App() {
   const handlePaste = (e, rowIndex) => {
     const pastedData = e.clipboardData.getData('Text')
     if (!pastedData || pastedData.indexOf('\n') === -1) return // let default single-cell paste happen
-    
+
     e.preventDefault()
     const lines = pastedData.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
     if (lines.length === 0) return
@@ -63,7 +63,7 @@ function App() {
     setError('')
     setResults([])
     setCheckedAt('')
-    
+
     const requests = rows
       .filter(r => r.code.trim())
       .map(r => ({
@@ -90,7 +90,7 @@ function App() {
       })
 
       const data = await res.json()
-      
+
       if (!res.ok) {
         throw new Error(data.error || 'Failed to check availability')
       }
@@ -113,7 +113,7 @@ function App() {
       const canvas = await html2canvas(resultsRef.current, { backgroundColor: '#ffffff', scale: 2 })
       const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
       const file = new File([blob], 'availability.png', { type: 'image/png' })
-      
+
       const text = `Stock Availability Check - ${checkedAt}`
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -133,10 +133,9 @@ function App() {
   return (
     <div className="container">
       <header>
-        <h1>Code Availability Finder</h1>
-        <p>Paste from Excel or type your codes below</p>
+        <h1>Laminate Stock Enquiry</h1>
       </header>
-      
+
       <main>
         <div className="input-section">
           <div className="table-container">
@@ -152,8 +151,8 @@ function App() {
                 {rows.map((row, i) => (
                   <tr key={i}>
                     <td>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={row.code}
                         onChange={(e) => handleRowChange(i, 'code', e.target.value)}
                         onPaste={(e) => handlePaste(e, i)}
@@ -161,8 +160,8 @@ function App() {
                       />
                     </td>
                     <td>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={row.quantity}
                         onChange={(e) => handleRowChange(i, 'quantity', e.target.value)}
                         placeholder="1"
@@ -177,7 +176,7 @@ function App() {
               </tbody>
             </table>
           </div>
-          
+
           <div className="form-actions">
             <button onClick={addRow} className="btn-secondary" type="button">+ Add Row</button>
             <button onClick={handleCheck} disabled={loading} className="btn-primary">
@@ -192,11 +191,11 @@ function App() {
             <div className="results-actions">
               <button onClick={handleShare} className="btn-secondary">Share / Save Image</button>
             </div>
-            
+
             <div ref={resultsRef} className="results-card">
               <h2>Availability Report</h2>
               {checkedAt && <p className="timestamp">Checked on: {checkedAt}</p>}
-              
+
               <table className="results-table">
                 <thead>
                   <tr>
