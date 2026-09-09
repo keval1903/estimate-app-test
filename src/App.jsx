@@ -14,6 +14,7 @@ import SalesReport from './pages/SalesReport'
 import SelectionSheetList from './pages/SelectionSheetList'
 import SelectionSheetEditor from './pages/SelectionSheetEditor'
 import Catalogue from './pages/Catalogue'
+import LamineaCodes from './pages/LamineaCodes'
 import ChoosePlatform from './pages/ChoosePlatform'
 import { PlatformProvider } from './context/PlatformContext'
 
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="selection-sheets" element={<SelectionSheetList />} />
             <Route path="selection-sheets/:id" element={<SelectionSheetEditor />} />
             <Route path="catalogue" element={<Catalogue />} />
+            <Route path="alternative-codes" element={<LamineaCodes />} />
             <Route path="sales-report" element={<SalesReport />} />
             <Route path="users" element={<UserManagement />} />
           </Route>

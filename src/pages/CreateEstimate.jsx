@@ -70,7 +70,8 @@ const EMPTY_ITEM = {
   length_snapshot: null, width_snapshot: null,
   nos: '', quantity: '', unit_snapshot: '',
   rate: '', base_rate: '', discount_percent: '', calculation_type_snapshot: 'QUANTITY', amount: 0,
-  has_stock: false, stock: 0, has_remark: false, remark: '', has_discount: false, keyword_snapshot: ''
+  has_stock: false, stock: 0, has_remark: false, remark: '', has_discount: false, keyword_snapshot: '',
+  alternative_code_snapshot: null, actual_code_snapshot: null
 }
 
 const EMPTY_PRODUCT_FORM = {
@@ -123,6 +124,7 @@ export default function CreateEstimate() {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestionIdx, setSuggestionIdx] = useState(-1)
   const [allProducts, setAllProducts] = useState([])
+  const [searchOptions, setSearchOptions] = useState([])
 
   // new product state
   const [showProductModal, setShowProductModal] = useState(false)
@@ -160,14 +162,31 @@ export default function CreateEstimate() {
   useEffect(() => {
     Promise.all([
       supabase.from('products').select('*').order('product_name').range(0, 999),
-      supabase.from('products').select('*').order('product_name').range(1000, 1999)
-    ]).then(([batch1, batch2]) => {
+      supabase.from('products').select('*').order('product_name').range(1000, 1999),
+      activePlatform === 'laminea' ? supabase.from('laminea_product_codes').select('*, products(product_code, product_name)').eq('is_active', true) : Promise.resolve({data: []})
+    ]).then(([batch1, batch2, altCodes]) => {
       const rawData = [...(batch1.data || []), ...(batch2.data || [])]
         const mapped = rawData.filter(p => p[`in_${activePlatform}`] === true).map(p => ({
           ...p,
           rate: p[`rate_${activePlatform}`] !== undefined && p[`rate_${activePlatform}`] !== null ? p[`rate_${activePlatform}`] : (p.rate || 0)
         }))
         setAllProducts(mapped)
+
+        let options = [...mapped]
+        if (activePlatform === 'laminea' && altCodes.data) {
+          altCodes.data.forEach(alt => {
+            const actualProduct = mapped.find(p => p.id === alt.product_id)
+            if (actualProduct) {
+               options.push({
+                 ...actualProduct,
+                 product_name: `${alt.alternative_code} (${actualProduct.product_code || actualProduct.product_name})`,
+                 alternative_code_snapshot: alt.alternative_code,
+                 actual_code_snapshot: actualProduct.product_code || ''
+               })
+            }
+          })
+        }
+        setSearchOptions(options)
     })
     supabase.from('sites').select('*').eq('platform', activePlatform).order('site_name')
       .then(({ data }) => setAllSites(data || []))
@@ -219,6 +238,8 @@ export default function CreateEstimate() {
             id: it.id,
             product_id: it.product_id,
             product_name_snapshot: it.product_name_snapshot,
+            alternative_code_snapshot: it.alternative_code_snapshot || null,
+            actual_code_snapshot: it.actual_code_snapshot || null,
             length_snapshot: it.length_snapshot,
             width_snapshot: it.width_snapshot,
             nos: it.nos ?? '',
@@ -332,6 +353,8 @@ export default function CreateEstimate() {
           id: it.id,
           product_id: it.product_id,
           product_name_snapshot: it.product_name_snapshot,
+          alternative_code_snapshot: it.alternative_code_snapshot || null,
+          actual_code_snapshot: it.actual_code_snapshot || null,
           length_snapshot: it.length_snapshot,
           width_snapshot: it.width_snapshot,
           nos: it.nos ?? '',
@@ -368,14 +391,14 @@ export default function CreateEstimate() {
     q = normalizeSearchQuery(q)
 
     if (!q) {
-      setProductSuggestions(allProducts)
+      setProductSuggestions(searchOptions)
       setSuggestionIdx(-1)
       return
     }
     const searchTerms = q.split(/\s+/)
     const smartTerms = q.match(/[a-z]+|[0-9]+/g) || []
 
-    const results = allProducts.filter(p => {
+    const results = searchOptions.filter(p => {
       const pName = p.product_name.toLowerCase()
       const matchesAllTerms = searchTerms.every(term => pName.includes(term))
       const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
@@ -388,7 +411,7 @@ export default function CreateEstimate() {
     })
     setProductSuggestions(results)
     setSuggestionIdx(-1)
-  }, [productSearch, allProducts])
+  }, [productSearch, searchOptions])
 
   // ── Client search ──
   useEffect(() => {
@@ -452,6 +475,8 @@ export default function CreateEstimate() {
       const nextItem = {
         product_id: p.id,
         product_name_snapshot: p.product_name,
+        alternative_code_snapshot: p.alternative_code_snapshot || null,
+        actual_code_snapshot: p.actual_code_snapshot || null,
         length_snapshot: p.length,
         width_snapshot: p.width,
         unit_snapshot: p.unit,
@@ -481,6 +506,8 @@ export default function CreateEstimate() {
         ...f,
         product_id: p.id,
         product_name_snapshot: p.product_name,
+        alternative_code_snapshot: p.alternative_code_snapshot || null,
+        actual_code_snapshot: p.actual_code_snapshot || null,
         length_snapshot: p.length,
         width_snapshot: p.width,
         unit_snapshot: p.unit,
@@ -918,6 +945,8 @@ export default function CreateEstimate() {
           serial_number: i + 1,
           product_id: it.product_id,
           product_name_snapshot: it.product_name_snapshot,
+          alternative_code_snapshot: it.alternative_code_snapshot || null,
+          actual_code_snapshot: it.actual_code_snapshot || null,
           length_snapshot: it.length_snapshot,
           width_snapshot: it.width_snapshot,
           nos: parseFloat(it.nos) || null,
@@ -1051,6 +1080,8 @@ export default function CreateEstimate() {
           serial_number: i + 1,
           product_id: it.product_id,
           product_name_snapshot: it.product_name_snapshot,
+          alternative_code_snapshot: it.alternative_code_snapshot || null,
+          actual_code_snapshot: it.actual_code_snapshot || null,
           length_snapshot: it.length_snapshot,
           width_snapshot: it.width_snapshot,
           nos: parseFloat(it.nos) || null,

@@ -686,7 +686,9 @@ export default function EstimateView() {
                     <tr key={it.id}>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>{it.serial_number}</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
-                        {it.product_name_snapshot}{it.remark ? ` - ${it.remark}` : ''}
+                        {isChallanMode && it.alternative_code_snapshot
+                          ? it.alternative_code_snapshot
+                          : it.product_name_snapshot}{it.remark ? ` - ${it.remark}` : ''}
                       </td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
                         {(() => {

@@ -177,6 +177,151 @@ export default function Home() {
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimate/new?type=RETURN`)}>
           <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
           <div>
+    }, [activePlatform])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const buttons = Array.from(document.querySelectorAll('.home-btn:not([disabled])'))
+        if (!buttons.length) return
+        const activeIdx = buttons.indexOf(document.activeElement)
+
+        e.preventDefault()
+        if (e.key === 'ArrowDown') {
+          const nextIdx = activeIdx < buttons.length - 1 ? activeIdx + 1 : 0
+          buttons[nextIdx].focus()
+        } else {
+          const prevIdx = activeIdx > 0 ? activeIdx - 1 : (activeIdx === -1 ? 0 : buttons.length - 1)
+          buttons[prevIdx].focus()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  async function handleBackupDownload() {
+    setDownloadingBackup(true)
+    try {
+      await downloadExcelBackup(supabase, activePlatform)
+    } catch (e) {
+      alert('Failed to download backup: ' + e.message)
+    } finally {
+      setDownloadingBackup(false)
+    }
+  }
+
+  return (
+    <div className="app-container">
+      <div className="top-nav" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span className="nav-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>📋 {PLATFORM_NAMES[activePlatform]} Estimate App <button onClick={() => navigate("/choose-platform")} style={{ marginLeft: 10, fontSize: "0.7rem", background: "rgba(255,255,255,0.2)", color: "white", border: "none", padding: "4px 8px", borderRadius: 4, cursor: "pointer" }}>🔄 Switch</button></span>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          {connOk !== null && (
+            <span className={`conn-status ${connOk ? 'conn-ok' : 'conn-err'}`}>
+              {connOk ? '● Live' : '● Offline'}
+            </span>
+          )}
+          <button
+            onClick={async () => {
+              if (user?.id) {
+                const { error: rpcErr } = await supabase.rpc('update_my_session_token', { new_token: null })
+                if (rpcErr) {
+                  // Fallback for Admin if RPC is missing
+                  await supabase.from('user_roles').update({
+                    current_session_token: null,
+                    session_expires_at: null
+                  }).eq('id', user.id)
+                }
+              }
+              await supabase.auth.signOut()
+            }}
+            style={{ padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: '0.875rem' }}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <div className="page">
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 4 }}>
+            Welcome back
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>What would you like to do?</div>
+        </div>
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimate/new`)}>
+          <div className="home-btn-icon" style={{ background: '#e8f5ec' }}>📝</div>
+          <div>
+            <div className="home-btn-text">CREATE NEW QUOTATION / ESTIMATE</div>
+            <div className="home-btn-sub">Start a quote or direct bill for a site</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=quotations`)}>
+          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📜</div>
+          <div>
+            <div className="home-btn-text">PREVIOUS QUOTATIONS</div>
+            <div className="home-btn-sub">View quotes or convert them to estimates</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=estimates`)}>
+          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🗂️</div>
+          <div>
+            <div className="home-btn-text">PREVIOUS ESTIMATES</div>
+            <div className="home-btn-sub">View, edit or reprint old bills</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/products`)}>
+          <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
+          <div>
+            <div className="home-btn-text">PRODUCT MASTER</div>
+            <div className="home-btn-sub">Add, edit or update product rates & stock</div>
+          </div>
+        </button>
+
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/catalogue`)}>
+          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📋</div>
+          <div>
+            <div className="home-btn-text">CATALOGUE</div>
+            <div className="home-btn-sub">Track lent items and inventory returns</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/client-sites`)}>
+          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
+          <div>
+            <div className="home-btn-text">SITE DETAILS & SELECTION SHEETS</div>
+            <div className="home-btn-sub">Manage client sites, material details, and selection sheets</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/clients`)}>
+          <div className="home-btn-icon" style={{ background: '#e0e7ff' }}>👥</div>
+          <div>
+            <div className="home-btn-text">CLIENTS & LEDGER</div>
+            <div className="home-btn-sub">Manage client profiles, payments & balances</div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/stock-report?tab=reorder`)}>
+          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>⚠️</div>
+          <div>
+            <div className="home-btn-text">
+              LOW STOCK ALERTS {lowStockCount > 0 ? `(${lowStockCount})` : ''}
+            </div>
+            <div className="home-btn-sub">
+              {lowStockCount > 0 ? `${lowStockCount} items below minimum stock level` : 'View items below minimum stock level'}
+            </div>
+          </div>
+        </button>
+
+        <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimate/new?type=RETURN`)}>
+          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
+          <div>
             <div className="home-btn-text">CREATE NEW SALES RETURN</div>
             <div className="home-btn-sub">Log returned items and issue a credit note</div>
           </div>
@@ -206,6 +351,16 @@ export default function Home() {
             <div className="home-btn-sub">View product group sales by client</div>
           </div>
         </button>
+
+        {activePlatform === 'laminea' && (role === 'ADMIN' || role === 'STAFF') && (
+          <button className="home-btn" onClick={() => navigate(`/${activePlatform}/alternative-codes`)}>
+            <div className="home-btn-icon" style={{ background: '#e0f2fe' }}>🔀</div>
+            <div>
+              <div className="home-btn-text">ALTERNATIVE CODES</div>
+              <div className="home-btn-sub">Map public codes to actual inventory</div>
+            </div>
+          </button>
+        )}
 
         {role === 'ADMIN' && (
           <>
