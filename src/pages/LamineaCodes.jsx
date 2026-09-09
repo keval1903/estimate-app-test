@@ -203,42 +203,48 @@ export default function LamineaCodes() {
           </div>
         </div>
 
-        <div className="table-responsive">
-          <table className="table table-striped">
+        <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
-              <tr>
-                <th>Alternative Code</th>
-                <th>Actual Product Code</th>
-                <th>Product Name</th>
-                <th>Status</th>
-                <th style={{ width: 100 }}>Actions</th>
+              <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>Alternative Code</th>
+                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>Product Code</th>
+                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151' }}>Product Name</th>
+                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151' }}>Status</th>
+                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', width: 120 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {codes.length === 0 ? (
-                <tr><td colSpan="5" style={{ textAlign: 'center' }}>No codes mapped yet.</td></tr>
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#9ca3af' }}>No codes mapped yet. Use "+ Add Code" to create one.</td></tr>
               ) : (
-                codes.map(c => (
-                  <tr key={c.id} style={{ opacity: c.is_active ? 1 : 0.6 }}>
-                    <td style={{ fontWeight: 600 }}>{c.alternative_code}</td>
-                    <td>{c.products?.product_code || '-'}</td>
-                    <td>{c.products?.product_name || '-'} {!c.products?.in_laminea && <span style={{ color: 'red', fontSize: 11 }}>(Disabled)</span>}</td>
-                    <td>
+                codes.map((c, i) => (
+                  <tr key={c.id} style={{ opacity: c.is_active ? 1 : 0.5, borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--accent, #7c5c2e)', fontFamily: 'monospace', fontSize: 15 }}>{c.alternative_code}</td>
+                    <td style={{ padding: '10px 14px', color: '#374151', fontFamily: 'monospace' }}>{c.products?.product_code || <span style={{ color: '#d1d5db' }}>—</span>}</td>
+                    <td style={{ padding: '10px 14px', color: '#374151' }}>
+                      {c.products?.product_name || <span style={{ color: '#d1d5db' }}>—</span>}
+                      {!c.products?.in_laminea && <span style={{ color: '#ef4444', fontSize: 11, marginLeft: 6 }}>(Disabled)</span>}
+                    </td>
+                    <td style={{ padding: '10px 14px' }}>
                       <span style={{ 
-                        padding: '2px 8px', 
-                        borderRadius: 10, 
-                        fontSize: 11, 
+                        padding: '3px 10px', 
+                        borderRadius: 20, 
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.05em',
                         background: c.is_active ? '#dcfce7' : '#fee2e2', 
                         color: c.is_active ? '#166534' : '#991b1b'
                       }}>
                         {c.is_active ? 'ACTIVE' : 'INACTIVE'}
                       </span>
                     </td>
-                    <td>
+                    <td style={{ padding: '10px 14px' }}>
                       <button 
                         className="btn btn-ghost btn-sm" 
                         onClick={() => handleToggleActive(c.id, c.is_active)}
                         title={c.is_active ? "Disable Code" : "Reactivate Code"}
+                        style={{ color: c.is_active ? '#ef4444' : '#16a34a' }}
                       >
                         {c.is_active ? '🚫 Disable' : '✅ Enable'}
                       </button>
