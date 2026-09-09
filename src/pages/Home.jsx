@@ -69,11 +69,11 @@ export default function Home() {
   return (
     <div className="app-container">
       <div className="top-nav" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span className="nav-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>≡ƒôï {PLATFORM_NAMES[activePlatform]} Estimate App <button onClick={() => navigate("/choose-platform")} style={{ marginLeft: 10, fontSize: "0.7rem", background: "rgba(255,255,255,0.2)", color: "white", border: "none", padding: "4px 8px", borderRadius: 4, cursor: "pointer" }}>≡ƒöä Switch</button></span>
+        <span className="nav-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>📋 {PLATFORM_NAMES[activePlatform]} Estimate App <button onClick={() => navigate("/choose-platform")} style={{ marginLeft: 10, fontSize: "0.7rem", background: "rgba(255,255,255,0.2)", color: "white", border: "none", padding: "4px 8px", borderRadius: 4, cursor: "pointer" }}>🔄 Switch</button></span>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           {connOk !== null && (
             <span className={`conn-status ${connOk ? 'conn-ok' : 'conn-err'}`}>
-              {connOk ? 'ΓùÅ Live' : 'ΓùÅ Offline'}
+              {connOk ? '● Live' : '● Offline'}
             </span>
           )}
           <button
@@ -106,7 +106,7 @@ export default function Home() {
         </div>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimate/new`)}>
-          <div className="home-btn-icon" style={{ background: '#e8f5ec' }}>≡ƒô¥</div>
+          <div className="home-btn-icon" style={{ background: '#e8f5ec' }}>📝</div>
           <div>
             <div className="home-btn-text">CREATE NEW QUOTATION / ESTIMATE</div>
             <div className="home-btn-sub">Start a quote or direct bill for a site</div>
@@ -114,7 +114,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=quotations`)}>
-          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>≡ƒô£</div>
+          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📜</div>
           <div>
             <div className="home-btn-text">PREVIOUS QUOTATIONS</div>
             <div className="home-btn-sub">View quotes or convert them to estimates</div>
@@ -122,7 +122,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=estimates`)}>
-          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>≡ƒùé∩╕Å</div>
+          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🗂️</div>
           <div>
             <div className="home-btn-text">PREVIOUS ESTIMATES</div>
             <div className="home-btn-sub">View, edit or reprint old bills</div>
@@ -130,7 +130,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/products`)}>
-          <div className="home-btn-icon" style={{ background: '#dbeafe' }}>≡ƒôª</div>
+          <div className="home-btn-icon" style={{ background: '#dbeafe' }}>📦</div>
           <div>
             <div className="home-btn-text">PRODUCT MASTER</div>
             <div className="home-btn-sub">Add, edit or update product rates & stock</div>
@@ -139,7 +139,7 @@ export default function Home() {
 
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/catalogue`)}>
-          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>≡ƒôï</div>
+          <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📋</div>
           <div>
             <div className="home-btn-text">CATALOGUE</div>
             <div className="home-btn-sub">Track lent items and inventory returns</div>
@@ -147,7 +147,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/client-sites`)}>
-          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>≡ƒÅù∩╕Å</div>
+          <div className="home-btn-icon" style={{ background: '#fef3c7' }}>🏗️</div>
           <div>
             <div className="home-btn-text">SITE DETAILS & SELECTION SHEETS</div>
             <div className="home-btn-sub">Manage client sites, material details, and selection sheets</div>
@@ -155,7 +155,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/clients`)}>
-          <div className="home-btn-icon" style={{ background: '#e0e7ff' }}>≡ƒæÑ</div>
+          <div className="home-btn-icon" style={{ background: '#e0e7ff' }}>👥</div>
           <div>
             <div className="home-btn-text">CLIENTS & LEDGER</div>
             <div className="home-btn-sub">Manage client profiles, payments & balances</div>
@@ -163,7 +163,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/stock-report?tab=reorder`)}>
-          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>ΓÜá∩╕Å</div>
+          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>⚠️</div>
           <div>
             <div className="home-btn-text">
               LOW STOCK ALERTS {lowStockCount > 0 ? `(${lowStockCount})` : ''}
@@ -175,7 +175,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimate/new?type=RETURN`)}>
-          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>Γå⌐∩╕Å</div>
+          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
           <div>
             <div className="home-btn-text">CREATE NEW SALES RETURN</div>
             <div className="home-btn-sub">Log returned items and issue a credit note</div>
@@ -184,7 +184,7 @@ export default function Home() {
 
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=returns`)}>
-          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>Γå⌐∩╕Å</div>
+          <div className="home-btn-icon" style={{ background: '#fee2e2' }}>↩️</div>
           <div>
             <div className="home-btn-text">PREVIOUS SALE RETURNS</div>
             <div className="home-btn-sub">View, edit or reprint sales returns</div>
@@ -192,7 +192,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/stock-report`)}>
-          <div className="home-btn-icon" style={{ background: '#ecfdf5' }}>≡ƒôè</div>
+          <div className="home-btn-icon" style={{ background: '#ecfdf5' }}>📊</div>
           <div>
             <div className="home-btn-text">STOCK MOVEMENT REPORT</div>
             <div className="home-btn-sub">View pieces added, sold & stock audit log</div>
@@ -200,7 +200,7 @@ export default function Home() {
         </button>
 
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/sales-report`)}>
-          <div className="home-btn-icon" style={{ background: '#fef08a' }}>≡ƒôê</div>
+          <div className="home-btn-icon" style={{ background: '#fef08a' }}>📈</div>
           <div>
             <div className="home-btn-text">SALES REPORT</div>
             <div className="home-btn-sub">View product group sales by client</div>
@@ -219,7 +219,7 @@ export default function Home() {
         {role === 'ADMIN' && (
           <>
             <button className="home-btn" onClick={handleBackupDownload} disabled={downloadingBackup}>
-              <div className="home-btn-icon" style={{ background: '#dcfce7' }}>≡ƒôÑ</div>
+              <div className="home-btn-icon" style={{ background: '#dcfce7' }}>📥</div>
               <div>
                 <div className="home-btn-text">
                   {downloadingBackup ? 'GENERATING EXCEL...' : 'DOWNLOAD EXCEL BACKUP'}
@@ -229,7 +229,7 @@ export default function Home() {
             </button>
 
             <button className="home-btn" onClick={() => navigate(`/${activePlatform}/users`)}>
-              <div className="home-btn-icon" style={{ background: '#f3e8ff' }}>≡ƒ¢í∩╕Å</div>
+              <div className="home-btn-icon" style={{ background: '#f3e8ff' }}>🛡️</div>
               <div>
                 <div className="home-btn-text">USER MANAGEMENT</div>
                 <div className="home-btn-sub">Add staff accounts and manage roles</div>
