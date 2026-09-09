@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePlatform } from '../context/PlatformContext'
 import { useToast } from '../hooks/useToast'
+import { isFuzzyMatch } from '../lib/searchUtils'
 import * as XLSX from 'xlsx'
 
 export default function LamineaCodes() {
@@ -22,6 +23,9 @@ export default function LamineaCodes() {
   
   const [showImportModal, setShowImportModal] = useState(false)
   const [importMode, setImportMode] = useState('add') // 'add' or 'replace'
+
+  const [search, setSearch] = useState('')
+  const [searchBy, setSearchBy] = useState('alternative_code') // 'alternative_code' | 'product_code' | 'product_name'
 
   useEffect(() => {
     if (activePlatform !== 'laminea') {
@@ -181,6 +185,23 @@ export default function LamineaCodes() {
 
   if (loading) return <div className="app-container"><div className="spinner" /></div>
 
+  const s = search.trim().toLowerCase()
+  const filteredCodes = s
+    ? codes.filter(c => {
+        if (searchBy === 'alternative_code') {
+          const v = (c.alternative_code || '').toLowerCase()
+          return v.includes(s) || isFuzzyMatch(s, v)
+        }
+        if (searchBy === 'product_code') {
+          const v = (c.products?.product_code || '').toLowerCase()
+          return v.includes(s) || isFuzzyMatch(s, v)
+        }
+        // product_name
+        const v = (c.products?.product_name || '').toLowerCase()
+        return v.includes(s) || isFuzzyMatch(s, v)
+      })
+    : codes
+
   return (
     <div className="app-container">
       {ToastEl}
@@ -191,8 +212,10 @@ export default function LamineaCodes() {
       </div>
 
       <div className="page">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Mapped Codes ({codes.length})</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 18 }}>
+            Mapped Codes ({filteredCodes.length}{filteredCodes.length !== codes.length ? `/${codes.length}` : ''})
+          </h2>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setShowImportModal(true)}>
               📥 Import Excel
@@ -201,6 +224,28 @@ export default function LamineaCodes() {
               + Add Code
             </button>
           </div>
+        </div>
+
+        {/* Search bar */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 16 }}>🔍</span>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={`Search by ${searchBy === 'alternative_code' ? 'alternative code' : searchBy === 'product_code' ? 'product code' : 'product name'}...`}
+              style={{ width: '100%', paddingLeft: 34, paddingRight: 10, height: 38, borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, boxSizing: 'border-box' }}
+            />
+          </div>
+          <select
+            value={searchBy}
+            onChange={e => { setSearchBy(e.target.value); setSearch('') }}
+            style={{ height: 38, borderRadius: 8, border: '1px solid #d1d5db', padding: '0 10px', fontSize: 13, background: '#f9fafb', cursor: 'pointer' }}
+          >
+            <option value="alternative_code">Alternative Code</option>
+            <option value="product_code">Product Code</option>
+            <option value="product_name">Product Name</option>
+          </select>
         </div>
 
         <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #e5e7eb' }}>
@@ -215,10 +260,12 @@ export default function LamineaCodes() {
               </tr>
             </thead>
             <tbody>
-              {codes.length === 0 ? (
-                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#9ca3af' }}>No codes mapped yet. Use "+ Add Code" to create one.</td></tr>
+              {filteredCodes.length === 0 ? (
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#9ca3af' }}>
+                  {codes.length === 0 ? 'No codes mapped yet. Use "+ Add Code" to create one.' : `No results for "${search}"`}
+                </td></tr>
               ) : (
-                codes.map((c, i) => (
+                filteredCodes.map((c, i) => (
                   <tr key={c.id} style={{ opacity: c.is_active ? 1 : 0.5, borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
                     <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--accent, #7c5c2e)', fontFamily: 'monospace', fontSize: 15 }}>{c.alternative_code}</td>
                     <td style={{ padding: '10px 14px', color: '#374151', fontFamily: 'monospace' }}>{c.products?.product_code || <span style={{ color: '#d1d5db' }}>—</span>}</td>
