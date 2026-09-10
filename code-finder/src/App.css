@@ -312,6 +312,7 @@ header p {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .results-table td {
@@ -320,12 +321,12 @@ header p {
   border-bottom: 1px solid #f1f5f9;
   font-size: 0.95rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .results-table th:first-child,
 .results-table td:first-child {
   text-align: left;
-  white-space: nowrap;
 }
 
 .results-table tbody tr:hover td {
@@ -382,5 +383,16 @@ header p {
   }
   .container {
     padding: 1.5rem 1rem;
+  }
+  .results-card {
+    padding: 1.5rem 1rem;
+  }
+  .results-table th {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.75rem;
+  }
+  .results-table td {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.85rem;
   }
 }
