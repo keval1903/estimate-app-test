@@ -102,10 +102,7 @@ serve(async (req: Request) => {
     
     // Fetch codes
     const { data: mappings, error: mappingErr } = await supabaseAdmin
-      .from('laminea_product_codes')
-      .select('alternative_code, product_id, is_active')
-      .in('alternative_code', uniqueCodes)
-      .eq('is_active', true)
+      .rpc('search_laminea_availability_codes', { search_codes: uniqueCodes })
 
     if (mappingErr) throw mappingErr
 
@@ -124,10 +121,11 @@ serve(async (req: Request) => {
       })
     }
 
-    // Map alternative_code to actual stock
+    // Map alternative_code to actual stock using normalized keys
     const codeToStock: Record<string, number> = {}
-    mappings.forEach(m => {
-       codeToStock[m.alternative_code] = stockMap[m.product_id] || 0
+    mappings.forEach((m: any) => {
+       const norm = m.alternative_code.replace(/\s+/g, '').toUpperCase()
+       codeToStock[norm] = stockMap[m.product_id] || 0
     })
 
     const results = []
@@ -135,17 +133,19 @@ serve(async (req: Request) => {
     for (const code of uniqueCodes) {
       const reqQty = aggregatedReqs[code]
       
+      const normCode = code.replace(/\s+/g, '').toUpperCase()
+      
       if (reqQty < 0) {
         results.push({ code, requestedQuantity: 'Invalid', status: 'INVALID QUANTITY' })
         continue
       }
       
-      if (codeToStock[code] === undefined) {
+      if (codeToStock[normCode] === undefined) {
          results.push({ code, requestedQuantity: reqQty, status: 'CODE NOT FOUND' })
          continue
       }
       
-      const actualStock = codeToStock[code]
+      const actualStock = codeToStock[normCode]
       
       let status = 'PLEASE CONFIRM WITH US'
       if (reqQty >= 1 && reqQty <= 10 && actualStock >= reqQty) {

@@ -827,3 +827,19 @@ ALTER TABLE catalogue_items DISABLE ROW LEVEL SECURITY;
 -- Added User Alias (Prepared By Default)
 -- ============================================================
 ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS alias TEXT;
+
+-- ============================================================
+-- RPC for space and case insensitive matching of alternative codes
+-- ============================================================
+CREATE OR REPLACE FUNCTION search_laminea_availability_codes(search_codes TEXT[])
+RETURNS TABLE(alternative_code TEXT, product_id UUID, is_active BOOLEAN)
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT alternative_code, product_id, is_active
+  FROM laminea_product_codes
+  WHERE is_active = true
+    AND REPLACE(UPPER(alternative_code), ' ', '') = ANY (
+      SELECT REPLACE(UPPER(c), ' ', '') FROM UNNEST(search_codes) c
+    );
+$$;
