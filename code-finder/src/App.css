@@ -304,7 +304,7 @@ header p {
 }
 
 .results-table th {
-  text-align: left;
+  text-align: center;
   padding: 1rem;
   border-bottom: 2px solid #e2e8f0;
   color: #475569;
@@ -315,10 +315,17 @@ header p {
 }
 
 .results-table td {
+  text-align: center;
   padding: 1rem;
   border-bottom: 1px solid #f1f5f9;
   font-size: 0.95rem;
   font-weight: 500;
+}
+
+.results-table th:first-child,
+.results-table td:first-child {
+  text-align: left;
+  white-space: nowrap;
 }
 
 .results-table tbody tr:hover td {
