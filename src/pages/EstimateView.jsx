@@ -232,7 +232,7 @@ export default function EstimateView() {
     if (navigator.share && navigator.canShare) {
       try {
         canShareFiles = navigator.canShare({ files: [new File([''], 'test.png', { type: 'image/png' })] })
-      } catch (e) {}
+      } catch (e) { }
     }
 
     let fallbackWindow = null;
@@ -303,7 +303,7 @@ export default function EstimateView() {
             const newStock = Number(p.stock) + qty
             await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
             await supabase.from('stock_history').insert({
-                platform: activePlatform,
+              platform: activePlatform,
               product_id: p.id,
               change_type: 'REVERT_TO_QUOTATION',
               quantity_changed: qty, // positive to add stock back
@@ -370,7 +370,7 @@ export default function EstimateView() {
             const newStock = Number(p.stock) - qty
             await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
             await supabase.from('stock_history').insert({
-                platform: activePlatform,
+              platform: activePlatform,
               product_id: p.id,
               change_type: 'QUOTATION_CONVERT',
               quantity_changed: -qty,
@@ -508,8 +508,8 @@ export default function EstimateView() {
         const standardMaxRows = paperSize === 'a5' ? A5_ROWS : A4_ROWS;
         const occupied = chunk.length + (!isFirst ? 1 : 0) + extraRows;
         if (occupied < standardMaxRows) {
-         // const maxEmpty = paperSize === 'a5' ? 12 : 20;
-         // emptyRowsCount = Math.min(emptyRowsCount, maxEmpty);
+          // const maxEmpty = paperSize === 'a5' ? 12 : 20;
+          // emptyRowsCount = Math.min(emptyRowsCount, maxEmpty);
           emptyRowsCount = standardMaxRows - occupied;
         }
       }
@@ -602,250 +602,250 @@ export default function EstimateView() {
             width: paperSize === 'a5' ? '529px' : '763px'
           }}>
             <div id="estimate-preview" ref={previewRef} style={{ display: 'flex', flexDirection: 'column', gap: '32px', width: '100%' }}>
-          {pages.map((page, pageIndex) => (
-            <div key={pageIndex} className="estimate-page" style={{ pageBreakAfter: page.isLast ? 'auto' : 'always', position: 'relative' }}>
-              <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', border: '1.5px solid #000', fontFamily: 'Arial, sans-serif', fontSize: 13, color: '#000', background: '#fff' }}>
-                <colgroup>
-                  <col style={{ width: 42 }} />     {/* Sr No */}
-                  <col style={{ width: 'auto' }} /> {/* Description */}
-                  <col style={{ width: isChallanMode ? 55 : 42 }} />     {/* Nos. */}
-                  <col style={{ width: isChallanMode ? 100 : 68 }} />     {/* Quantity */}
-                  {!isChallanMode && <col style={{ width: 78 }} />}     {/* Rate */}
-                  {!isChallanMode && <col style={{ width: 110 }} />}     {/* Amount */}
-                </colgroup>
-                <tbody>
-                  {/* Title row */}
-                  <tr>
-                    <td colSpan={isChallanMode ? 4 : 6} style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, letterSpacing: 2, padding: '6px 0', borderBottom: '1px solid #000' }}>
-                      {isChallanMode ? 'DELIVERY CHALLAN' : estimate.type === 'QUOTATION' ? 'Q U O T A T I O N' : estimate.type === 'RETURN' ? 'S A L E S   R E T U R N' : 'E S T I M A T E'}
-                      {pages.length > 1 && <span style={{ fontSize: 10, fontWeight: 400, position: 'absolute', right: 8, top: 8 }}>(Page {pageIndex + 1}/{pages.length})</span>}
-                    </td>
-                  </tr>
+              {pages.map((page, pageIndex) => (
+                <div key={pageIndex} className="estimate-page" style={{ pageBreakAfter: page.isLast ? 'auto' : 'always', position: 'relative' }}>
+                  <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', border: '1.5px solid #000', fontFamily: 'Arial, sans-serif', fontSize: 13, color: '#000', background: '#fff' }}>
+                    <colgroup>
+                      <col style={{ width: 42 }} />     {/* Sr No */}
+                      <col style={{ width: 'auto' }} /> {/* Description */}
+                      <col style={{ width: isChallanMode ? 55 : 42 }} />     {/* Nos. */}
+                      <col style={{ width: isChallanMode ? 100 : 68 }} />     {/* Quantity */}
+                      {!isChallanMode && <col style={{ width: 78 }} />}     {/* Rate */}
+                      {!isChallanMode && <col style={{ width: 110 }} />}     {/* Amount */}
+                    </colgroup>
+                    <tbody>
+                      {/* Title row */}
+                      <tr>
+                        <td colSpan={isChallanMode ? 4 : 6} style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, letterSpacing: 2, padding: '6px 0', borderBottom: '1px solid #000' }}>
+                          {isChallanMode ? 'DELIVERY CHALLAN' : estimate.type === 'QUOTATION' ? 'Q U O T A T I O N' : estimate.type === 'RETURN' ? 'S A L E S   R E T U R N' : 'E S T I M A T E'}
+                          {pages.length > 1 && <span style={{ fontSize: 10, fontWeight: 400, position: 'absolute', right: 8, top: 8 }}>(Page {pageIndex + 1}/{pages.length})</span>}
+                        </td>
+                      </tr>
 
-                  {/* Meta details */}
-                  <tr>
-                    <td colSpan={isChallanMode ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000', borderRight: '1px solid #000' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <tbody>
-                          {[
-                            ['Site', estimate.site_name],
-                            ['Client', estimate.client_name || estimate.transport || ''],
-                            ['Order By', estimate.order_by || '']
-                          ].map(([label, val]) => (
-                            <tr key={label}>
-                              <td style={{ width: 65, fontWeight: 600, paddingBottom: 2, whiteSpace: 'nowrap' }}>{label}</td>
-                              <td style={{ width: 10, paddingBottom: 2 }}>:</td>
-                              <td style={{ fontWeight: label === 'Site' ? 700 : 400, paddingBottom: 2 }}>{val}</td>
-                            </tr>
+                      {/* Meta details */}
+                      <tr>
+                        <td colSpan={isChallanMode ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000', borderRight: '1px solid #000' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <tbody>
+                              {[
+                                ['Site', estimate.site_name],
+                                ['Client', estimate.client_name || estimate.transport || ''],
+                                ['Order By', estimate.order_by || '']
+                              ].map(([label, val]) => (
+                                <tr key={label}>
+                                  <td style={{ width: 65, fontWeight: 600, paddingBottom: 2, whiteSpace: 'nowrap' }}>{label}</td>
+                                  <td style={{ width: 10, paddingBottom: 2 }}>:</td>
+                                  <td style={{ fontWeight: label === 'Site' ? 700 : 400, paddingBottom: 2 }}>{val}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                        <td colSpan={isChallanMode ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <tbody>
+                              {[
+                                ['Date', estimate.bill_date],
+                                ['No.', estimate.bill_number],
+                                ['Prep. By', estimate.prepared_by || ''],
+                              ].map(([label, val]) => (
+                                <tr key={label}>
+                                  <td style={{ width: 62, fontWeight: 600, paddingBottom: 2, whiteSpace: 'nowrap' }}>{label}</td>
+                                  <td style={{ width: 10, paddingBottom: 2 }}>:</td>
+                                  <td style={{ fontWeight: 400, paddingBottom: 2, whiteSpace: 'nowrap' }}>{val}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+
+                      {/* Table header */}
+                      <tr style={{ background: '#f0f0f0' }}>
+                        {['Sr No', 'Description of Goods', 'Nos.', 'Quantity', 'Rate', 'Amount']
+                          .filter(h => !isChallanMode || (h !== 'Rate' && h !== 'Amount'))
+                          .map((h, i) => (
+                            <td key={h} style={{
+                              border: '1px solid #000', padding: '6px 4px', fontWeight: 700,
+                              textAlign: h === 'Description of Goods' ? 'left' : 'center',
+                              fontSize: 12,
+                              whiteSpace: 'nowrap',
+                              width: h === 'Sr No' ? 42 : h === 'Description of Goods' ? 'auto' : h === 'Nos.' ? 42 : h === 'Quantity' ? 68 : h === 'Rate' ? 72 : 94
+                            }}>{h}</td>
                           ))}
-                        </tbody>
-                      </table>
-                    </td>
-                    <td colSpan={isChallanMode ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                        <tbody>
-                          {[
-                            ['Date', estimate.bill_date],
-                            ['No.', estimate.bill_number],
-                            ['Prep. By', estimate.prepared_by || ''],
-                          ].map(([label, val]) => (
-                            <tr key={label}>
-                              <td style={{ width: 62, fontWeight: 600, paddingBottom: 2, whiteSpace: 'nowrap' }}>{label}</td>
-                              <td style={{ width: 10, paddingBottom: 2 }}>:</td>
-                              <td style={{ fontWeight: 400, paddingBottom: 2, whiteSpace: 'nowrap' }}>{val}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
+                      </tr>
 
-                  {/* Table header */}
-                  <tr style={{ background: '#f0f0f0' }}>
-                    {['Sr No', 'Description of Goods', 'Nos.', 'Quantity', 'Rate', 'Amount']
-                      .filter(h => !isChallanMode || (h !== 'Rate' && h !== 'Amount'))
-                      .map((h, i) => (
-                        <td key={h} style={{
-                          border: '1px solid #000', padding: '6px 4px', fontWeight: 700,
-                          textAlign: h === 'Description of Goods' ? 'left' : 'center',
-                          fontSize: 12,
-                          whiteSpace: 'nowrap',
-                          width: h === 'Sr No' ? 42 : h === 'Description of Goods' ? 'auto' : h === 'Nos.' ? 42 : h === 'Quantity' ? 68 : h === 'Rate' ? 72 : 94
-                        }}>{h}</td>
-                      ))}
-                  </tr>
-
-                  {/* Brought Forward Row */}
-                  {page.brought && (
-                    <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
-                      <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>Brought Forward</td>
-                      <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
-                        {page.brought.nos % 1 === 0 ? page.brought.nos : page.brought.nos.toFixed(2)}
-                      </td>
-                      <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
-                        {page.brought.qty % 1 === 0 ? page.brought.qty : page.brought.qty.toFixed(2)}
-                      </td>
-                      {!isChallanMode && (
-                        <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
-                          {fmtMoney(page.brought.amt)}
-                        </td>
-                      )}
-                    </tr>
-                  )}
-
-                  {/* Items */}
-                  {page.items.map(it => (
-                    <tr key={it.id}>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>{it.serial_number}</td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
-                        {isChallanMode && it.alternative_code_snapshot
-                            ? it.alternative_code_snapshot
-                            : `${getInternalItemName(it, est?.type)}${it.remark ? ` - ${it.remark}` : ''}`}
-                      </td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
-                        {(() => {
-                          const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
-                          const val = isPieceBased ? it.nos : it.quantity;
-                          return val % 1 === 0 ? val : Number(val).toFixed(2);
-                        })()}
-                      </td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
-                        {it.quantity} {it.unit_snapshot}
-                      </td>
-                      {!isChallanMode && (
-                        <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
-                          {fmtMoney(it.rate)}
-                        </td>
-                      )}
-                      {!isChallanMode && (
-                        <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
-                          {fmtMoney(it.amount)}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-
-                  {/* Empty Filler Rows */}
-                  {page.emptyRowsCount > 0 && Array.from({ length: page.emptyRowsCount }).map((_, i) => (
-                    <tr key={`empty-${i}`}>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', height: '22px', fontSize: 12 }}>&nbsp;</td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
-                      <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
-                      {!isChallanMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
-                      {!isChallanMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
-                    </tr>
-                  ))}
-
-                  {/* Carried Forward Row */}
-                  {page.carried && (
-                    <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
-                      <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>Carried Forward</td>
-                      <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
-                        {page.carried.nos % 1 === 0 ? page.carried.nos : page.carried.nos.toFixed(2)}
-                      </td>
-                      <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
-                        {page.carried.qty % 1 === 0 ? page.carried.qty : page.carried.qty.toFixed(2)}
-                      </td>
-                      {!isChallanMode && (
-                        <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
-                          {fmtMoney(page.carried.amt)}
-                        </td>
-                      )}
-                    </tr>
-                  )}
-
-                  {/* Totals row (only on last page) */}
-                  {page.isLast && (
-                    <>
-                      {estimate?.gst_percent > 0 ? (
-                        <>
-                          <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
-                            <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
-                            <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
-                              {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
-                            </td>
-                            <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
-                              {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
-                            </td>
-                            {!isChallanMode && (
-                              <>
-                                <td style={{ border: '1px solid #000', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
-                                  Sub Total
-                                </td>
-                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                  {fmtMoney(estimate.sub_total)}
-                                </td>
-                              </>
-                            )}
-                          </tr>
-                          {!isChallanMode && (
-                            <>
-                              <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
-                                <td colSpan={5} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12 }}>GST @ {estimate.gst_percent}%</td>
-                                <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13 }}>
-                                  {fmtMoney(estimate.gst_amount)}
-                                </td>
-                              </tr>
-                              <tr style={{ background: '#f9f9f9', fontWeight: 800 }}>
-                                <td colSpan={4} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none' }}></td>
-                                <td style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
-                                  {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
-                                </td>
-                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                                  {fmtMoney(grandTotal)}
-                                </td>
-                              </tr>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
-                          <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
-                          <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
-                            {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
+                      {/* Brought Forward Row */}
+                      {page.brought && (
+                        <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
+                          <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>Brought Forward</td>
+                          <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
+                            {page.brought.nos % 1 === 0 ? page.brought.nos : page.brought.nos.toFixed(2)}
                           </td>
-                          <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
-                            {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
+                          <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
+                            {page.brought.qty % 1 === 0 ? page.brought.qty : page.brought.qty.toFixed(2)}
                           </td>
                           {!isChallanMode && (
-                            <>
-                              <td style={{ border: '1px solid #000', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
-                                {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
-                              </td>
-                              <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                {fmtMoney(grandTotal)}
-                              </td>
-                            </>
+                            <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
+                              {fmtMoney(page.brought.amt)}
+                            </td>
                           )}
                         </tr>
                       )}
-                      {estimate?.type === 'ESTIMATE' && estimate?.client_id && !isChallanMode && (
+
+                      {/* Items */}
+                      {page.items.map(it => (
+                        <tr key={it.id}>
+                          <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>{it.serial_number}</td>
+                          <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
+                            {isChallanMode && it.alternative_code_snapshot
+                              ? it.alternative_code_snapshot
+                              : `${getInternalItemName(it, estimate.type)}${it.remark ? ` - ${it.remark}` : ''}`}
+                          </td>
+                          <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
+                            {(() => {
+                              const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+                              const val = isPieceBased ? it.nos : it.quantity;
+                              return val % 1 === 0 ? val : Number(val).toFixed(2);
+                            })()}
+                          </td>
+                          <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
+                            {it.quantity} {it.unit_snapshot}
+                          </td>
+                          {!isChallanMode && (
+                            <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
+                              {fmtMoney(it.rate)}
+                            </td>
+                          )}
+                          {!isChallanMode && (
+                            <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
+                              {fmtMoney(it.amount)}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+
+                      {/* Empty Filler Rows */}
+                      {page.emptyRowsCount > 0 && Array.from({ length: page.emptyRowsCount }).map((_, i) => (
+                        <tr key={`empty-${i}`}>
+                          <td style={{ border: '1px solid #000', padding: '2px 4px', height: '22px', fontSize: 12 }}>&nbsp;</td>
+                          <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
+                          <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
+                          <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
+                          {!isChallanMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
+                          {!isChallanMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
+                        </tr>
+                      ))}
+
+                      {/* Carried Forward Row */}
+                      {page.carried && (
+                        <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
+                          <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>Carried Forward</td>
+                          <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
+                            {page.carried.nos % 1 === 0 ? page.carried.nos : page.carried.nos.toFixed(2)}
+                          </td>
+                          <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
+                            {page.carried.qty % 1 === 0 ? page.carried.qty : page.carried.qty.toFixed(2)}
+                          </td>
+                          {!isChallanMode && (
+                            <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>
+                              {fmtMoney(page.carried.amt)}
+                            </td>
+                          )}
+                        </tr>
+                      )}
+
+                      {/* Totals row (only on last page) */}
+                      {page.isLast && (
                         <>
-                          <tr>
-                            <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 8px', borderRight: 'none' }}></td>
-                            <td colSpan={2} style={{ border: '1px solid #000', borderLeft: 'none', padding: '4px 4px', textAlign: 'right', fontSize: 13, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
-                              Prev. Bal.
-                            </td>
-                            <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
-                              {fmtMoney(clientBalance)}
-                            </td>
-                          </tr>
-                          <tr style={{ background: '#f1f5f9' }}>
-                            <td colSpan={3} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none', fontWeight: 600, fontSize: 13 }}>Estimate #{estimate.bill_number}</td>
-                            <td colSpan={2} style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 14, fontWeight: 700 }}>Total Due</td>
-                            <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                              {fmtMoney(clientBalance + grandTotal)}
-                            </td>
-                          </tr>
+                          {estimate?.gst_percent > 0 ? (
+                            <>
+                              <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
+                                <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
+                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                                  {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
+                                </td>
+                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                                  {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
+                                </td>
+                                {!isChallanMode && (
+                                  <>
+                                    <td style={{ border: '1px solid #000', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
+                                      Sub Total
+                                    </td>
+                                    <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                      {fmtMoney(estimate.sub_total)}
+                                    </td>
+                                  </>
+                                )}
+                              </tr>
+                              {!isChallanMode && (
+                                <>
+                                  <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
+                                    <td colSpan={5} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12 }}>GST @ {estimate.gst_percent}%</td>
+                                    <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13 }}>
+                                      {fmtMoney(estimate.gst_amount)}
+                                    </td>
+                                  </tr>
+                                  <tr style={{ background: '#f9f9f9', fontWeight: 800 }}>
+                                    <td colSpan={4} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none' }}></td>
+                                    <td style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
+                                      {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
+                                    </td>
+                                    <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                      {fmtMoney(grandTotal)}
+                                    </td>
+                                  </tr>
+                                </>
+                              )}
+                            </>
+                          ) : (
+                            <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
+                              <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
+                              <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                                {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                                {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
+                              </td>
+                              {!isChallanMode && (
+                                <>
+                                  <td style={{ border: '1px solid #000', padding: '6px 4px', textAlign: 'right', fontSize: 13, whiteSpace: 'nowrap' }}>
+                                    {estimate?.type === 'ESTIMATE' && estimate?.client_id ? 'Bill Amt' : 'Gr.Total'}
+                                  </td>
+                                  <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                    {fmtMoney(grandTotal)}
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          )}
+                          {estimate?.type === 'ESTIMATE' && estimate?.client_id && !isChallanMode && (
+                            <>
+                              <tr>
+                                <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 8px', borderRight: 'none' }}></td>
+                                <td colSpan={2} style={{ border: '1px solid #000', borderLeft: 'none', padding: '4px 4px', textAlign: 'right', fontSize: 13, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                                  Prev. Bal.
+                                </td>
+                                <td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'right', fontSize: 13, fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                                  {fmtMoney(clientBalance)}
+                                </td>
+                              </tr>
+                              <tr style={{ background: '#f1f5f9' }}>
+                                <td colSpan={3} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none', fontWeight: 600, fontSize: 13 }}>Estimate #{estimate.bill_number}</td>
+                                <td colSpan={2} style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 14, fontWeight: 700 }}>Total Due</td>
+                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                  {fmtMoney(clientBalance + grandTotal)}
+                                </td>
+                              </tr>
+                            </>
+                          )}
                         </>
                       )}
-                    </>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
             </div>
           </div>
         </div>
