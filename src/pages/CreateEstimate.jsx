@@ -83,6 +83,18 @@ const EMPTY_PRODUCT_FORM = {
 const UNITS = ['Sq.Ft', 'Nos.', 'Kg.', 'Bundle', 'Rmt', 'Ltr', 'Pkt', 'Box', 'Set', 'Pair']
 
 // ── Main Component ────────────────────────────────────────────────────────────
+
+function getInternalItemName(item, docType) {
+  if (item.alternative_code_snapshot) {
+    if (docType === 'QUOTATION') {
+      return `${item.alternative_code_snapshot} (${item.actual_code_snapshot || item.product_name_snapshot})`
+    } else {
+      return item.alternative_code_snapshot
+    }
+  }
+  return item.product_name_snapshot
+}
+
 export default function CreateEstimate() {
   const navigate = useNavigate()
   const { activePlatform } = usePlatform()
@@ -1434,7 +1446,7 @@ export default function CreateEstimate() {
         ) : items.map((it, idx) => (
           <div key={idx} className="item-card">
             <div className="item-name">
-              {idx + 1}. {it.product_name_snapshot}{it.remark ? ` - ${it.remark}` : ''}
+              {idx + 1}. {getInternalItemName(it, type)}{it.remark ? ` - ${it.remark}` : ''}
             </div>
             <div className="item-grid">
               {it.calculation_type_snapshot === 'SQFT' ? (
@@ -1658,7 +1670,7 @@ export default function CreateEstimate() {
                 {/* Show selected product details */}
                 {itemForm.product_name_snapshot && (
                   <div style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 13 }}>
-                    <strong>{itemForm.product_name_snapshot}</strong><br />
+                    <strong>{getInternalItemName(itemForm, type)}</strong><br />
                     {itemForm.unit_snapshot} · {itemForm.calculation_type_snapshot}
                     {Boolean(itemForm.length_snapshot && itemForm.width_snapshot) &&
                       ` · ${itemForm.length_snapshot} × ${itemForm.width_snapshot} ${itemForm.calculation_type_snapshot === 'INCH' || itemForm.calculation_type_snapshot === 'FEET' ? (itemForm.calculation_type_snapshot === 'FEET' ? 'ft' : 'in') : 'ft'}`}
@@ -1782,8 +1794,8 @@ export default function CreateEstimate() {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                               <strong style={{ display: 'block', fontSize: 13 }}>
-                                {item.product_name_snapshot}
-                              </strong>
+                                {getInternalItemName(item, type)}
+                                </strong>
                               <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>
                                 ₹{item.rate} · {item.unit_snapshot}
                                 {Boolean(item.length_snapshot && item.width_snapshot) && ` · ${item.length_snapshot}×${item.width_snapshot}`}

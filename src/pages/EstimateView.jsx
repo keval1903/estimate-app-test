@@ -6,6 +6,18 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
 
+
+function getInternalItemName(item, docType) {
+  if (item.alternative_code_snapshot) {
+    if (docType === 'QUOTATION') {
+      return `${item.alternative_code_snapshot} (${item.actual_code_snapshot || item.product_name_snapshot})`
+    } else {
+      return item.alternative_code_snapshot
+    }
+  }
+  return item.product_name_snapshot
+}
+
 export default function EstimateView() {
   const { role } = useAuth()
   const { id } = useParams()
@@ -687,8 +699,8 @@ export default function EstimateView() {
                       <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>{it.serial_number}</td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
                         {isChallanMode && it.alternative_code_snapshot
-                          ? it.alternative_code_snapshot
-                          : `${it.product_name_snapshot}${it.remark ? ` - ${it.remark}` : ''}`}
+                            ? it.alternative_code_snapshot
+                            : `${getInternalItemName(it, est?.type)}${it.remark ? ` - ${it.remark}` : ''}`}
                       </td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
                         {(() => {
