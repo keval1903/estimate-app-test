@@ -822,3 +822,8 @@ WHERE estimates.id = hb.estimate_id;
 -- DONE! All previous_balances have been successfully restored!
 -- ============================================================
 ALTER TABLE catalogue_items DISABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- Added User Alias (Prepared By Default)
+-- ============================================================
+ALTER TABLE user_roles ADD COLUMN IF NOT EXISTS alias TEXT;

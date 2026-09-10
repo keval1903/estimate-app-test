@@ -21,6 +21,7 @@ function App() {
   }
 
   const addRow = () => {
+    if (rows.length >= 25) return
     setRows([...rows, { code: '', quantity: '' }])
   }
 
@@ -43,7 +44,8 @@ function App() {
     const newRows = [...rows]
     let currentRowIdx = rowIndex
 
-    lines.forEach(line => {
+    for (const line of lines) {
+      if (newRows.length >= 25 && currentRowIdx >= newRows.length) break // cap at 25
       const parts = line.split(/\t+|\s{2,}/)
       const code = parts[0] || ''
       const quantity = parts[1] || ''
@@ -54,7 +56,7 @@ function App() {
         newRows.push({ code, quantity })
       }
       currentRowIdx++
-    })
+    }
 
     setRows(newRows)
   }
@@ -68,7 +70,7 @@ function App() {
       .filter(r => r.code.trim())
       .map(r => ({
         code: r.code.trim().toUpperCase(),
-        quantity: Number(r.quantity) || 1
+        quantity: Number(r.quantity)
       }))
 
     // Auto-combine duplicate codes by summing their quantities
@@ -98,6 +100,7 @@ function App() {
     try {
       const res = await fetch('/api/check-availability', {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests: deduped })
       })

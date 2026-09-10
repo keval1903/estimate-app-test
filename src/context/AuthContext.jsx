@@ -8,6 +8,7 @@ const AuthContext = createContext()
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
+  const [alias, setAlias] = useState(null)
   const [loading, setLoading] = useState(true)
   const [onlineUsers, setOnlineUsers] = useState(new Set())
 
@@ -18,7 +19,7 @@ export function AuthProvider({ children }) {
     }
     const { data, error } = await supabase
       .from('user_roles')
-      .select('role, is_active, current_session_token, session_expires_at')
+      .select('role, is_active, current_session_token, session_expires_at, alias')
       .eq('id', userId)
       .single()
       
@@ -72,6 +73,7 @@ export function AuthProvider({ children }) {
     }
 
     setRole(data.role)
+    setAlias(data.alias || null)
     return true
   }
 
@@ -115,6 +117,7 @@ export function AuthProvider({ children }) {
           if (mounted) {
             setUser(null)
             setRole(null)
+            setAlias(null)
           }
         }
         if (mounted) setLoading(false)
@@ -133,6 +136,7 @@ export function AuthProvider({ children }) {
           if (!isValid) {
             setUser(null);
             setRole(null);
+            setAlias(null);
             return;
           }
 
@@ -191,6 +195,7 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     role,
+    alias,
     loading,
     onlineUsers
   }

@@ -2,14 +2,17 @@ export const config = {
   runtime: 'edge', // use edge runtime for fast proxying
 };
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 export default async function handler(req) {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
-      }
+      headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
     });
   }
 
@@ -19,10 +22,7 @@ export default async function handler(req) {
   if (!SUPABASE_FUNCTION_URL || !PROXY_SECRET) {
     return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
       status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
-      }
+      headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
     });
   }
 
@@ -35,6 +35,7 @@ export default async function handler(req) {
     // Forward the POST request to the Supabase Edge Function
     const response = await fetch(SUPABASE_FUNCTION_URL, {
       method: 'POST',
+      cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
         'x-code-finder-secret': PROXY_SECRET,
@@ -47,19 +48,13 @@ export default async function handler(req) {
 
     return new Response(data, {
       status: response.status,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
-      }
+      headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
     });
   } catch (err) {
     console.error('Proxy Error:', err);
     return new Response(JSON.stringify({ error: 'Failed to communicate with inventory service' }), {
       status: 502,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
-      }
+      headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
     });
   }
 }

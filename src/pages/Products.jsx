@@ -14,7 +14,11 @@ const EMPTY_FORM = {
   product_name: '', product_code: '', keyword: '', product_group: '', length: '', width: '',
   unit: '', rate: '', calculation_type: 'QUANTITY',
   has_stock: false, stock: '', add_stock: '', min_stock: '5',
-  has_remark: false, has_discount: false
+  has_remark: false, has_discount: false,
+  in_ccai: false, rate_ccai: '',
+  in_dc: false, rate_dc: '',
+  in_laminea: false, rate_laminea: '',
+  in_phs: false, rate_phs: ''
 }
 
 export default function Products() {
@@ -41,7 +45,7 @@ export default function Products() {
   const fileRef = useRef()
   const searchInputRef = useRef()
 
-  const { isListening, startListening, error: voiceError } = useVoiceSearch({
+  const { isListening, startListening, stopListening, error: voiceError } = useVoiceSearch({
     onResult: (text) => {
       setSearch(text)
       if (searchInputRef.current) searchInputRef.current.focus()
@@ -89,7 +93,7 @@ export default function Products() {
   const smartTerms = s.match(/[a-z]+|[0-9]+/g) || []
 
   const filtered = products.filter(p => {
-    if (!showAllProducts && !p.is_available) return false;
+    if (showAllProducts ? p.is_available : !p.is_available) return false;
     const pName = p.product_name.toLowerCase()
     const matchesAllTerms = searchTerms.every(term => pName.includes(term))
     const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
@@ -101,7 +105,10 @@ export default function Products() {
            isFuzzyMatch(sNoSpace, pName)
   })
 
-  function openAdd() { setForm(EMPTY_FORM); setEditingId(null); setStockMode('SET'); setShowCustomUnit(false); setShowModal(true) }
+  function openAdd() {
+    setForm({ ...EMPTY_FORM, [`in_${activePlatform}`]: true })
+    setEditingId(null); setStockMode('SET'); setShowCustomUnit(false); setShowModal(true)
+  }
 
   function openEdit(p) {
     setForm({
@@ -111,7 +118,11 @@ export default function Products() {
       has_stock: p.has_stock || false, stock: p.stock ?? '', add_stock: '',
       min_stock: p.min_stock ?? 5,
       has_remark: p.has_remark || false,
-      has_discount: p.has_discount || false
+      has_discount: p.has_discount || false,
+      in_ccai: p.in_ccai || false, rate_ccai: p.rate_ccai ?? '',
+      in_dc: p.in_dc || false, rate_dc: p.rate_dc ?? '',
+      in_laminea: p.in_laminea || false, rate_laminea: p.rate_laminea ?? '',
+      in_phs: p.in_phs || false, rate_phs: p.rate_phs ?? ''
     })
     setEditingId(p.id); setStockMode('ADD'); setShowCustomUnit(false); setShowModal(true)
   }
@@ -189,19 +200,11 @@ export default function Products() {
       has_discount: form.has_discount,
       updated_at: new Date().toISOString(),
       product_code: form.product_code ? form.product_code.trim().toUpperCase() : null,
-      [`in_${activePlatform}`]: true,
-      [`rate_${activePlatform}`]: Number(form.rate)
-    }
-
-    if (!targetId) {
-      // Prevent violating products_platform_rates_check constraint on insert
-      // by explicitly overriding database defaults for other platforms
-      ['ccai', 'dc', 'laminea', 'phs'].forEach(p => {
-        if (p !== activePlatform) {
-          payload[`in_${p}`] = false;
-          payload[`rate_${p}`] = null;
-        }
-      });
+      // Use form-controlled platform toggles and rates
+      in_ccai: !!form.in_ccai, rate_ccai: form.rate_ccai !== '' && form.rate_ccai !== undefined ? Number(form.rate_ccai) : null,
+      in_dc: !!form.in_dc, rate_dc: form.rate_dc !== '' && form.rate_dc !== undefined ? Number(form.rate_dc) : null,
+      in_laminea: !!form.in_laminea, rate_laminea: form.rate_laminea !== '' && form.rate_laminea !== undefined ? Number(form.rate_laminea) : null,
+      in_phs: !!form.in_phs, rate_phs: form.rate_phs !== '' && form.rate_phs !== undefined ? Number(form.rate_phs) : null
     }
 
     if (targetId) {
@@ -326,75 +329,72 @@ export default function Products() {
     if (lines.length === 0) return
 
     // Extract headers and create a map of column names to indices
-    const headerCols = parseCsvLine(lines[0]).map(c => c.toLowerCase())
+    const headerCols = parseCsvLine(lines[0]).map(c => c.toLowerCase().trim())
     const colMap = {}
+    // Exact header → field mappings (order matters: specific before general)
+    const EXACT_MAP = {
+      'product name':     'product_name',
+      'product code':     'product_code',
+      'keyword':          'keyword',
+      'product group':    'product_group',
+      'length':           'length',
+      'width':            'width',
+      'unit':             'unit',
+      'rate':             'rate',
+      'calculation type': 'calculation_type',
+      'has stock':        'has_stock',
+      'stock':            'stock',
+      'min stock':        'min_stock',
+      'has remark':       'has_remark',
+      'has discount':     'has_discount',
+      'in ccai':          'in_ccai',
+      'rate ccai':        'rate_ccai',
+      'in dc':            'in_dc',
+      'rate dc':          'rate_dc',
+      'in laminea':       'in_laminea',
+      'rate laminea':     'rate_laminea',
+      'in phs':           'in_phs',
+      'rate phs':         'rate_phs',
+    }
     headerCols.forEach((col, idx) => {
-      if (col.includes('product')) colMap['product_name'] = idx
-      else if (col.includes('keyword')) colMap['keyword'] = idx
-        else if (col.includes('group')) colMap['product_group'] = idx
-        else if (col.includes('group')) colMap['product_group'] = idx
-      else if (col.includes('length')) colMap['length'] = idx
-      else if (col.includes('width')) colMap['width'] = idx
-      else if (col === 'unit') colMap['unit'] = idx
-      else if (col.includes('rate')) colMap['rate'] = idx
-      else if (col.includes('calculation')) colMap['calculation_type'] = idx
-      else if (col === 'has stock') colMap['has_stock'] = idx
-      else if (col === 'stock') colMap['stock'] = idx
-      else if (col.includes('min stock')) colMap['min_stock'] = idx
-      else if (col.includes('remark')) colMap['has_remark'] = idx
-      else if (col.includes('discount')) colMap['has_discount'] = idx
-        else if (col.includes('in ccai')) colMap['in_ccai'] = idx
-        else if (col.includes('rate ccai')) colMap['rate_ccai'] = idx
-        else if (col.includes('in dc')) colMap['in_dc'] = idx
-        else if (col.includes('rate dc')) colMap['rate_dc'] = idx
-        else if (col.includes('in laminea')) colMap['in_laminea'] = idx
-        else if (col.includes('rate laminea')) colMap['rate_laminea'] = idx
-        else if (col.includes('in phs')) colMap['in_phs'] = idx
-        else if (col.includes('rate phs')) colMap['rate_phs'] = idx
-        else if (col.includes('in ccai')) colMap['in_ccai'] = idx
-        else if (col.includes('rate ccai')) colMap['rate_ccai'] = idx
-        else if (col.includes('in dc')) colMap['in_dc'] = idx
-        else if (col.includes('rate dc')) colMap['rate_dc'] = idx
-        else if (col.includes('in laminea')) colMap['in_laminea'] = idx
-        else if (col.includes('rate laminea')) colMap['rate_laminea'] = idx
-        else if (col.includes('in phs')) colMap['in_phs'] = idx
-        else if (col.includes('rate phs')) colMap['rate_phs'] = idx
+      if (EXACT_MAP[col] !== undefined) colMap[EXACT_MAP[col]] = idx
     })
 
-    const hasDynamic = ('product_name' in colMap && 'rate' in colMap && 'unit' in colMap)
+    const hasDynamic = ('product_name' in colMap && 'unit' in colMap)
     const isNewFormat = lines[0].toLowerCase().includes('keyword')
 
     for (let i = 0; i < lines.length; i++) {
       const cols = parseCsvLine(lines[i])
       if (cols.length < 3) continue
-      
-      let product_name, keyword, product_group, length, width, unit, rate, calculation_type, has_stock, stock, min_stock, has_remark, has_discount
-      
+
+      let product_name, product_code, keyword, product_group, length, width, unit, rate, calculation_type, has_stock, stock, min_stock, has_remark, has_discount
+      let in_ccai, rate_ccai, in_dc, rate_dc, in_laminea, rate_laminea, in_phs, rate_phs
+
       if (hasDynamic) {
         if (i === 0) continue // skip header row since we mapped it
-        product_name = cols[colMap['product_name']]
-        keyword = cols[colMap['keyword']]
-          product_group = cols[colMap['product_group']]
-          product_group = cols[colMap['product_group']]
-        length = cols[colMap['length']]
-        width = cols[colMap['width']]
-        unit = cols[colMap['unit']]
-        rate = cols[colMap['rate']]
-        calculation_type = cols[colMap['calculation_type']]
-        has_stock = cols[colMap['has_stock']]
-        stock = cols[colMap['stock']]
-        min_stock = cols[colMap['min_stock']]
-        has_remark = cols[colMap['has_remark']]
-        has_discount = cols[colMap['has_discount']]
-          var in_ccai = cols[colMap['in_ccai']]
-          var rate_ccai = cols[colMap['rate_ccai']]
-          var in_dc = cols[colMap['in_dc']]
-          var rate_dc = cols[colMap['rate_dc']]
-          var in_laminea = cols[colMap['in_laminea']]
-          var rate_laminea = cols[colMap['rate_laminea']]
-          var in_phs = cols[colMap['in_phs']]
-          var rate_phs = cols[colMap['rate_phs']]
-        } else {
+        product_name     = colMap['product_name']     !== undefined ? cols[colMap['product_name']]     : undefined
+        product_code     = colMap['product_code']     !== undefined ? cols[colMap['product_code']]     : undefined
+        keyword          = colMap['keyword']          !== undefined ? cols[colMap['keyword']]          : undefined
+        product_group    = colMap['product_group']    !== undefined ? cols[colMap['product_group']]    : undefined
+        length           = colMap['length']           !== undefined ? cols[colMap['length']]           : undefined
+        width            = colMap['width']            !== undefined ? cols[colMap['width']]            : undefined
+        unit             = colMap['unit']             !== undefined ? cols[colMap['unit']]             : undefined
+        rate             = colMap['rate']             !== undefined ? cols[colMap['rate']]             : undefined
+        calculation_type = colMap['calculation_type'] !== undefined ? cols[colMap['calculation_type']] : undefined
+        has_stock        = colMap['has_stock']        !== undefined ? cols[colMap['has_stock']]        : undefined
+        stock            = colMap['stock']            !== undefined ? cols[colMap['stock']]            : undefined
+        min_stock        = colMap['min_stock']        !== undefined ? cols[colMap['min_stock']]        : undefined
+        has_remark       = colMap['has_remark']       !== undefined ? cols[colMap['has_remark']]       : undefined
+        has_discount     = colMap['has_discount']     !== undefined ? cols[colMap['has_discount']]     : undefined
+        in_ccai          = colMap['in_ccai']          !== undefined ? cols[colMap['in_ccai']]          : undefined
+        rate_ccai        = colMap['rate_ccai']        !== undefined ? cols[colMap['rate_ccai']]        : undefined
+        in_dc            = colMap['in_dc']            !== undefined ? cols[colMap['in_dc']]            : undefined
+        rate_dc          = colMap['rate_dc']          !== undefined ? cols[colMap['rate_dc']]          : undefined
+        in_laminea       = colMap['in_laminea']       !== undefined ? cols[colMap['in_laminea']]       : undefined
+        rate_laminea     = colMap['rate_laminea']     !== undefined ? cols[colMap['rate_laminea']]     : undefined
+        in_phs           = colMap['in_phs']           !== undefined ? cols[colMap['in_phs']]           : undefined
+        rate_phs         = colMap['rate_phs']         !== undefined ? cols[colMap['rate_phs']]         : undefined
+      } else {
         if (isNewFormat) {
           [product_name, keyword, length, width, unit, rate, calculation_type, has_stock, stock, min_stock, has_remark, has_discount] = cols
         } else {
@@ -441,12 +441,13 @@ export default function Products() {
 
       rows.push({
         product_name: product_name ? product_name.toUpperCase().trim() : '',
+        product_code: product_code ? product_code.trim().toUpperCase() : null,
         keyword: keyword ? keyword.trim() : null,
         product_group: typeof product_group === 'string' ? product_group.trim() : 'Uncategorized',
         length: length ? Number(length) : null,
         width:  width  ? Number(width)  : null,
-        unit: unit ? unit.trim() : '', 
-        rate: isNaN(parsedRate) ? 0 : parsedRate, 
+        unit: unit ? unit.trim() : '',
+        rate: isNaN(parsedRate) ? 0 : parsedRate,
         calculation_type: calcType,
         has_stock: parsedHasStock, stock: parsedStock, min_stock: parsedMinStock,
         has_remark: parsedHasRemark, has_discount: parsedHasDiscount,
@@ -575,13 +576,13 @@ export default function Products() {
     if (discrepancies.length > 0) setImportDiscrepancies(discrepancies);
   }
 
-  function handleExport() {
-    if (!filtered.length) { showToast('No products to export', 'error'); return }
-    const headers = ['Product Name', 'Keyword', 'Product Group', 'Length', 'Width', 'Unit', 'Calculation Type', 'Has Stock', 'Stock', 'Min Stock', 'Has Remark', 'Has Discount', 'In CCAI', 'Rate CCAI', 'In DC', 'Rate DC', 'In Laminea', 'Rate Laminea', 'In PHS', 'Rate PHS']
+  function exportCsv(list, filename) {
+    const headers = ['Product Name', 'Product Code', 'Keyword', 'Product Group', 'Length', 'Width', 'Unit', 'Calculation Type', 'Has Stock', 'Stock', 'Min Stock', 'Has Remark', 'Has Discount', 'In CCAI', 'Rate CCAI', 'In DC', 'Rate DC', 'In Laminea', 'Rate Laminea', 'In PHS', 'Rate PHS']
     const csvRows = [headers.join(',')]
-    for (const p of filtered) {
+    for (const p of list) {
       csvRows.push([
           `"${(p.product_name || '').replace(/"/g, '""')}"`,
+          `"${(p.product_code || '').replace(/"/g, '""')}"`,
           `"${(p.keyword || '').replace(/"/g, '""')}"`,
           `"${(p.product_group || 'Uncategorized').replace(/"/g, '""')}"`,
           p.length || '',
@@ -607,9 +608,19 @@ export default function Products() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'products_export.csv'
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  function handleExport() {
+    if (!filtered.length) { showToast('No products to export', 'error'); return }
+    exportCsv(filtered, 'products_export.csv')
+  }
+
+  function handleExportAll() {
+    if (!products.length) { showToast('No products to export', 'error'); return }
+    exportCsv(products, 'products_export_all.csv')
   }
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
@@ -628,17 +639,20 @@ export default function Products() {
     <div className="app-container">
       <div className="top-nav">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
-        <button className="nav-home" onClick={() => navigate('/')} title="Home">🏠</button>
+        <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
         <span className="nav-title">Product Master</span>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button className="btn btn-sm"
             style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
-            onClick={() => navigate('/stock-report')}>📊 Report</button>
+            onClick={() => navigate(`/${activePlatform}/stock-report`)}>📊 Report</button>
           {role === 'ADMIN' && (
             <>
               <button className="btn btn-sm"
                 style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
                 onClick={handleExport}>⬇ Export</button>
+              <button className="btn btn-sm"
+                style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
+                onClick={handleExportAll}>⬇ Export All</button>
               <button className="btn btn-sm"
                 style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
                 onClick={() => setShowImport(true)}>⬆ Import</button>
@@ -823,6 +837,29 @@ export default function Products() {
               <label>Rate (₹) *</label>
               <input name="rate" type="number" inputMode="decimal"
                 value={form.rate} onChange={handleFormChange} placeholder="0.00" />
+            </div>
+            <div className="field">
+              <div className="section-label" style={{ marginBottom: 8 }}>Platform Availability &amp; Rates</div>
+              {['ccai', 'dc', 'laminea', 'phs'].map(p => (
+                <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 120, cursor: 'pointer', fontWeight: 600, textTransform: 'uppercase', fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!form[`in_${p}`]}
+                      onChange={e => setForm(f => ({ ...f, [`in_${p}`]: e.target.checked }))}
+                      style={{ width: 15, height: 15 }}
+                    />
+                    {PLATFORM_NAMES[p] || p}
+                  </label>
+                  <input
+                    type="number" inputMode="decimal"
+                    placeholder="Rate"
+                    value={form[`rate_${p}`] ?? ''}
+                    onChange={e => setForm(f => ({ ...f, [`rate_${p}`]: e.target.value }))}
+                    style={{ width: 100 }}
+                  />
+                </div>
+              ))}
             </div>
             {(form.calculation_type === 'SQFT' || form.calculation_type === 'INCH' || form.calculation_type === 'FEET') && (
               <div className="field-row">

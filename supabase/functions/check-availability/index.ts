@@ -7,6 +7,12 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -24,51 +30,58 @@ serve(async (req: Request) => {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders })
     }
 
-    // Get DB URL and ANON Key securely from Supabase Edge environment
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    
-    // Create direct client
-    const supabaseAdmin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || supabaseAnonKey)
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!serviceRoleKey) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY is not set')
+      return new Response(JSON.stringify({ error: 'Service unavailable' }), {
+        status: 500,
+        headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
 
     const payload = await req.json()
     const requests: { code: string, quantity: number }[] = payload.requests || []
 
     if (!Array.isArray(requests) || requests.length === 0) {
-      return new Response(JSON.stringify({ error: 'No requests provided' }), { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } 
+      return new Response(JSON.stringify({ error: 'No requests provided' }), {
+        status: 400,
+        headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
       })
     }
 
     if (requests.length > 25) {
-       return new Response(JSON.stringify({ error: 'Max 25 codes per request' }), { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } 
+      return new Response(JSON.stringify({ error: 'Max 25 codes per request' }), {
+        status: 400,
+        headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    // Rate Limiting Logic
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown'
-    const today = new Date().toISOString().split('T')[0]
-    
-    // Increment or insert
-    const { data: limitData, error: limitErr } = await supabaseAdmin.rpc('increment_laminea_rate_limit', {
-      p_ip_address: ip,
-      p_action_date: today,
-      p_count: requests.length
+    // Rate Limiting Logic — fail closed: deny if the check itself errors
+    const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim()
+      || req.headers.get('x-real-ip')
+      || 'unknown'
+    const ipBytes = new TextEncoder().encode(rawIp)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', ipBytes)
+    const ipHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+
+    const { data: limitData, error: limitErr } = await supabaseAdmin.rpc('check_and_update_rate_limit', {
+      p_ip_hash: ipHash
     })
 
     if (limitErr) {
       console.error('Rate limit check failed:', limitErr)
+      return new Response(JSON.stringify({ error: 'Service unavailable' }), {
+        status: 429,
+        headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
+      })
     }
 
-    // If over limit, deny (using 200 checks per day as standard)
-    const currentLimit = limitData || 0
-    if (currentLimit > 200) {
-      return new Response(JSON.stringify({ error: 'Daily limit exceeded' }), { 
-        status: 429, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } 
+    if (!limitData?.allowed) {
+      return new Response(JSON.stringify({ error: limitData?.reason || 'Rate limit exceeded' }), {
+        status: 429,
+        headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
       })
     }
 
@@ -146,18 +159,18 @@ serve(async (req: Request) => {
       })
     }
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       results,
       checkedAt: new Date().toISOString()
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' },
     })
 
   } catch (err: any) {
     console.error(err)
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
-      status: 500, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } 
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+      status: 500,
+      headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
     })
   }
 })

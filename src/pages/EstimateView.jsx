@@ -688,7 +688,7 @@ export default function EstimateView() {
                       <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
                         {isChallanMode && it.alternative_code_snapshot
                           ? it.alternative_code_snapshot
-                          : it.product_name_snapshot}{it.remark ? ` - ${it.remark}` : ''}
+                          : `${it.product_name_snapshot}${it.remark ? ` - ${it.remark}` : ''}`}
                       </td>
                       <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
                         {(() => {

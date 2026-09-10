@@ -7,6 +7,7 @@ import { getMergedUnits } from '../constants/units.js'
 import { isFuzzyMatch } from '../lib/searchUtils'
 import { normalizeSearchQuery } from '../lib/synonyms.js'
 import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
+import { useAuth } from '../context/AuthContext'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function todayIST() {
@@ -85,6 +86,7 @@ const UNITS = ['Sq.Ft', 'Nos.', 'Kg.', 'Bundle', 'Rmt', 'Ltr', 'Pkt', 'Box', 'Se
 export default function CreateEstimate() {
   const navigate = useNavigate()
   const { activePlatform } = usePlatform()
+  const { alias } = useAuth()
   const { id } = useParams()
   const isEdit = Boolean(id)
   const { showToast, ToastEl } = useToast()
@@ -97,7 +99,7 @@ export default function CreateEstimate() {
   const [clientName, setClientName] = useState('')
   const [clientMobile, setClientMobile] = useState('')
   const [orderBy, setOrderBy] = useState('')
-  const [preparedBy, setPreparedBy] = useState('')
+  const [preparedBy, setPreparedBy] = useState(alias || '')
   const [siteName, setSiteName] = useState('')
   const [items, setItems] = useState([])
   const [originalItems, setOriginalItems] = useState([])
@@ -179,7 +181,10 @@ export default function CreateEstimate() {
             if (actualProduct) {
                options.push({
                  ...actualProduct,
-                 product_name: `${alt.alternative_code} (${actualProduct.product_code || actualProduct.product_name})`,
+                 option_key: `alias:${alt.id}`,
+                 // Keep product_name as the real product name (saved as snapshot)
+                 // display_label is only used for UI rendering
+                 display_label: `${alt.alternative_code} (${actualProduct.product_code || actualProduct.product_name})`,
                  alternative_code_snapshot: alt.alternative_code,
                  actual_code_snapshot: actualProduct.product_code || ''
                })
@@ -374,7 +379,7 @@ export default function CreateEstimate() {
       setClientName('')
       setClientMobile('')
       setOrderBy('')
-      setPreparedBy('')
+      setPreparedBy(alias || '')
       setSiteName('')
       setItems([])
       setGstPercent('')
@@ -400,14 +405,16 @@ export default function CreateEstimate() {
 
     const results = searchOptions.filter(p => {
       const pName = p.product_name.toLowerCase()
-      const matchesAllTerms = searchTerms.every(term => pName.includes(term))
-      const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
+      const pLabel = (p.display_label || p.product_name).toLowerCase()
+      const matchesAllTerms = searchTerms.every(term => pLabel.includes(term))
+      const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pLabel.includes(term))
 
-      return pName.includes(q) ||
-        pName.replace(/\s+/g, '').includes(q.replace(/\s+/g, '')) ||
+      return pLabel.includes(q) ||
+        pLabel.replace(/\s+/g, '').includes(q.replace(/\s+/g, '')) ||
+        pName.includes(q) ||
         matchesAllTerms ||
         matchesSmartTerms ||
-        isFuzzyMatch(q.replace(/\s+/g, ''), pName)
+        isFuzzyMatch(q.replace(/\s+/g, ''), pLabel)
     })
     setProductSuggestions(results)
     setSuggestionIdx(-1)
@@ -530,7 +537,7 @@ export default function CreateEstimate() {
       next.amount = amount
       return next
     })
-    setProductSearch(p.product_name)
+    setProductSearch(p.display_label || p.product_name)
     setShowSuggestions(false)
     setProductSuggestions([])
     setSuggestionIdx(-1)
@@ -733,7 +740,10 @@ export default function CreateEstimate() {
       has_remark: productForm.has_remark,
       has_discount: productForm.has_discount,
       keyword: productForm.keyword ? productForm.keyword.trim() : null,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      // Mark the product as available in the current platform with the entered rate
+      [`in_${activePlatform}`]: true,
+      [`rate_${activePlatform}`]: Number(productForm.rate)
     }
 
     const { data, error } = await supabase.from('products').insert(payload).select().single()
@@ -1566,7 +1576,7 @@ export default function CreateEstimate() {
                   {showSuggestions && productSuggestions.length > 0 && (
                     <div className="autocomplete-list">
                       {productSuggestions.map((p, i) => (
-                        <div key={p.id} className="autocomplete-item"
+                        <div key={p.option_key || p.id} className="autocomplete-item"
                           ref={(el) => {
                             if (suggestionIdx === i && el) {
                               el.scrollIntoView({ block: 'nearest' })
@@ -1587,7 +1597,7 @@ export default function CreateEstimate() {
                               />
                             )}
                             <div>
-                              <div style={{ fontWeight: 600 }}>{p.product_name}</div>
+                              <div style={{ fontWeight: 600 }}>{p.display_label || p.product_name}</div>
                               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                 {p.unit} · ₹{p.rate} · {p.calculation_type}
                                 {(p.calculation_type === 'SQFT' || p.calculation_type === 'INCH' || p.calculation_type === 'FEET') && ` · ${p.length}×${p.width} ${p.calculation_type === 'INCH' || p.calculation_type === 'FEET' ? (p.calculation_type === 'FEET' ? 'ft' : 'in') : 'ft'}`}

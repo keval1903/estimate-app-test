@@ -51,6 +51,19 @@ export default function UserManagement() {
     }
   }
 
+  const handleAliasChange = async (id, newAlias) => {
+    const { error } = await supabase
+      .from('user_roles')
+      .update({ alias: newAlias || null })
+      .eq('id', id)
+      
+    if (!error) {
+      setUsers(users.map(u => u.id === id ? { ...u, alias: newAlias } : u))
+    } else {
+      alert('Error updating alias')
+    }
+  }
+
   const handleToggleStatus = async (id, currentStatus) => {
     const { error } = await supabase
       .from('user_roles')
@@ -199,6 +212,7 @@ export default function UserManagement() {
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Username</th>
+                <th style={{ textAlign: 'left' }}>Alias (Prepared By)</th>
                 <th style={{ textAlign: 'center' }}>Role</th>
                 <th style={{ textAlign: 'center' }}>Status</th>
                 <th style={{ textAlign: 'center' }}>Actions</th>
@@ -221,6 +235,17 @@ export default function UserManagement() {
                       />
                       {u.username}
                     </div>
+                  </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      value={u.alias || ''} 
+                      onChange={e => setUsers(users.map(x => x.id === u.id ? { ...x, alias: e.target.value } : x))}
+                      onBlur={e => handleAliasChange(u.id, e.target.value.trim().toUpperCase())}
+                      className="input-field"
+                      placeholder="e.g. JOHN DOE"
+                      style={{ padding: '4px 8px', width: '100%', textTransform: 'uppercase' }}
+                    />
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     <select 
