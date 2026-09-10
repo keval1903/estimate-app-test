@@ -728,9 +728,12 @@ export default function CreateEstimate() {
     if (err) { showToast(err, 'error'); return }
     setSavingProduct(true)
     const isDimensionBased = productForm.calculation_type === 'SQFT' || productForm.calculation_type === 'INCH' || productForm.calculation_type === 'FEET'
+    const enteredRate = Number(productForm.rate)
+
     const payload = {
       product_name: productForm.product_name.trim().toUpperCase(),
-      unit: productForm.unit.trim(), rate: Number(productForm.rate),
+      unit: productForm.unit.trim(), 
+      rate: enteredRate,
       calculation_type: productForm.calculation_type,
       length: isDimensionBased && productForm.length ? Number(productForm.length) : null,
       width: isDimensionBased && productForm.width ? Number(productForm.width) : null,
@@ -741,9 +744,19 @@ export default function CreateEstimate() {
       has_discount: productForm.has_discount,
       keyword: productForm.keyword ? productForm.keyword.trim() : null,
       updated_at: new Date().toISOString(),
-      // Mark the product as available in the current platform with the entered rate
-      [`in_${activePlatform}`]: true,
-      [`rate_${activePlatform}`]: Number(productForm.rate)
+
+      // Prevent CCAI defaults from interfering
+      in_ccai: activePlatform === 'ccai',
+      rate_ccai: activePlatform === 'ccai' ? enteredRate : null,
+
+      in_dc: activePlatform === 'dc',
+      rate_dc: activePlatform === 'dc' ? enteredRate : null,
+
+      in_laminea: activePlatform === 'laminea',
+      rate_laminea: activePlatform === 'laminea' ? enteredRate : null,
+
+      in_phs: activePlatform === 'phs',
+      rate_phs: activePlatform === 'phs' ? enteredRate : null
     }
 
     const { data, error } = await supabase.from('products').insert(payload).select().single()

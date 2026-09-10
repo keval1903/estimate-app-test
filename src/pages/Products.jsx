@@ -93,7 +93,7 @@ export default function Products() {
   const smartTerms = s.match(/[a-z]+|[0-9]+/g) || []
 
   const filtered = products.filter(p => {
-    if (showAllProducts ? p.is_available : !p.is_available) return false;
+    if (!showAllProducts && !p.is_available) return false;
     const pName = p.product_name.toLowerCase()
     const matchesAllTerms = searchTerms.every(term => pName.includes(term))
     const matchesSmartTerms = smartTerms.length > 0 && smartTerms.every(term => pName.includes(term))
@@ -141,7 +141,25 @@ export default function Products() {
   function validate() {
     if (!form.product_name.trim()) return 'Product name is required'
     if (!form.unit.trim()) return 'Unit is required'
-    if (form.rate === '' || form.rate === null || form.rate === undefined || isNaN(form.rate) || Number(form.rate) < 0) return 'Valid rate is required'
+    
+    // Check platform rates
+    const platforms = ['ccai', 'dc', 'laminea', 'phs']
+    const PLATFORM_NAMES = { ccai: 'CCAI', dc: 'DC', laminea: 'Laminea', phs: 'PHS' }
+
+    if (!platforms.some(p => form[`in_${p}`])) {
+      return 'Select at least one platform'
+    }
+
+    for (const platform of platforms) {
+      const rate = form[`rate_${platform}`]
+
+      if (
+        form[`in_${platform}`] &&
+        (rate === '' || rate === null || !Number.isFinite(Number(rate)) || Number(rate) < 0)
+      ) {
+        return `${PLATFORM_NAMES[platform]} rate is required`
+      }
+    }
     if (form.calculation_type === 'SQFT' || form.calculation_type === 'INCH' || form.calculation_type === 'FEET') {
       if (!form.length || isNaN(form.length)) return 'Length is required'
       if (!form.width  || isNaN(form.width))  return 'Width is required'
@@ -185,11 +203,18 @@ export default function Products() {
     }
 
     const isDimensionBased = form.calculation_type === 'SQFT' || form.calculation_type === 'INCH' || form.calculation_type === 'FEET'
+    const legacyRate = 
+      (form.in_ccai ? Number(form.rate_ccai) : null) ??
+      (form.in_dc ? Number(form.rate_dc) : null) ??
+      (form.in_laminea ? Number(form.rate_laminea) : null) ??
+      (form.in_phs ? Number(form.rate_phs) : null) ?? 0
+
     const payload = {
       product_name: form.product_name.trim().toUpperCase(),
       keyword: form.keyword ? form.keyword.trim() : null,
       product_group: form.product_group ? form.product_group.trim() : 'Uncategorized',
-      unit: form.unit.trim(), rate: Number(form.rate),
+      unit: form.unit.trim(), 
+      rate: legacyRate,
       calculation_type: form.calculation_type,
       length: isDimensionBased && form.length ? Number(form.length) : null,
       width:  isDimensionBased && form.width  ? Number(form.width)  : null,
@@ -201,10 +226,10 @@ export default function Products() {
       updated_at: new Date().toISOString(),
       product_code: form.product_code ? form.product_code.trim().toUpperCase() : null,
       // Use form-controlled platform toggles and rates
-      in_ccai: !!form.in_ccai, rate_ccai: form.rate_ccai !== '' && form.rate_ccai !== undefined ? Number(form.rate_ccai) : null,
-      in_dc: !!form.in_dc, rate_dc: form.rate_dc !== '' && form.rate_dc !== undefined ? Number(form.rate_dc) : null,
-      in_laminea: !!form.in_laminea, rate_laminea: form.rate_laminea !== '' && form.rate_laminea !== undefined ? Number(form.rate_laminea) : null,
-      in_phs: !!form.in_phs, rate_phs: form.rate_phs !== '' && form.rate_phs !== undefined ? Number(form.rate_phs) : null
+      in_ccai: !!form.in_ccai, rate_ccai: form.in_ccai && form.rate_ccai !== '' ? Number(form.rate_ccai) : null,
+      in_dc: !!form.in_dc, rate_dc: form.in_dc && form.rate_dc !== '' ? Number(form.rate_dc) : null,
+      in_laminea: !!form.in_laminea, rate_laminea: form.in_laminea && form.rate_laminea !== '' ? Number(form.rate_laminea) : null,
+      in_phs: !!form.in_phs, rate_phs: form.in_phs && form.rate_phs !== '' ? Number(form.rate_phs) : null
     }
 
     if (targetId) {
@@ -303,6 +328,12 @@ export default function Products() {
     reader.readAsText(file)
   }
 
+
+  // Helper for normalizing product names
+  function normalizeProductName(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ').toUpperCase()
+  }
+
   // Parse a CSV line properly, respecting quoted fields that may contain commas
   function parseCsvLine(line) {
     const result = []
@@ -324,6 +355,14 @@ export default function Products() {
     return result
   }
 
+  function parseRate(value) {
+    if (value === undefined || value === null || String(value).trim() === '') {
+      return null
+    }
+    const parsed = Number(value)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+  }
+
   function parseImport(text) {
     const lines = text.trim().split('\n').filter(Boolean); const rows = []
     if (lines.length === 0) return
@@ -331,7 +370,7 @@ export default function Products() {
     // Extract headers and create a map of column names to indices
     const headerCols = parseCsvLine(lines[0]).map(c => c.toLowerCase().trim())
     const colMap = {}
-    // Exact header → field mappings (order matters: specific before general)
+    // Exact header mapping
     const EXACT_MAP = {
       'product name':     'product_name',
       'product code':     'product_code',
@@ -340,7 +379,6 @@ export default function Products() {
       'length':           'length',
       'width':            'width',
       'unit':             'unit',
-      'rate':             'rate',
       'calculation type': 'calculation_type',
       'has stock':        'has_stock',
       'stock':            'stock',
@@ -361,13 +399,16 @@ export default function Products() {
     })
 
     const hasDynamic = ('product_name' in colMap && 'unit' in colMap)
-    const isNewFormat = lines[0].toLowerCase().includes('keyword')
+    
+    // In-file duplicate checking sets
+    const seenNames = new Set()
+    const codeToNameMap = new Map()
 
     for (let i = 0; i < lines.length; i++) {
       const cols = parseCsvLine(lines[i])
       if (cols.length < 3) continue
 
-      let product_name, product_code, keyword, product_group, length, width, unit, rate, calculation_type, has_stock, stock, min_stock, has_remark, has_discount
+      let product_name, product_code, keyword, product_group, length, width, unit, calculation_type, has_stock, stock, min_stock, has_remark, has_discount
       let in_ccai, rate_ccai, in_dc, rate_dc, in_laminea, rate_laminea, in_phs, rate_phs
 
       if (hasDynamic) {
@@ -379,7 +420,6 @@ export default function Products() {
         length           = colMap['length']           !== undefined ? cols[colMap['length']]           : undefined
         width            = colMap['width']            !== undefined ? cols[colMap['width']]            : undefined
         unit             = colMap['unit']             !== undefined ? cols[colMap['unit']]             : undefined
-        rate             = colMap['rate']             !== undefined ? cols[colMap['rate']]             : undefined
         calculation_type = colMap['calculation_type'] !== undefined ? cols[colMap['calculation_type']] : undefined
         has_stock        = colMap['has_stock']        !== undefined ? cols[colMap['has_stock']]        : undefined
         stock            = colMap['stock']            !== undefined ? cols[colMap['stock']]            : undefined
@@ -395,76 +435,94 @@ export default function Products() {
         in_phs           = colMap['in_phs']           !== undefined ? cols[colMap['in_phs']]           : undefined
         rate_phs         = colMap['rate_phs']         !== undefined ? cols[colMap['rate_phs']]         : undefined
       } else {
-        if (isNewFormat) {
-          [product_name, keyword, length, width, unit, rate, calculation_type, has_stock, stock, min_stock, has_remark, has_discount] = cols
-        } else {
-          [product_name, length, width, unit, rate, calculation_type, has_stock, stock, min_stock] = cols
-        }
-        if (product_name?.toLowerCase().includes('product') && rate?.toLowerCase().includes('rate')) continue
+        if (i === 0) continue
+        continue
       }
+      
       const errors = []
-      if (!product_name?.trim()) errors.push('Missing product name')
+      const normName = normalizeProductName(product_name)
+      if (!normName) errors.push('Missing product name')
       if (!unit?.trim()) errors.push('Missing unit')
 
-      const parsedRate = Number(rate)
-      if (isNaN(parsedRate)) {
-        errors.push(`Invalid rate format: "${rate}"`)
-      } else if (rate && rate.trim() && parsedRate === 0 && rate.trim() !== '0') {
-        errors.push(`Rate "${rate}" evaluated to 0`)
+      // In-file duplicate checking
+      if (normName) {
+        if (seenNames.has(normName)) {
+          errors.push(`Duplicate Product Name in file: "${normName}"`)
+        }
+        seenNames.add(normName)
+        
+        const normCode = product_code ? product_code.trim().toUpperCase() : null
+        if (normCode) {
+          if (codeToNameMap.has(normCode) && codeToNameMap.get(normCode) !== normName) {
+             errors.push(`Product Code "${normCode}" is assigned to multiple products in file`)
+          } else {
+             codeToNameMap.set(normCode, normName)
+          }
+        }
       }
+
+      const parseBool = val => (typeof val === 'string' && (val.toLowerCase() === 'yes' || val.toLowerCase() === 'true')) || val === true
+      
+      const parsedInCcai = parseBool(in_ccai)
+      const parsedInDc = parseBool(in_dc)
+      const parsedInLaminea = parseBool(in_laminea)
+      const parsedInPhs = parseBool(in_phs)
+      
+      const parsedRateCcai = parseRate(rate_ccai)
+      const parsedRateDc = parseRate(rate_dc)
+      const parsedRateLaminea = parseRate(rate_laminea)
+      const parsedRatePhs = parseRate(rate_phs)
+      
+      const platformData = [
+        ['CCAI', parsedInCcai, parsedRateCcai],
+        ['DC', parsedInDc, parsedRateDc],
+        ['Laminea', parsedInLaminea, parsedRateLaminea],
+        ['PHS', parsedInPhs, parsedRatePhs]
+      ]
+
+      if (!platformData.some(([, enabled]) => enabled)) {
+        errors.push('Product must be enabled for at least one platform')
+      }
+
+      for (const [name, enabled, platformRate] of platformData) {
+        if (enabled && platformRate === null) {
+          errors.push(`${name} rate is required`)
+        }
+      }
+
+      const legacyRate = parsedRateCcai ?? parsedRateDc ?? parsedRateLaminea ?? parsedRatePhs ?? 0
       
       const ct = calculation_type?.toUpperCase().trim()
       const calcType = (ct === 'SQFT' || ct === 'INCH' || ct === 'FEET') ? ct : 'QUANTITY'
       
-      const hsLower = has_stock?.trim().toLowerCase()
-      let parsedHasStock = false
-      if (hsLower && !['yes','no','true','false',''].includes(hsLower)) {
-        errors.push(`Unrecognized has_stock: "${has_stock}"`)
-      } else {
-        parsedHasStock = hsLower === 'yes' || hsLower === 'true'
-      }
-
+      const parsedHasStock = parseBool(has_stock)
       const parsedStock = parsedHasStock && !isNaN(Number(stock)) ? Number(stock) : 0
       if (parsedHasStock && isNaN(Number(stock))) errors.push(`Invalid stock value: "${stock}"`)
 
       const parsedMinStock = min_stock && !isNaN(Number(min_stock)) ? Number(min_stock) : 5
-      
-      const hrLower = has_remark?.trim().toLowerCase()
-      let parsedHasRemark = false
-      if (hrLower && !['yes','no','true','false',''].includes(hrLower)) errors.push(`Unrecognized has_remark: "${has_remark}"`)
-      else parsedHasRemark = hrLower === 'yes' || hrLower === 'true'
-
-      const hdLower = has_discount?.trim().toLowerCase()
-      let parsedHasDiscount = false
-      if (hdLower && !['yes','no','true','false',''].includes(hdLower)) errors.push(`Unrecognized has_discount: "${has_discount}"`)
-      else parsedHasDiscount = hdLower === 'yes' || hdLower === 'true'
+      const parsedHasRemark = parseBool(has_remark)
+      const parsedHasDiscount = parseBool(has_discount)
 
       rows.push({
-        product_name: product_name ? product_name.toUpperCase().trim() : '',
+        product_name: normName,
         product_code: product_code ? product_code.trim().toUpperCase() : null,
         keyword: keyword ? keyword.trim() : null,
         product_group: typeof product_group === 'string' ? product_group.trim() : 'Uncategorized',
         length: length ? Number(length) : null,
         width:  width  ? Number(width)  : null,
         unit: unit ? unit.trim() : '',
-        rate: isNaN(parsedRate) ? 0 : parsedRate,
+        rate: legacyRate,
         calculation_type: calcType,
         has_stock: parsedHasStock, stock: parsedStock, min_stock: parsedMinStock,
         has_remark: parsedHasRemark, has_discount: parsedHasDiscount,
-        raw_rate: rate?.trim(),
-        in_ccai: (typeof in_ccai === 'string' && (in_ccai.toLowerCase() === 'yes' || in_ccai.toLowerCase() === 'true')) || in_ccai === true,
-        rate_ccai: rate_ccai ? Number(rate_ccai) : 0,
-        in_dc: (typeof in_dc === 'string' && (in_dc.toLowerCase() === 'yes' || in_dc.toLowerCase() === 'true')) || in_dc === true,
-        rate_dc: rate_dc ? Number(rate_dc) : 0,
-        in_laminea: (typeof in_laminea === 'string' && (in_laminea.toLowerCase() === 'yes' || in_laminea.toLowerCase() === 'true')) || in_laminea === true,
-        rate_laminea: rate_laminea ? Number(rate_laminea) : 0,
-        in_phs: (typeof in_phs === 'string' && (in_phs.toLowerCase() === 'yes' || in_phs.toLowerCase() === 'true')) || in_phs === true,
-        rate_phs: rate_phs ? Number(rate_phs) : 0,
+        in_ccai: parsedInCcai, rate_ccai: parsedInCcai ? parsedRateCcai : null,
+        in_dc: parsedInDc, rate_dc: parsedInDc ? parsedRateDc : null,
+        in_laminea: parsedInLaminea, rate_laminea: parsedInLaminea ? parsedRateLaminea : null,
+        in_phs: parsedInPhs, rate_phs: parsedInPhs ? parsedRatePhs : null,
         errors
       })
     }
 
-    // Sort rows so that errors appear at the top of the list
     rows.sort((a, b) => {
       const aHasErrors = a.errors && a.errors.length > 0;
       const bHasErrors = b.errors && b.errors.length > 0;
@@ -477,20 +535,53 @@ export default function Products() {
   }
 
   async function handleImport() {
-    if (!importPreview.length) { showToast('No valid rows to import', 'error'); return }
+    const validRows = importPreview.filter(row => !row.errors || row.errors.length === 0)
+    if (!validRows.length) { showToast('No valid rows to import', 'error'); return }
+    
     setSaving(true);
+    
+    // Fetch all products with pagination to ensure conflict checking works fully
+    showToast('Fetching database for conflict check...', 'success');
+    const allDbProducts = [];
+    let from = 0;
+    const limit = 1000;
+    while (true) {
+      const { data, error } = await supabase.from('products').select('*').range(from, from + limit - 1);
+      if (error) {
+        showToast('Error fetching database products: ' + error.message, 'error');
+        setSaving(false);
+        return;
+      }
+      if (!data || data.length === 0) break;
+      allDbProducts.push(...data);
+      if (data.length < limit) break;
+      from += limit;
+    }
+
     let added = 0, updated = 0;
     let hasError = false;
-    const discrepancies = [];
 
     const toInsert = [];
     const toUpdate = [];
 
-    // Separate rows into inserts and updates
-    for (const row of importPreview) {
-      const existing = products.find(p => p.product_name.toLowerCase() === row.product_name.toLowerCase());
+    for (const row of validRows) {
+      if (row.product_code) {
+        const conflict = allDbProducts.find(p => p.product_code && p.product_code.toUpperCase() === row.product_code && normalizeProductName(p.product_name) !== row.product_name);
+        if (conflict) {
+          showToast(`Conflict: Product Code "${row.product_code}" belongs to "${conflict.product_name}"`, 'error');
+          setSaving(false);
+          return;
+        }
+      }
+
+      const existing = allDbProducts.find(p => normalizeProductName(p.product_name) === row.product_name);
+      
       if (existing) {
-        toUpdate.push({ ...row, id: existing.id });
+        toUpdate.push({ 
+          ...row, 
+          id: existing.id, 
+          product_code: row.product_code || existing.product_code || null
+        });
         updated++;
       } else {
         toInsert.push(row);
@@ -500,10 +591,9 @@ export default function Products() {
 
     const chunkSize = 200;
 
-    // Process Updates using upsert
     for (let i = 0; i < toUpdate.length; i += chunkSize) {
       const chunk = toUpdate.slice(i, i + chunkSize);
-      const dbChunk = chunk.map(({ raw_rate, errors, ...rest }) => rest);
+      const dbChunk = chunk.map(({ errors, ...rest }) => rest);
       const { data, error } = await supabase.from('products').upsert(dbChunk, { onConflict: 'id' }).select();
       if (error) { 
         console.error('Update error:', error);
@@ -513,8 +603,8 @@ export default function Products() {
 
       const historyBatch = [];
       for (const r of data || []) {
-        const previewRow = chunk.find(p => p.product_name.toLowerCase() === r.product_name.toLowerCase());
-        const existing = products.find(p => p.id === r.id);
+        const previewRow = chunk.find(p => normalizeProductName(p.product_name) === normalizeProductName(r.product_name));
+        const existing = allDbProducts.find(p => p.id === r.id);
         if (previewRow) {
           if (previewRow.has_stock) {
             const oldStock = existing ? (existing.stock || 0) : 0;
@@ -522,9 +612,6 @@ export default function Products() {
             if (diff !== 0) {
               historyBatch.push({ product_id: r.id, change_type: 'CSV_IMPORT', quantity_changed: diff, platform: activePlatform });
             }
-          }
-          if (Number(r.rate) !== Number(previewRow.raw_rate) && !isNaN(Number(previewRow.raw_rate))) {
-            discrepancies.push({ product_name: r.product_name, field: 'rate', expected: previewRow.raw_rate, saved: r.rate })
           }
         }
       }
@@ -534,11 +621,10 @@ export default function Products() {
       }
     }
 
-    // Process Inserts
     if (!hasError) {
       for (let i = 0; i < toInsert.length; i += chunkSize) {
         const chunk = toInsert.slice(i, i + chunkSize);
-        const dbChunk = chunk.map(({ raw_rate, errors, ...rest }) => rest);
+        const dbChunk = chunk.map(({ errors, ...rest }) => rest);
         const { data, error } = await supabase.from('products').insert(dbChunk).select();
         if (error) { 
           console.error('Insert error:', error);
@@ -548,32 +634,30 @@ export default function Products() {
 
         const historyBatch = [];
         for (const r of data || []) {
-          const previewRow = chunk.find(p => p.product_name.toLowerCase() === r.product_name.toLowerCase());
+          const previewRow = chunk.find(p => normalizeProductName(p.product_name) === normalizeProductName(r.product_name));
           if (previewRow) {
             if (previewRow.has_stock) {
               historyBatch.push({ product_id: r.id, change_type: 'CSV_IMPORT', quantity_changed: previewRow.stock, platform: activePlatform });
-            }
-            if (Number(r.rate) !== Number(previewRow.raw_rate) && !isNaN(Number(previewRow.raw_rate))) {
-              discrepancies.push({ product_name: r.product_name, field: 'rate', expected: previewRow.raw_rate, saved: r.rate })
             }
           }
         }
         if (historyBatch.length > 0) {
           const { error: histError } = await supabase.from('stock_history').insert(historyBatch);
-          if (histError) console.error('History insert error:', histError);
+          if (histError) console.error('History update error:', histError);
         }
       }
     }
 
     setSaving(false);
-    if (hasError) {
-      showToast('Import failed or partially failed', 'error');
+    if (!hasError) {
+      showToast(`Import complete. Added: ${added}, Updated: ${updated}`, 'success');
+      setShowImport(false);
+      setImportPreview([]);
+      setImportText('');
+      fetchProducts();
     } else {
-      showToast(`Imported: ${added} added, ${updated} updated`);
+      showToast('Import partially failed. Check console for details.', 'error');
     }
-    setShowImport(false); setImportPreview([]); setImportText('');
-    fetchProducts();
-    if (discrepancies.length > 0) setImportDiscrepancies(discrepancies);
   }
 
   function exportCsv(list, filename) {
@@ -595,13 +679,13 @@ export default function Products() {
           p.has_remark ? 'Yes' : 'No',
           p.has_discount ? 'Yes' : 'No',
           p.in_ccai ? 'Yes' : 'No',
-          p.rate_ccai || 0,
+          p.in_ccai ? (p.rate_ccai ?? '') : '',
           p.in_dc ? 'Yes' : 'No',
-          p.rate_dc || 0,
+          p.in_dc ? (p.rate_dc ?? '') : '',
           p.in_laminea ? 'Yes' : 'No',
-          p.rate_laminea || 0,
+          p.in_laminea ? (p.rate_laminea ?? '') : '',
           p.in_phs ? 'Yes' : 'No',
-          p.rate_phs || 0
+          p.in_phs ? (p.rate_phs ?? '') : ''
         ].join(','))
     }
     const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' })
@@ -614,13 +698,29 @@ export default function Products() {
   }
 
   function handleExport() {
-    if (!filtered.length) { showToast('No products to export', 'error'); return }
-    exportCsv(filtered, 'products_export.csv')
+    const currentPlatformProducts = products.filter(p => p[`in_${activePlatform}`] === true)
+    if (!currentPlatformProducts.length) { showToast('No products to export for this platform', 'error'); return }
+    exportCsv(currentPlatformProducts, `products_${activePlatform}.csv`)
   }
 
-  function handleExportAll() {
-    if (!products.length) { showToast('No products to export', 'error'); return }
-    exportCsv(products, 'products_export_all.csv')
+  async function handleExportAll() {
+    showToast('Fetching all products for export...', 'success')
+    const allProducts = []
+    let from = 0
+    const limit = 1000
+    while (true) {
+      const { data, error } = await supabase.from('products').select('*').order('product_name', { ascending: true }).range(from, from + limit - 1)
+      if (error) {
+        showToast('Error fetching products: ' + error.message, 'error')
+        return
+      }
+      if (!data || data.length === 0) break
+      allProducts.push(...data)
+      if (data.length < limit) break
+      from += limit
+    }
+    if (!allProducts.length) { showToast('No products to export', 'error'); return }
+    exportCsv(allProducts, 'products_all_platforms.csv')
   }
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length
@@ -832,11 +932,6 @@ export default function Products() {
                   <option value="FEET">FEET</option>
                 </select>
               </div>
-            </div>
-            <div className="field">
-              <label>Rate (₹) *</label>
-              <input name="rate" type="number" inputMode="decimal"
-                value={form.rate} onChange={handleFormChange} placeholder="0.00" />
             </div>
             <div className="field">
               <div className="section-label" style={{ marginBottom: 8 }}>Platform Availability &amp; Rates</div>

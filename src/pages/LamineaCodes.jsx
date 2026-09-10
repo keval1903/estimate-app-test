@@ -7,6 +7,14 @@ import { useToast } from '../hooks/useToast'
 import { isFuzzyMatch } from '../lib/searchUtils'
 import * as XLSX from 'xlsx'
 
+function normalizeAlternativeCode(value) {
+  return String(value || '').trim().replace(/\s+/g, '').toUpperCase()
+}
+
+function normalizeProductCode(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toUpperCase()
+}
+
 export default function LamineaCodes() {
   const navigate = useNavigate()
   const { role } = useAuth()
@@ -22,7 +30,9 @@ export default function LamineaCodes() {
   const [selectedProductId, setSelectedProductId] = useState('')
   
   const [showImportModal, setShowImportModal] = useState(false)
-  const [importMode, setImportMode] = useState('add') // 'add' or 'replace'
+  const [importMode, setImportMode] = useState('merge') // 'merge' or 'replace'
+  const [previewRows, setPreviewRows] = useState([])
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
 
   const [search, setSearch] = useState('')
   const [searchBy, setSearchBy] = useState('alternative_code') // 'alternative_code' | 'product_code' | 'product_name'
@@ -116,71 +126,130 @@ export default function LamineaCodes() {
     const file = e.target.files[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target.result
-        const wb = XLSX.read(bstr, { type: 'binary' })
-        const wsname = wb.SheetNames[0]
-        const ws = wb.Sheets[wsname]
-        const data = XLSX.utils.sheet_to_json(ws, { raw: false })
-        
-        const toInsert = []
-        let errors = 0
-        
-        for (const row of data) {
-          const alt = (row['AlternativeCode'] || row['Alternative Code'] || row['Code'] || '').toString().trim()
-          const pCode = (row['ProductCode'] || row['Product Code'] || row['ActualCode'] || '').toString().trim()
-          
-          if (!alt || !pCode) continue
-          
-          const product = products.find(p => p.product_code?.toLowerCase() === pCode.toLowerCase())
-          if (product) {
-            toInsert.push({
-              alternative_code: alt,
-              product_id: product.id,
-              is_active: true
-            })
-          } else {
-            errors++
-          }
-        }
-        
-        if (toInsert.length === 0) {
-          showToast('No valid rows found to import', 'error')
-          return
-        }
-        
-        if (importMode === 'replace') {
-           if (!window.confirm(`Warning: Replace mode will deactivate all existing codes not in this file. Continue?`)) return;
-           
-           const incomingCodes = toInsert.map(i => i.alternative_code.toLowerCase().replace(/[^a-z0-9]/g, ''))
-           
-           const toDeactivate = codes.filter(c => !incomingCodes.includes(c.alternative_code.toLowerCase().replace(/[^a-z0-9]/g, '')))
-           if (toDeactivate.length > 0) {
-             const { error: deactErr } = await supabase
-               .from('laminea_product_codes')
-               .update({ is_active: false })
-               .in('id', toDeactivate.map(c => c.id))
-             
-             if (deactErr) throw deactErr
-           }
-        }
-
-        let successCount = 0
-        for (const record of toInsert) {
-           const { error } = await supabase.from('laminea_product_codes').insert(record)
-           if (!error) successCount++
-        }
-        
-        showToast(`Imported ${successCount} codes. ${errors > 0 ? `(${errors} unknown product codes skipped)` : ''} ✓`, 'success', 5000)
-        setShowImportModal(false)
-        loadData()
-      } catch (e) {
-        showToast('Import failed: ' + e.message, 'error')
+    setLoading(true)
+    try {
+      // Fetch all products
+      const allProducts = []
+      let from = 0
+      const limit = 1000
+      while (true) {
+        const { data, error } = await supabase.from('products').select('id, product_name, product_code').eq('in_laminea', true).range(from, from + limit - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        allProducts.push(...data)
+        if (data.length < limit) break
+        from += limit
       }
+
+      // Fetch all codes
+      const allCodes = []
+      from = 0
+      while (true) {
+        const { data, error } = await supabase.from('laminea_product_codes').select('id, alternative_code, is_active, product_id').range(from, from + limit - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        allCodes.push(...data)
+        if (data.length < limit) break
+        from += limit
+      }
+
+      const reader = new FileReader()
+      reader.onload = async (evt) => {
+        try {
+          const bstr = evt.target.result
+          const wb = XLSX.read(bstr, { type: 'binary' })
+          const wsname = wb.SheetNames[0]
+          const ws = wb.Sheets[wsname]
+          const data = XLSX.utils.sheet_to_json(ws, { raw: false })
+
+          const preview = []
+          const seenCodes = new Set()
+
+          for (const row of data) {
+            const rawAlt = (row['AlternativeCode'] || row['Alternative Code'] || row['Code'] || '').toString()
+            const rawCode = (row['ProductCode'] || row['Product Code'] || row['ActualCode'] || '').toString()
+            if (!rawAlt || !rawCode) continue
+
+            const normAlt = normalizeAlternativeCode(rawAlt)
+            const normProd = normalizeProductCode(rawCode)
+
+            if (seenCodes.has(normAlt)) {
+              preview.push({ alternativeCode: rawAlt, productCode: rawCode, action: 'DUPLICATE IN FILE', targetProductId: null })
+              continue
+            }
+            seenCodes.add(normAlt)
+
+            const targetProduct = allProducts.find(p => normalizeProductCode(p.product_code) === normProd)
+            if (!targetProduct) {
+              preview.push({ alternativeCode: rawAlt, productCode: rawCode, action: 'UNKNOWN PRODUCT', targetProductId: null })
+              continue
+            }
+
+            const existingMapping = allCodes.find(c => normalizeAlternativeCode(c.alternative_code) === normAlt)
+
+            let action = ''
+            if (!existingMapping) {
+              action = 'NEW'
+            } else if (existingMapping.product_id !== targetProduct.id) {
+              action = 'CONFLICT'
+            } else if (!existingMapping.is_active) {
+              action = 'REACTIVATE'
+            } else {
+              action = 'UNCHANGED'
+            }
+
+            
+
+            preview.push({ alternativeCode: rawAlt, productCode: rawCode, action, targetProductId: targetProduct.id })
+          }
+
+          setPreviewRows(preview)
+          setShowPreviewModal(true)
+          setShowImportModal(false)
+        } catch (err) {
+          showToast('File parse failed: ' + err.message, 'error')
+        } finally {
+          setLoading(false)
+          e.target.value = null
+        }
+      }
+      reader.readAsBinaryString(file)
+    } catch (err) {
+      showToast('Fetch failed: ' + err.message, 'error')
+      setLoading(false)
+      e.target.value = null
     }
-    reader.readAsBinaryString(file)
+  }
+
+  async function executeImport() {
+    const hasErrors = previewRows.some(r => ['CONFLICT', 'UNKNOWN PRODUCT', 'DUPLICATE IN FILE'].includes(r.action))
+    if (hasErrors) {
+       showToast('Cannot import with errors present.', 'error')
+       return
+    }
+
+    if (importMode === 'replace') {
+       if (!window.confirm('Warning: Replace mode will deactivate all existing active codes not in this file. Continue?')) return;
+    }
+
+    setLoading(true)
+    try {
+       const { data, error } = await supabase.rpc('import_laminea_alternative_codes', {
+          p_rows: previewRows,
+          p_mode: importMode === 'replace' ? 'REPLACE' : 'MERGE'
+       })
+
+       if (error) throw error
+
+       showToast(`Import complete. Created: ${data.created}, Reactivated: ${data.reactivated}, Disabled: ${data.disabled}`, 'success', 5000)
+       setShowPreviewModal(false)
+       setPreviewRows([])
+       loadData()
+    } catch (err) {
+       showToast('Import failed: ' + err.message, 'error')
+    } finally {
+       setLoading(false)
+    }
   }
 
   if (loading) return <div className="app-container"><div className="spinner" /></div>
