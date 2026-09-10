@@ -48,29 +48,48 @@ export default function LamineaCodes() {
   async function loadData() {
     setLoading(true)
     try {
-      const { data: cData, error: cErr } = await supabase
-        .from('laminea_product_codes')
-        .select(`
-          id,
-          alternative_code,
-          is_active,
-          product_id,
-          products ( product_name, product_code, in_laminea )
-        `)
-        .order('alternative_code')
-        
-      if (cErr) throw cErr
+      const allCodes = []
+      let from = 0
+      const limit = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('laminea_product_codes')
+          .select(`
+            id,
+            alternative_code,
+            is_active,
+            product_id,
+            products ( product_name, product_code, in_laminea )
+          `)
+          .order('id')
+          .range(from, from + limit - 1)
+          
+        if (error) throw error
+        if (!data || data.length === 0) break
+        allCodes.push(...data)
+        if (data.length < limit) break
+        from += limit
+      }
 
-      const { data: pData, error: pErr } = await supabase
-        .from('products')
-        .select('id, product_name, product_code')
-        .eq('in_laminea', true)
-        .order('product_name')
+      const allProducts = []
+      from = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, product_name, product_code')
+          .eq('in_laminea', true)
+          .order('id')
+          .range(from, from + limit - 1)
 
-      if (pErr) throw pErr
+        if (error) throw error
+        if (!data || data.length === 0) break
+        allProducts.push(...data)
+        if (data.length < limit) break
+        from += limit
+      }
 
-      setCodes(cData || [])
-      setProducts(pData || [])
+      setCodes(allCodes)
+      setProducts(allProducts)
     } catch (e) {
       showToast('Error loading data: ' + e.message, 'error')
     } finally {
@@ -133,7 +152,7 @@ export default function LamineaCodes() {
       let from = 0
       const limit = 1000
       while (true) {
-        const { data, error } = await supabase.from('products').select('id, product_name, product_code').eq('in_laminea', true).range(from, from + limit - 1)
+        const { data, error } = await supabase.from('products').select('id, product_name, product_code').eq('in_laminea', true).order('id').range(from, from + limit - 1)
         if (error) throw error
         if (!data || data.length === 0) break
         allProducts.push(...data)
@@ -145,7 +164,7 @@ export default function LamineaCodes() {
       const allCodes = []
       from = 0
       while (true) {
-        const { data, error } = await supabase.from('laminea_product_codes').select('id, alternative_code, is_active, product_id').range(from, from + limit - 1)
+        const { data, error } = await supabase.from('laminea_product_codes').select('id, alternative_code, is_active, product_id').order('id').range(from, from + limit - 1)
         if (error) throw error
         if (!data || data.length === 0) break
         allCodes.push(...data)
@@ -168,7 +187,10 @@ export default function LamineaCodes() {
           for (const row of data) {
             const rawAlt = (row['AlternativeCode'] || row['Alternative Code'] || row['Code'] || '').toString()
             const rawCode = (row['ProductCode'] || row['Product Code'] || row['ActualCode'] || '').toString()
-            if (!rawAlt || !rawCode) continue
+            if (!rawAlt || !rawCode) {
+              preview.push({ alternativeCode: rawAlt, productCode: rawCode, action: 'MISSING DATA', targetProductId: null })
+              continue
+            }
 
             const normAlt = normalizeAlternativeCode(rawAlt)
             const normProd = normalizeProductCode(rawCode)
@@ -222,7 +244,7 @@ export default function LamineaCodes() {
   }
 
   async function executeImport() {
-    const hasErrors = previewRows.some(r => ['CONFLICT', 'UNKNOWN PRODUCT', 'DUPLICATE IN FILE'].includes(r.action))
+    const hasErrors = previewRows.some(r => ['CONFLICT', 'UNKNOWN PRODUCT', 'DUPLICATE IN FILE', 'MISSING DATA'].includes(r.action))
     if (hasErrors) {
        showToast('Cannot import with errors present.', 'error')
        return
@@ -431,7 +453,7 @@ export default function LamineaCodes() {
             <div className="field">
               <label>Import Mode</label>
               <select value={importMode} onChange={e => setImportMode(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', fontSize: '14px', fontFamily: 'inherit' }}>
-                <option value="add">Add Mode (Only add new codes, keep existing active)</option>
+                <option value="merge">Merge Mode (Add/reactivate codes and keep existing codes)</option>
                 <option value="replace">Replace Mode (Deactivate all codes NOT in this file)</option>
               </select>
             </div>
@@ -442,6 +464,57 @@ export default function LamineaCodes() {
             
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
               <button type="button" className="btn btn-secondary btn-full" onClick={() => setShowImportModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPreviewModal && (
+        <div className="modal-overlay" style={{ padding: 20 }} onClick={e => e.target === e.currentTarget && setShowPreviewModal(false)}>
+          <div className="modal-box" style={{ maxWidth: 800, width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-title">
+              <span>Import Preview</span>
+              <button className="btn btn-ghost" type="button" onClick={() => setShowPreviewModal(false)}>✕</button>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, marginTop: 10, marginBottom: 16 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#f9fafb' }}>
+                  <tr>
+                    <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Alternative Code</th>
+                    <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Product Code</th>
+                    <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map((r, i) => {
+                    let color = '#374151'
+                    if (r.action === 'NEW') color = '#16a34a'
+                    else if (r.action === 'REACTIVATE') color = '#2563eb'
+                    else if (['CONFLICT', 'UNKNOWN PRODUCT', 'DUPLICATE IN FILE', 'MISSING DATA'].includes(r.action)) color = '#dc2626'
+                    
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <td style={{ padding: '8px' }}>{r.alternativeCode || <span style={{color:'#9ca3af'}}>—</span>}</td>
+                        <td style={{ padding: '8px' }}>{r.productCode || <span style={{color:'#9ca3af'}}>—</span>}</td>
+                        <td style={{ padding: '8px', color, fontWeight: 600 }}>{r.action}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowPreviewModal(false)}>Cancel</button>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={executeImport}
+                disabled={previewRows.some(r => ['CONFLICT', 'UNKNOWN PRODUCT', 'DUPLICATE IN FILE', 'MISSING DATA'].includes(r.action))}
+              >
+                Execute Import
+              </button>
             </div>
           </div>
         </div>

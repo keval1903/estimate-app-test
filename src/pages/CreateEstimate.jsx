@@ -162,12 +162,34 @@ export default function CreateEstimate() {
 
   //── Load products & sites ──
   useEffect(() => {
-    Promise.all([
-      supabase.from('products').select('*').order('product_name').range(0, 999),
-      supabase.from('products').select('*').order('product_name').range(1000, 1999),
-      activePlatform === 'laminea' ? supabase.from('laminea_product_codes').select('*, products(product_code, product_name)').eq('is_active', true) : Promise.resolve({data: []})
-    ]).then(([batch1, batch2, altCodes]) => {
-      const rawData = [...(batch1.data || []), ...(batch2.data || [])]
+    async function loadProducts() {
+      try {
+        const [batch1, batch2] = await Promise.all([
+          supabase.from('products').select('*').order('product_name').range(0, 999),
+          supabase.from('products').select('*').order('product_name').range(1000, 1999)
+        ])
+        
+        let altCodes = []
+        if (activePlatform === 'laminea') {
+          let from = 0
+          const limit = 1000
+          while (true) {
+            const { data, error } = await supabase
+              .from('laminea_product_codes')
+              .select('*, products(product_code, product_name)')
+              .eq('is_active', true)
+              .order('id')
+              .range(from, from + limit - 1)
+              
+            if (error) throw error
+            if (!data || data.length === 0) break
+            altCodes.push(...data)
+            if (data.length < limit) break
+            from += limit
+          }
+        }
+        
+        const rawData = [...(batch1.data || []), ...(batch2.data || [])]
         const mapped = rawData.filter(p => p[`in_${activePlatform}`] === true).map(p => ({
           ...p,
           rate: p[`rate_${activePlatform}`] !== undefined && p[`rate_${activePlatform}`] !== null ? p[`rate_${activePlatform}`] : (p.rate || 0)
@@ -175,15 +197,13 @@ export default function CreateEstimate() {
         setAllProducts(mapped)
 
         let options = [...mapped]
-        if (activePlatform === 'laminea' && altCodes.data) {
-          altCodes.data.forEach(alt => {
+        if (activePlatform === 'laminea' && altCodes.length > 0) {
+          altCodes.forEach(alt => {
             const actualProduct = mapped.find(p => p.id === alt.product_id)
             if (actualProduct) {
                options.push({
                  ...actualProduct,
                  option_key: `alias:${alt.id}`,
-                 // Keep product_name as the real product name (saved as snapshot)
-                 // display_label is only used for UI rendering
                  display_label: `${alt.alternative_code} (${actualProduct.product_code || actualProduct.product_name})`,
                  alternative_code_snapshot: alt.alternative_code,
                  actual_code_snapshot: actualProduct.product_code || ''
@@ -192,7 +212,11 @@ export default function CreateEstimate() {
           })
         }
         setSearchOptions(options)
-    })
+      } catch(e) {
+        console.error('Error loading products for create estimate', e)
+      }
+    }
+    loadProducts()
     supabase.from('sites').select('*').eq('platform', activePlatform).order('site_name')
       .then(({ data }) => setAllSites(data || []))
     }, [activePlatform])
