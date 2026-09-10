@@ -65,15 +65,27 @@ export default function Products() {
   }, [products])
 
   async function fetchProducts() {
-    setLoading(true)
-    const [batch1, batch2] = await Promise.all ([
-      supabase.from('products').select('*').order('product_name').range(0, 999),
-      supabase.from('products').select('*').order('product_name').range(1000, 1999)
-    ])
-    if (batch1.error || batch2.error) {
-      showToast('Failed to load products', 'error')
-    } else {
-      const allData = [...(batch1.data || []), ...(batch2.data || [])];
+      setLoading(true)
+      const allData = []
+      let from = 0
+      const limit = 1000
+      let hasError = false
+      
+      while (true) {
+        const { data, error } = await supabase.from('products').select('*').order('product_name').range(from, from + limit - 1)
+        if (error) {
+          hasError = true
+          break
+        }
+        if (!data || data.length === 0) break
+        allData.push(...data)
+        if (data.length < limit) break
+        from += limit
+      }
+
+      if (hasError) {
+        showToast('Failed to load products', 'error')
+      } else {
       const mapped = allData.map(p => ({
         ...p,
         rate: p[`rate_${activePlatform}`] !== undefined && p[`rate_${activePlatform}`] !== null ? p[`rate_${activePlatform}`] : (p.rate || 0),
@@ -461,12 +473,21 @@ export default function Products() {
         }
       }
 
-      const parseBool = val => (typeof val === 'string' && (val.toLowerCase() === 'yes' || val.toLowerCase() === 'true')) || val === true
+      const parseBool = (val, colName) => {
+        if (val === undefined || val === null || String(val).trim() === '') return false;
+        if (val === true) return true;
+        if (val === false) return false;
+        const v = String(val).toLowerCase().trim();
+        if (v === 'yes' || v === 'true') return true;
+        if (v === 'no' || v === 'false') return false;
+        errors.push(`Invalid boolean value in "${colName}": "${val}". Must be Yes, No, True, or False.`);
+        return false;
+      }
       
-      const parsedInCcai = parseBool(in_ccai)
-      const parsedInDc = parseBool(in_dc)
-      const parsedInLaminea = parseBool(in_laminea)
-      const parsedInPhs = parseBool(in_phs)
+      const parsedInCcai = parseBool(in_ccai, 'In CCAI')
+      const parsedInDc = parseBool(in_dc, 'In DC')
+      const parsedInLaminea = parseBool(in_laminea, 'In Laminea')
+      const parsedInPhs = parseBool(in_phs, 'In PHS')
       
       const parsedRateCcai = parseRate(rate_ccai)
       const parsedRateDc = parseRate(rate_dc)
@@ -490,18 +511,18 @@ export default function Products() {
         }
       }
 
-      const legacyRate = parsedRateCcai ?? parsedRateDc ?? parsedRateLaminea ?? parsedRatePhs ?? 0
+      const legacyRate = (parsedInCcai ? parsedRateCcai : null) ?? (parsedInDc ? parsedRateDc : null) ?? (parsedInLaminea ? parsedRateLaminea : null) ?? (parsedInPhs ? parsedRatePhs : null) ?? 0
       
       const ct = calculation_type?.toUpperCase().trim()
       const calcType = (ct === 'SQFT' || ct === 'INCH' || ct === 'FEET') ? ct : 'QUANTITY'
       
-      const parsedHasStock = parseBool(has_stock)
+      const parsedHasStock = parseBool(has_stock, 'Has Stock')
       const parsedStock = parsedHasStock && !isNaN(Number(stock)) ? Number(stock) : 0
       if (parsedHasStock && isNaN(Number(stock))) errors.push(`Invalid stock value: "${stock}"`)
 
       const parsedMinStock = min_stock && !isNaN(Number(min_stock)) ? Number(min_stock) : 5
-      const parsedHasRemark = parseBool(has_remark)
-      const parsedHasDiscount = parseBool(has_discount)
+      const parsedHasRemark = parseBool(has_remark, 'Has Remark')
+      const parsedHasDiscount = parseBool(has_discount, 'Has Discount')
 
       rows.push({
         product_name: normName,
@@ -697,10 +718,23 @@ export default function Products() {
     URL.revokeObjectURL(url)
   }
 
-  function handleExport() {
-    const currentPlatformProducts = products.filter(p => p[`in_${activePlatform}`] === true)
-    if (!currentPlatformProducts.length) { showToast('No products to export for this platform', 'error'); return }
-    exportCsv(currentPlatformProducts, `products_${activePlatform}.csv`)
+  async function handleExport() {
+    showToast(`Fetching all ${activePlatform} products for export...`, 'success')
+    const allProducts = []
+    let from = 0
+    const limit = 1000
+    while (true) {
+      const { data, error } = await supabase.from('products').select('*')
+        .eq(`in_${activePlatform}`, true)
+        .order('product_name').range(from, from + limit - 1)
+      if (error) { showToast('Error fetching products', 'error'); return }
+      if (!data || data.length === 0) break
+      allProducts.push(...data)
+      if (data.length < limit) break
+      from += limit
+    }
+    if (!allProducts.length) { showToast('No products to export for this platform', 'error'); return }
+    exportCsv(allProducts, `products_${activePlatform}.csv`)
   }
 
   async function handleExportAll() {
@@ -1115,8 +1149,8 @@ export default function Products() {
               <button className="btn btn-ghost" onClick={() => setShowImport(false)}>✕</button>
             </div>
             <p style={{ fontSize:13, color:'var(--text-muted)', marginBottom:12 }}>
-              Columns: <strong>Product Name, Length, Width, Unit, Rate, Calculation Type, Has Stock, Stock</strong><br />
-              Leave Length/Width blank for QUANTITY products. "Has Stock" should be Yes/No.
+              Please use the exact columns from the exported CSV.<br />
+                Leave Length/Width blank for QUANTITY products. Boolean columns like "Has Stock" or "In CCAI" must be Yes, No, True, or False.
             </p>
             <div className="field">
               <label>Upload CSV File</label>
@@ -1127,7 +1161,7 @@ export default function Products() {
               <label>Or Paste CSV Text</label>
               <textarea rows={5}
                 style={{ width:'100%', padding:12, border:'2px solid var(--border-light)', borderRadius:8, fontSize:13, fontFamily:'monospace' }}
-                placeholder={"C PLY 4 18 MM 7 x 4,7,4,Sq.Ft,57.50,SQFT\nNAILS 14 X 1 3/4,,,Kg.,130,QUANTITY"}
+                placeholder={"Paste the complete contents of an exported Product Master CSV here"}
                 value={importText}
                 onChange={e => { setImportText(e.target.value); parseImport(e.target.value) }} />
             </div>
@@ -1140,7 +1174,7 @@ export default function Products() {
                 <div style={{ maxHeight:160, overflowY:'auto', fontSize:13 }}>
                   {importPreview.map((r,i) => (
                     <div key={i} style={{ padding:'6px 0', borderBottom:'1px solid #f0f0f0', color: r.errors?.length ? 'var(--danger)' : 'inherit' }}>
-                      <strong>{r.product_name || 'Missing Name'}</strong> — {r.unit || 'No Unit'} @ ₹{r.raw_rate}
+                      <strong>{r.product_name || 'Missing Name'}</strong> — {r.unit || 'No Unit'} (Rates: {[r.in_ccai && 'CCAI: ₹'+r.rate_ccai, r.in_dc && 'DC: ₹'+r.rate_dc, r.in_laminea && 'Laminea: ₹'+r.rate_laminea, r.in_phs && 'PHS: ₹'+r.rate_phs].filter(Boolean).join(', ') || 'None'})
                       {r.calculation_type === 'SQFT' && ` (${r.length}×${r.width} ft)`}
                       {r.errors?.length > 0 && (
                         <div style={{ fontSize: 11, marginTop: 4 }}>

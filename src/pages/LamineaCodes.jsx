@@ -141,6 +141,62 @@ export default function LamineaCodes() {
     }
   }
 
+  
+  async function handleExport() {
+    showToast('Fetching all alternative codes...', 'success')
+    const allCodes = []
+    let from = 0
+    const limit = 1000
+    while (true) {
+      const { data, error } = await supabase
+        .from('laminea_product_codes')
+        .select('alternative_code, products(product_code, product_name)')
+        .eq('is_active', true)
+        .order('id')
+        .range(from, from + limit - 1)
+      if (error) { showToast('Error fetching codes', 'error'); return }
+      if (!data || data.length === 0) break
+      allCodes.push(...data)
+      if (data.length < limit) break
+      from += limit
+    }
+
+    if (!allCodes.length) { showToast('No alternative codes to export', 'error'); return }
+
+    const missingProductCodes = allCodes.some(
+      item => !item.products?.product_code?.trim()
+    )
+
+    if (missingProductCodes) {
+      showToast(
+        'Some active mappings do not have a Product Code. Update them before exporting.',
+        'error'
+      )
+      return
+    }
+
+    const headers = ['Alternative Code', 'Product Code']
+    const csvRows = [headers.join(',')]
+    for (const item of allCodes) {
+      const altCode = `"${(item.alternative_code || '').replace(/"/g, '""')}"`
+      const prodCode = `"${(item.products?.product_code || '').replace(/"/g, '""')}"`
+      csvRows.push(`${altCode},${prodCode}`)
+    }
+    
+    const blob = new Blob(
+      ['\uFEFF' + csvRows.join('\n')],
+      { type: 'text/csv;charset=utf-8;' }
+    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'alternative_codes.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   async function handleImport(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -308,13 +364,20 @@ export default function LamineaCodes() {
             Mapped Codes ({filteredCodes.length}{filteredCodes.length !== codes.length ? `/${codes.length}` : ''})
           </h2>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowImportModal(true)}>
-              📥 Import Excel
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
-              + Add Code
-            </button>
-          </div>
+              <button className="btn btn-secondary btn-sm" onClick={handleExport}>
+                📤 Export CSV
+              </button>
+              {role === 'ADMIN' && (
+                <>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setShowImportModal(true)}>
+                    📥 Import Excel
+                  </button>
+                  <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+                    + Add Code
+                  </button>
+                </>
+              )}
+            </div>
         </div>
 
         {/* Search bar */}
@@ -378,14 +441,16 @@ export default function LamineaCodes() {
                       </span>
                     </td>
                     <td style={{ padding: '10px 14px' }}>
-                      <button 
-                        className="btn btn-ghost btn-sm" 
-                        onClick={() => handleToggleActive(c.id, c.is_active)}
-                        title={c.is_active ? "Disable Code" : "Reactivate Code"}
-                        style={{ color: c.is_active ? '#ef4444' : '#16a34a' }}
-                      >
-                        {c.is_active ? '🚫 Disable' : '✅ Enable'}
-                      </button>
+                        {role === 'ADMIN' && (
+                          <button 
+                            className="btn btn-ghost btn-sm" 
+                            onClick={() => handleToggleActive(c.id, c.is_active)}
+                            title={c.is_active ? "Disable Code" : "Reactivate Code"}
+                            style={{ color: c.is_active ? '#ef4444' : '#16a34a' }}
+                          >
+                            {c.is_active ? '🚫 Disable' : '🔄 Enable'}
+                          </button>
+                        )}
                     </td>
                   </tr>
                 ))
