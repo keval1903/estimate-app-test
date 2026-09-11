@@ -1446,7 +1446,7 @@ export default function CreateEstimate() {
         ) : items.map((it, idx) => (
           <div key={idx} className="item-card">
             <div className="item-name">
-              {idx + 1}. {getInternalItemName(it, type)}{it.remark ? ` - ${it.remark}` : ''}
+              {idx + 1}. {getInternalItemName(it, docType)}{it.remark ? ` - ${it.remark}` : ''}
             </div>
             <div className="item-grid">
               {it.calculation_type_snapshot === 'SQFT' ? (
@@ -1670,7 +1670,7 @@ export default function CreateEstimate() {
                 {/* Show selected product details */}
                 {itemForm.product_name_snapshot && (
                   <div style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 13 }}>
-                    <strong>{getInternalItemName(itemForm, type)}</strong><br />
+                    <strong>{getInternalItemName(itemForm, docType)}</strong><br />
                     {itemForm.unit_snapshot} · {itemForm.calculation_type_snapshot}
                     {Boolean(itemForm.length_snapshot && itemForm.width_snapshot) &&
                       ` · ${itemForm.length_snapshot} × ${itemForm.width_snapshot} ${itemForm.calculation_type_snapshot === 'INCH' || itemForm.calculation_type_snapshot === 'FEET' ? (itemForm.calculation_type_snapshot === 'FEET' ? 'ft' : 'in') : 'ft'}`}
@@ -1794,7 +1794,7 @@ export default function CreateEstimate() {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                               <strong style={{ display: 'block', fontSize: 13 }}>
-                                {getInternalItemName(item, type)}
+                                {getInternalItemName(item, docType)}
                                 </strong>
                               <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>
                                 ₹{item.rate} · {item.unit_snapshot}
