@@ -851,7 +851,7 @@ export default function CreateEstimate() {
 
       const totalRequested = otherItemsQty + requestedQty
       if (totalRequested > availStock) {
-        const unit = itemForm.unit_snapshot || 'units'
+        const unit = isPieceBased ? 'Nos.' : (itemForm.unit_snapshot || 'units')
         if (otherItemsQty > 0) {
           showToast(`Cannot add! ${itemForm.product_name_snapshot} has ${availStock} ${unit} stock (${otherItemsQty} already added to this bill).`, 'error')
         } else {
@@ -925,7 +925,7 @@ export default function CreateEstimate() {
 
         const totalRequested = otherItemsQty + requestedQty
         if (totalRequested > availStock) {
-          const unit = item.unit_snapshot || 'units'
+          const unit = isPieceBased ? 'Nos.' : (item.unit_snapshot || 'units')
           if (otherItemsQty > 0) {
             showToast(`Cannot add! ${item.product_name_snapshot} has ${availStock} ${unit} stock (${otherItemsQty} already added to this bill).`, 'error')
           } else {
@@ -1676,7 +1676,10 @@ export default function CreateEstimate() {
                       ` · ${itemForm.length_snapshot} × ${itemForm.width_snapshot} ${itemForm.calculation_type_snapshot === 'INCH' || itemForm.calculation_type_snapshot === 'FEET' ? (itemForm.calculation_type_snapshot === 'FEET' ? 'ft' : 'in') : 'ft'}`}
                     {itemForm.has_stock && (
                       <div style={{ marginTop: 4, color: itemForm.stock > 0 ? 'var(--primary-color)' : 'var(--danger-color)', fontWeight: 600 }}>
-                        Available Stock: {itemForm.stock} {itemForm.unit_snapshot}
+                        Available Stock: {itemForm.stock}{' '}
+{['SQFT', 'INCH', 'FEET'].includes(itemForm.calculation_type_snapshot)
+  ? 'Nos.'
+  : itemForm.unit_snapshot}
                       </div>
                     )}
                   </div>
