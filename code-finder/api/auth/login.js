@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import cookie from 'cookie';
+import { serialize } from 'cookie';
 
 export const config = {
   runtime: 'edge',
@@ -125,8 +125,8 @@ export default async function handler(req) {
       maxAge: 60 * 60 * 24 * 7 // 7 days
     };
 
-    const accessTokenCookie = cookie.serialize('cf_access_token', signInData.session.access_token, cookieOptions);
-    const refreshTokenCookie = cookie.serialize('cf_refresh_token', signInData.session.refresh_token, cookieOptions);
+    const accessTokenCookie = serialize('cf_access_token', signInData.session.access_token, cookieOptions);
+    const refreshTokenCookie = serialize('cf_refresh_token', signInData.session.refresh_token, cookieOptions);
 
     const headers = new Headers({
       'Content-Type': 'application/json',

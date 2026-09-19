@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import cookie from 'cookie';
+import { parse, serialize } from 'cookie';
 
 const NO_CACHE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -11,7 +11,7 @@ export async function getAuthenticatedUser(req, headers) {
   const cookieHeader = req.headers.get('cookie');
   if (!cookieHeader) return null;
 
-  const cookies = cookie.parse(cookieHeader);
+  const cookies = parse(cookieHeader);
   let accessToken = cookies.cf_access_token;
   const refreshToken = cookies.cf_refresh_token;
 
@@ -52,8 +52,8 @@ export async function getAuthenticatedUser(req, headers) {
         path: '/',
         maxAge: 60 * 60 * 24 * 7
       };
-      headers.append('Set-Cookie', cookie.serialize('cf_access_token', data.session.access_token, cookieOptions));
-      headers.append('Set-Cookie', cookie.serialize('cf_refresh_token', data.session.refresh_token, cookieOptions));
+      headers.append('Set-Cookie', serialize('cf_access_token', data.session.access_token, cookieOptions));
+      headers.append('Set-Cookie', serialize('cf_refresh_token', data.session.refresh_token, cookieOptions));
     }
   }
 
