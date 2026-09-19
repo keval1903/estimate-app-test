@@ -7,7 +7,24 @@ const NO_CACHE_HEADERS = {
   'Expires': '0',
 };
 
-export async function getAuthenticatedUser(req, headers) {
+/**
+ * Authenticates the user from cookies and returns their profile.
+ *
+ * @param {Request} req
+ * @param {Headers} headers - Response headers (cookies may be appended on token refresh).
+ * @param {object}  [options]
+ * @param {boolean} [options.allowPendingPassword=false] - If false (default), returns a
+ *   PASSWORD_CHANGE_REQUIRED sentinel when the user still has a temporary password.
+ *   Only /api/auth/me, /change-password and /logout should pass true.
+ *
+ * @returns {null | {error: string} | {user, cfUser, accessToken}}
+ *   null           → not authenticated at all (no cookies / invalid token)
+ *   {error: '...'}  → authenticated but blocked (e.g. password change required)
+ *   {user, cfUser, accessToken} → fully authenticated
+ */
+export async function getAuthenticatedUser(req, headers, options = {}) {
+  const { allowPendingPassword = false } = options;
+
   const cookieHeader = req.headers.get('cookie');
   if (!cookieHeader) return null;
 
@@ -17,15 +34,14 @@ export async function getAuthenticatedUser(req, headers) {
 
   if (!accessToken && !refreshToken) return null;
 
-  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_ANON_KEY) {
     throw new Error('Server misconfiguration');
   }
 
-  // We use the anon key for normal client operations to correctly manage tokens.
-  const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
@@ -71,7 +87,26 @@ export async function getAuthenticatedUser(req, headers) {
     return null;
   }
 
+  // Block business APIs when user hasn't changed their temporary password
+  if (cfUser.must_change_password && !allowPendingPassword) {
+    return { error: 'PASSWORD_CHANGE_REQUIRED' };
+  }
+
   return { user, cfUser, accessToken };
+}
+
+/**
+ * Helper to check if getAuthenticatedUser returned an error sentinel.
+ * If so, returns an appropriate Response; otherwise returns null.
+ */
+export function handleAuthResult(authData, headers) {
+  if (!authData) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers });
+  }
+  if (authData.error === 'PASSWORD_CHANGE_REQUIRED') {
+    return new Response(JSON.stringify({ error: 'Password change required' }), { status: 403, headers });
+  }
+  return null;
 }
 
 export function createErrorResponse(message, status) {

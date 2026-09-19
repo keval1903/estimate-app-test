@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4"
 
+const CODE_FINDER_ORIGIN = Deno.env.get('CODE_FINDER_ORIGIN') || 'https://code-finder-five.vercel.app'
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': CODE_FINDER_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-code-finder-secret',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
@@ -58,7 +60,7 @@ serve(async (req: Request) => {
 
     const { data: cfUser, error: cfUserErr } = await supabaseAdmin
       .from('code_finder_users')
-      .select('id, is_active')
+      .select('id, is_active, must_change_password')
       .eq('auth_user_id', user.id)
       .single()
 
@@ -66,11 +68,19 @@ serve(async (req: Request) => {
       return new Response('Account inactive or not found', { status: 403, headers: corsHeaders })
     }
 
-    // Only return converted enquiries that are tied to an estimate
-    const { data: orders, error: eqErr } = await supabaseAdmin
+    if (cfUser.must_change_password) {
+      return new Response(JSON.stringify({ error: 'Password change required' }), {
+        status: 403,
+        headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Get converted enquiries with linked estimate details
+    const { data: enquiries, error: eqErr } = await supabaseAdmin
       .from('code_finder_enquiries')
       .select(`
         id, enquiry_number, status, checked_at, created_at,
+        converted_estimate_id,
         code_finder_enquiry_items (
           id, alternative_code_snapshot, requested_quantity
         )
@@ -81,6 +91,45 @@ serve(async (req: Request) => {
       .order('created_at', { ascending: false })
 
     if (eqErr) throw eqErr
+
+    // Fetch linked estimate details (only safe fields)
+    const estimateIds = (enquiries || [])
+      .map((e: any) => e.converted_estimate_id)
+      .filter(Boolean)
+
+    let estimateMap: Record<string, any> = {}
+
+    if (estimateIds.length > 0) {
+      const { data: estimates, error: estErr } = await supabaseAdmin
+        .from('estimates')
+        .select('id, bill_number, created_at, doc_type')
+        .in('id', estimateIds)
+
+      if (!estErr && estimates) {
+        estimates.forEach((est: any) => {
+          estimateMap[est.id] = {
+            platform_estimate_number: est.bill_number,
+            estimate_date: est.created_at,
+            doc_type: est.doc_type
+          }
+        })
+      }
+    }
+
+    // Build response — only expose safe fields, never internal codes/rates/stock
+    const orders = (enquiries || []).map((eq: any) => {
+      const estimate = estimateMap[eq.converted_estimate_id] || null
+      return {
+        id: eq.id,
+        enquiry_number: eq.enquiry_number,
+        status: eq.status,
+        checked_at: eq.checked_at,
+        created_at: eq.created_at,
+        platform_estimate_number: estimate?.platform_estimate_number || null,
+        estimate_date: estimate?.estimate_date || null,
+        code_finder_enquiry_items: eq.code_finder_enquiry_items
+      }
+    })
 
     return new Response(JSON.stringify({ orders }), {
       headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' },

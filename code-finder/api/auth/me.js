@@ -21,7 +21,7 @@ export default async function handler(req) {
   });
 
   try {
-    const authData = await getAuthenticatedUser(req, headers);
+    const authData = await getAuthenticatedUser(req, headers, { allowPendingPassword: true });
     
     if (!authData) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {

@@ -11,10 +11,6 @@ const NO_CACHE_HEADERS = {
   'Expires': '0',
 };
 
-// Simple in-memory rate limiting map (only works per Edge instance, but better than nothing).
-// For production, a Redis or Supabase edge cache should be used.
-const rateLimitMap = new Map();
-
 export default async function handler(req) {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -23,27 +19,7 @@ export default async function handler(req) {
     });
   }
 
-  // Rate Limiting
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-  const now = Date.now();
-  const limit = rateLimitMap.get(ip) || { count: 0, resetTime: now + 60000 };
-  
-  if (now > limit.resetTime) {
-    limit.count = 1;
-    limit.resetTime = now + 60000;
-  } else {
-    limit.count++;
-  }
-  rateLimitMap.set(ip, limit);
-
-  if (limit.count > 10) { // Max 10 logins per minute per IP
-    return new Response(JSON.stringify({ error: 'Too many login attempts. Try again later.' }), {
-      status: 429,
-      headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
-    });
-  }
-
-  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -64,13 +40,47 @@ export default async function handler(req) {
     }
 
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const cleanUsername = username.trim();
 
-    // 1. Find user in code_finder_users using case-insensitive match
+    // Database-backed rate limiting
+    const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || req.headers.get('x-real-ip')
+      || 'unknown';
+    const hmacSecret = Deno?.env?.get?.('RATE_LIMIT_HMAC_SECRET') || process.env.RATE_LIMIT_HMAC_SECRET || 'default-hmac-key';
+    const ipKeyData = new TextEncoder().encode(rawIp + hmacSecret);
+    const ipHashBuf = await crypto.subtle.digest('SHA-256', ipKeyData);
+    const ipHash = Array.from(new Uint8Array(ipHashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const { data: limitData, error: limitErr } = await supabaseAdmin.rpc('check_rate_limit_v2', {
+      p_namespace: 'login',
+      p_key_hash: ipHash,
+      p_max_requests: 10,
+      p_window_seconds: 60
+    });
+
+    if (limitErr) {
+      console.error('Rate limit check failed:', limitErr);
+      // Fail closed
+      return new Response(JSON.stringify({ error: 'Service temporarily unavailable. Try again later.' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
+      });
+    }
+
+    if (!limitData?.allowed) {
+      return new Response(JSON.stringify({ error: 'Too many login attempts. Try again later.' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
+      });
+    }
+
+    // Normalize username: remove spaces, uppercase
+    const normalizedUsername = username.trim().replace(/\s+/g, '').toUpperCase();
+
+    // 1. Find user in code_finder_users using normalized username (exact match, no ILIKE)
     const { data: cfUser, error: cfErr } = await supabaseAdmin
       .from('code_finder_users')
       .select('auth_user_id, is_active')
-      .ilike('username', cleanUsername)
+      .eq('normalized_username', normalizedUsername)
       .single();
 
     if (cfErr || !cfUser) {

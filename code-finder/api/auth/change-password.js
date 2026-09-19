@@ -22,7 +22,7 @@ export default async function handler(req) {
   });
 
   try {
-    const authData = await getAuthenticatedUser(req, headers);
+    const authData = await getAuthenticatedUser(req, headers, { allowPendingPassword: true });
     
     if (!authData) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -42,7 +42,7 @@ export default async function handler(req) {
       });
     }
 
-    const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 

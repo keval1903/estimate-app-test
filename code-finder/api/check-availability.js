@@ -1,7 +1,7 @@
-import { getAuthenticatedUser, createErrorResponse } from './_auth.js';
+import { getAuthenticatedUser, handleAuthResult, createErrorResponse } from './_auth.js';
 
 export const config = {
-  runtime: 'edge', // use edge runtime for fast proxying
+  runtime: 'edge',
 };
 
 const NO_CACHE_HEADERS = {
@@ -18,10 +18,11 @@ export default async function handler(req) {
     });
   }
 
-  const SUPABASE_FUNCTION_URL = process.env.SUPABASE_CHECK_AVAILABILITY_URL || `${process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL}/functions/v1/check-availability`;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_FUNCTION_URL = process.env.SUPABASE_CHECK_AVAILABILITY_URL || `${SUPABASE_URL}/functions/v1/check-availability`;
   const PROXY_SECRET = process.env.CODE_FINDER_PROXY_SECRET;
 
-  if (!SUPABASE_FUNCTION_URL || !PROXY_SECRET) {
+  if (!SUPABASE_URL || !SUPABASE_FUNCTION_URL || !PROXY_SECRET) {
     return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
@@ -35,9 +36,8 @@ export default async function handler(req) {
     });
 
     const authData = await getAuthenticatedUser(req, headers);
-    if (!authData) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers });
-    }
+    const authError = handleAuthResult(authData, headers);
+    if (authError) return authError;
 
     const body = await req.json();
 
@@ -51,7 +51,7 @@ export default async function handler(req) {
       headers: {
         'Content-Type': 'application/json',
         'x-code-finder-secret': PROXY_SECRET,
-        'x-forwarded-for': ip, // Pass IP to Edge Function for accurate rate limiting
+        'x-forwarded-for': ip,
         'Authorization': `Bearer ${authData.accessToken}`
       },
       body: JSON.stringify(body)

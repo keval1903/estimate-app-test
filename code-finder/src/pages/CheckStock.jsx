@@ -159,6 +159,7 @@ function App() {
   }
 
   const [submitting, setSubmitting] = useState(false)
+  const [enquiryIdempotencyKey, setEnquiryIdempotencyKey] = useState(null)
   
   const handleSubmitEnquiry = async () => {
     if (results.length === 0) return
@@ -171,13 +172,20 @@ function App() {
 
     if (requests.length === 0) return
 
+    // Generate idempotency key on first attempt; reuse on retries
+    let key = enquiryIdempotencyKey
+    if (!key) {
+      key = crypto.randomUUID()
+      setEnquiryIdempotencyKey(key)
+    }
+
     setSubmitting(true)
     setError('')
     try {
       const res = await fetch('/api/enquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests })
+        body: JSON.stringify({ requests, idempotency_key: key })
       })
       const data = await res.json()
 
@@ -185,11 +193,16 @@ function App() {
         throw new Error(data.error || 'Failed to submit enquiry')
       }
 
-      alert(`Enquiry #${data.enquiry_number} submitted successfully! You can view it in the Enquiries tab.`)
-      // Optional: Clear form
+      const msg = data.duplicate
+        ? `Enquiry #${data.enquiry_number} was already submitted.`
+        : `Enquiry #${data.enquiry_number} submitted successfully! You can view it in the Enquiries tab.`
+      alert(msg)
+      // Clear form and reset idempotency key
       setResults([])
       setRows([{ code: '', quantity: '' }, { code: '', quantity: '' }, { code: '', quantity: '' }])
+      setEnquiryIdempotencyKey(null)
     } catch (err) {
+      // Don't reset idempotency key on error — allows retry with same key
       setError(err.message)
     } finally {
       setSubmitting(false)

@@ -37,10 +37,18 @@ export default function Orders() {
           {orders.map(order => (
             <div key={order.id} className="item-card order-card">
               <div className="card-header">
-                <h3>Order #{order.enquiry_number}</h3>
+                <h3>
+                  {order.platform_estimate_number
+                    ? `Estimate #${order.platform_estimate_number}`
+                    : `Enquiry #${order.enquiry_number}`}
+                </h3>
                 <span className="status-badge confirmed">CONFIRMED</span>
               </div>
-              <p className="date-text">Date: {new Date(order.checked_at).toLocaleString()}</p>
+              <p className="date-text">
+                {order.estimate_date
+                  ? `Estimate Date: ${new Date(order.estimate_date).toLocaleString()}`
+                  : `Enquiry Date: ${new Date(order.checked_at).toLocaleString()}`}
+              </p>
               
               <div className="items-list">
                 {order.code_finder_enquiry_items?.map(item => (

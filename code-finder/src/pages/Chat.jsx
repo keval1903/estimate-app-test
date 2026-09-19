@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../App';
 
 export default function Chat() {
@@ -11,33 +11,61 @@ export default function Chat() {
   const { user } = useAuth();
   const messagesEndRef = useRef(null);
   const isPollingRef = useRef(true);
+  const lastTimestampRef = useRef(null); // Track latest message timestamp for incremental polling
 
-  const fetchMessages = async () => {
+  // Initial full load (no ?after= param)
+  const fetchAllMessages = useCallback(async () => {
     try {
       const res = await fetch('/api/messages', { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) {
-        setMessages(data.messages || []);
+        const msgs = data.messages || [];
+        setMessages(msgs);
+        if (msgs.length > 0) {
+          lastTimestampRef.current = msgs[msgs.length - 1].created_at;
+        }
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Incremental poll (only new messages since last timestamp)
+  const pollNewMessages = useCallback(async () => {
+    if (!lastTimestampRef.current) {
+      // No messages yet — do a full fetch instead
+      await fetchAllMessages();
+      return;
+    }
+    try {
+      const res = await fetch(`/api/messages?after=${encodeURIComponent(lastTimestampRef.current)}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok) {
+        const newMsgs = data.messages || [];
+        if (newMsgs.length > 0) {
+          setMessages(prev => [...prev, ...newMsgs]);
+          lastTimestampRef.current = newMsgs[newMsgs.length - 1].created_at;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [fetchAllMessages]);
 
   useEffect(() => {
-    fetchMessages();
+    fetchAllMessages();
     
-    // Authenticated polling every 5 seconds
+    // Incremental polling every 5 seconds
     const interval = setInterval(() => {
       if (isPollingRef.current && document.visibilityState === 'visible') {
-        fetchMessages();
+        pollNewMessages();
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchAllMessages, pollNewMessages]);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -68,7 +96,9 @@ export default function Chat() {
       
       if (!res.ok) throw new Error(data.error || 'Failed to send message');
       
-      setMessages([...messages, data.message]);
+      const sentMsg = data.message;
+      setMessages(prev => [...prev, sentMsg]);
+      lastTimestampRef.current = sentMsg.created_at;
       setNewMessage('');
     } catch (err) {
       setError(err.message);

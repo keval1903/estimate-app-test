@@ -1,8 +1,10 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4"
 
+const CODE_FINDER_ORIGIN = Deno.env.get('CODE_FINDER_ORIGIN') || 'https://code-finder-five.vercel.app'
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': CODE_FINDER_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-code-finder-secret',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
@@ -11,6 +13,16 @@ const noCacheHeaders = {
   'Cache-Control': 'no-store, no-cache, must-revalidate',
   'Pragma': 'no-cache',
   'Expires': '0',
+}
+
+async function hmacIpHash(rawIp: string, userId: string): Promise<string> {
+  const secret = Deno.env.get('RATE_LIMIT_HMAC_SECRET') || 'default-hmac-key'
+  const data = new TextEncoder().encode(`${rawIp}:${secret}`)
+  const hashBuf = await crypto.subtle.digest('SHA-256', data)
+  const ipPart = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
+  const combined = new TextEncoder().encode(`${userId}:${ipPart}`)
+  const finalBuf = await crypto.subtle.digest('SHA-256', combined)
+  return Array.from(new Uint8Array(finalBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
 serve(async (req: Request) => {
@@ -54,7 +66,7 @@ serve(async (req: Request) => {
 
     const { data: cfUser, error: cfUserErr } = await supabaseAdmin
       .from('code_finder_users')
-      .select('id, is_active')
+      .select('id, is_active, must_change_password')
       .eq('auth_user_id', user.id)
       .single()
 
@@ -62,12 +74,30 @@ serve(async (req: Request) => {
       return new Response('Account inactive or not found', { status: 403, headers: corsHeaders })
     }
 
+    if (cfUser.must_change_password) {
+      return new Response(JSON.stringify({ error: 'Password change required' }), {
+        status: 403,
+        headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     if (req.method === 'GET') {
-      const { data: messages, error: msgErr } = await supabaseAdmin
+      // Support incremental polling: ?after=<ISO timestamp>
+      const url = new URL(req.url)
+      const afterParam = url.searchParams.get('after')
+
+      let query = supabaseAdmin
         .from('code_finder_messages')
         .select('id, enquiry_id, sender_type, message, created_at')
         .eq('code_finder_user_id', cfUser.id)
         .order('created_at', { ascending: true })
+
+      if (afterParam) {
+        // Incremental poll: only messages after the given timestamp
+        query = query.gt('created_at', afterParam)
+      }
+
+      const { data: messages, error: msgErr } = await query
 
       if (msgErr) throw msgErr
 
@@ -77,7 +107,34 @@ serve(async (req: Request) => {
     }
     
     if (req.method === 'POST') {
-      // Basic IP Rate limiting could be added here
+      // Rate limiting for messages
+      const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || req.headers.get('x-real-ip')
+        || 'unknown'
+      const keyHash = await hmacIpHash(rawIp, cfUser.id)
+
+      const { data: limitData, error: limitErr } = await supabaseAdmin.rpc('check_rate_limit_v2', {
+        p_namespace: 'message',
+        p_key_hash: keyHash,
+        p_max_requests: 20,
+        p_window_seconds: 60  // 20 messages per minute
+      })
+
+      if (limitErr) {
+        console.error('Rate limit check failed:', limitErr)
+        return new Response(JSON.stringify({ error: 'Service unavailable' }), {
+          status: 429,
+          headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      if (!limitData?.allowed) {
+        return new Response(JSON.stringify({ error: 'Too many messages. Please wait.' }), {
+          status: 429,
+          headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
       const payload = await req.json()
       const messageText = payload.message?.trim() || ''
       const enquiryId = payload.enquiry_id || null
