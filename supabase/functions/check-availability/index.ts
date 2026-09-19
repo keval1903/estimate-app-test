@@ -32,14 +32,45 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    if (!serviceRoleKey) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY is not set')
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    
+    if (!serviceRoleKey || !anonKey) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY is not set')
       return new Response(JSON.stringify({ error: 'Service unavailable' }), {
         status: 500,
         headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' }
       })
     }
+
+    // Token validation
+    const authHeader = req.headers.get('authorization')
+    if (!authHeader) {
+      return new Response('Missing authorization header', { status: 401, headers: corsHeaders })
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    })
+    const { data: { user }, error: authErr } = await authClient.auth.getUser(token)
+
+    if (authErr || !user) {
+      return new Response('Unauthorized token', { status: 401, headers: corsHeaders })
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+
+    // Verify Code Finder user is active
+    const { data: cfUser, error: cfUserErr } = await supabaseAdmin
+      .from('code_finder_users')
+      .select('id, is_active')
+      .eq('auth_user_id', user.id)
+      .single()
+
+    if (cfUserErr || !cfUser || !cfUser.is_active) {
+      return new Response('Account inactive or not found', { status: 403, headers: corsHeaders })
+    }
 
     const payload = await req.json()
     const requests: { code: string, quantity: number }[] = payload.requests || []
