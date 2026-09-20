@@ -74,14 +74,25 @@ export default function CustomerEnquiries() {
         const myRead = c.code_finder_message_reads?.find(r => r.staff_user_id === userId);
         
         const latestMsg = c.code_finder_messages?.sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        const latestMsgDate = latestMsg ? new Date(latestMsg.created_at).getTime() : 0;
         const hasUnreadChat = latestMsg && (!myRead || new Date(myRead.last_read_message_created_at) < new Date(latestMsg.created_at));
+
+        const latestEnq = c.code_finder_enquiries?.sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        const latestEnqDate = latestEnq ? new Date(latestEnq.created_at).getTime() : 0;
+        const lastInteraction = Math.max(latestMsgDate, latestEnqDate);
 
         return {
           ...c,
           pendingCount,
-          hasUnreadChat
+          hasUnreadChat,
+          lastInteraction
         };
-      }).sort((a,b) => b.hasUnreadChat - a.hasUnreadChat || b.pendingCount - a.pendingCount);
+      }).sort((a,b) => {
+        if (b.hasUnreadChat !== a.hasUnreadChat) return b.hasUnreadChat ? 1 : -1;
+        if (b.pendingCount > 0 && a.pendingCount === 0) return 1;
+        if (a.pendingCount > 0 && b.pendingCount === 0) return -1;
+        return b.lastInteraction - a.lastInteraction;
+      });
       
       setCustomers(formatted);
     } catch (err) {

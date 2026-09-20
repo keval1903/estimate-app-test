@@ -16,11 +16,11 @@ export default function CustomerDetail() {
   
   const [customer, setCustomer] = useState(null);
   const [activeTab, setActiveTab] = useState('ENQUIRIES'); // ENQUIRIES, ORDERS, CHAT, ACCOUNT
-  
   const [enquiries, setEnquiries] = useState([]);
   const [orders, setOrders] = useState([]);
   const [messages, setMessages] = useState([]);
-  
+  const [newMessage, setNewMessage] = useState('');
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef(null);
@@ -73,19 +73,36 @@ export default function CustomerDetail() {
       if (msgErr) throw msgErr;
       setMessages(msgs);
 
-      // Mark read
+      // Fetch read cursor
+      const { data: authUser } = await supabase.auth.getUser();
+      const { data: myRead } = await supabase
+        .from('code_finder_message_reads')
+        .select('last_read_message_created_at')
+        .eq('staff_user_id', authUser.user?.id)
+        .eq('code_finder_user_id', id)
+        .single();
+        
+      const lastReadTime = myRead ? new Date(myRead.last_read_message_created_at).getTime() : 0;
+      const unreads = msgs.filter(m => new Date(m.created_at).getTime() > lastReadTime);
+      
+      setUnreadChatCount(unreads.length);
+
+      // Mark read enquiries
       if (activeEnqs.length > 0) {
         activeEnqs.forEach(async (eq) => {
           await supabase.rpc('mark_enquiry_read', { p_enquiry_id: eq.id });
         });
       }
-      if (msgs.length > 0) {
-        const lastMsg = msgs[msgs.length - 1];
+      
+      // Mark chat as read only if currently on chat tab
+      if (activeTab === 'CHAT' && unreads.length > 0) {
+        const lastMsg = unreads[unreads.length - 1];
         await supabase.rpc('update_message_read_cursor', { 
           p_cf_user_id: id, 
           p_message_created_at: lastMsg.created_at, 
           p_message_id: lastMsg.id 
         });
+        setUnreadChatCount(0);
       }
 
     } catch (err) {
@@ -103,9 +120,22 @@ export default function CustomerDetail() {
     if (payload.new && payload.new.code_finder_user_id === id) {
       fetchData();
     }
-  }, [id]);
+  }, [id, activeTab]);
 
   useEnquirySubscription(handleRealtimeUpdate);
+
+  useEffect(() => {
+    if (activeTab === 'CHAT' && unreadChatCount > 0 && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      supabase.rpc('update_message_read_cursor', { 
+        p_cf_user_id: id, 
+        p_message_created_at: lastMsg.created_at, 
+        p_message_id: lastMsg.id 
+      }).then(() => {
+        setUnreadChatCount(0);
+      });
+    }
+  }, [activeTab, unreadChatCount, messages, id]);
 
   useEffect(() => {
     if (activeTab === 'CHAT' && chatEndRef.current) {
@@ -162,18 +192,18 @@ export default function CustomerDetail() {
       </div>
 
       <div className="page">
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-light)', marginBottom: '16px' }}>
-          <button style={{ flex: 1, padding: '12px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: activeTab === 'ENQUIRIES' ? '3px solid var(--accent)' : '3px solid transparent', fontWeight: activeTab === 'ENQUIRIES' ? 'bold' : 'normal', color: activeTab === 'ENQUIRIES' ? 'var(--accent)' : 'var(--text-muted)' }} onClick={() => setActiveTab('ENQUIRIES')}>
+        <div style={{ display: 'flex', borderBottom: '2px solid var(--accent)', marginBottom: '16px' }}>
+          <button style={{ flex: 1, padding: '12px', border: 'none', cursor: 'pointer', borderRadius: '8px 8px 0 0', background: activeTab === 'ENQUIRIES' ? 'var(--accent)' : 'transparent', fontWeight: activeTab === 'ENQUIRIES' ? 'bold' : 'normal', color: activeTab === 'ENQUIRIES' ? '#fff' : 'var(--text-muted)' }} onClick={() => setActiveTab('ENQUIRIES')}>
             Enquiries ({enquiries.length})
           </button>
-          <button style={{ flex: 1, padding: '12px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: activeTab === 'ORDERS' ? '3px solid var(--accent)' : '3px solid transparent', fontWeight: activeTab === 'ORDERS' ? 'bold' : 'normal', color: activeTab === 'ORDERS' ? 'var(--accent)' : 'var(--text-muted)' }} onClick={() => setActiveTab('ORDERS')}>
+          <button style={{ flex: 1, padding: '12px', border: 'none', cursor: 'pointer', borderRadius: '8px 8px 0 0', background: activeTab === 'ORDERS' ? 'var(--accent)' : 'transparent', fontWeight: activeTab === 'ORDERS' ? 'bold' : 'normal', color: activeTab === 'ORDERS' ? '#fff' : 'var(--text-muted)' }} onClick={() => setActiveTab('ORDERS')}>
             Orders ({orders.length})
           </button>
-          <button style={{ flex: 1, padding: '12px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: activeTab === 'CHAT' ? '3px solid var(--accent)' : '3px solid transparent', fontWeight: activeTab === 'CHAT' ? 'bold' : 'normal', color: activeTab === 'CHAT' ? 'var(--accent)' : 'var(--text-muted)' }} onClick={() => setActiveTab('CHAT')}>
-            Chat
+          <button style={{ flex: 1, padding: '12px', border: 'none', cursor: 'pointer', borderRadius: '8px 8px 0 0', background: activeTab === 'CHAT' ? 'var(--accent)' : 'transparent', fontWeight: activeTab === 'CHAT' ? 'bold' : 'normal', color: activeTab === 'CHAT' ? '#fff' : 'var(--text-muted)' }} onClick={() => setActiveTab('CHAT')}>
+            Chat {unreadChatCount > 0 && <span style={{ background: '#ef4444', color: '#fff', borderRadius: '12px', padding: '2px 6px', fontSize: '11px', marginLeft: '4px' }}>{unreadChatCount}</span>}
           </button>
           {role === 'ADMIN' && (
-            <button style={{ flex: 1, padding: '12px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: activeTab === 'ACCOUNT' ? '3px solid var(--accent)' : '3px solid transparent', fontWeight: activeTab === 'ACCOUNT' ? 'bold' : 'normal', color: activeTab === 'ACCOUNT' ? 'var(--accent)' : 'var(--text-muted)' }} onClick={() => setActiveTab('ACCOUNT')}>
+            <button style={{ flex: 1, padding: '12px', border: 'none', cursor: 'pointer', borderRadius: '8px 8px 0 0', background: activeTab === 'ACCOUNT' ? 'var(--accent)' : 'transparent', fontWeight: activeTab === 'ACCOUNT' ? 'bold' : 'normal', color: activeTab === 'ACCOUNT' ? '#fff' : 'var(--text-muted)' }} onClick={() => setActiveTab('ACCOUNT')}>
               Account
             </button>
           )}
