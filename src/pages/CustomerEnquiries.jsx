@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -96,10 +96,12 @@ export default function CustomerEnquiries() {
     else fetchCustomers();
   }, [activeTab]);
 
-  useEnquirySubscription(() => {
+  const handleRealtimeUpdate = useCallback(() => {
     if (activeTab === 'PENDING') fetchPending();
     else fetchCustomers();
-  });
+  }, [activeTab]);
+
+  useEnquirySubscription(handleRealtimeUpdate);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({ username: '', password: '', client_name: '', contact_person: '', mobile: '' });

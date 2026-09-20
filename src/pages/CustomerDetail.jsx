@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -99,11 +99,13 @@ export default function CustomerDetail() {
     if (id) fetchData();
   }, [id]);
 
-  useEnquirySubscription((type, payload) => {
+  const handleRealtimeUpdate = useCallback((type, payload) => {
     if (payload.new && payload.new.code_finder_user_id === id) {
       fetchData();
     }
-  });
+  }, [id]);
+
+  useEnquirySubscription(handleRealtimeUpdate);
 
   useEffect(() => {
     if (activeTab === 'CHAT' && chatEndRef.current) {
