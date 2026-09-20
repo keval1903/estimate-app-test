@@ -380,19 +380,19 @@ export default function CreateEstimate() {
 
     // Load clients for autocomplete
     async function loadClientNames() {
-      const { data: cData } = await supabase.from('clients').select('id, name, mobile').eq('platform', activePlatform)
+      const { data: cData } = await supabase.from('clients').select('id, name, mobile, client_type').eq('platform', activePlatform)
       const { data: eData } = await supabase.from('estimates').select('client_name, client_mobile').eq('platform', activePlatform)
       const cmap = new Map()
       if (cData) cData.forEach(c => {
-        if (c.name) cmap.set(c.name.trim().toUpperCase(), { id: c.id, mobile: c.mobile || '' })
+        if (c.name) cmap.set(c.name.trim().toUpperCase(), { id: c.id, mobile: c.mobile || '', type: c.client_type || 'GREEN' })
       })
       if (eData) eData.forEach(e => {
         if (e.client_name) {
           const n = e.client_name.trim().toUpperCase()
-          if (!cmap.has(n)) cmap.set(n, { id: null, mobile: e.client_mobile || '' })
+          if (!cmap.has(n)) cmap.set(n, { id: null, mobile: e.client_mobile || '', type: 'GREEN' })
         }
       })
-      const merged = Array.from(cmap.entries()).map(([name, val]) => ({ name, id: val.id, mobile: val.mobile })).sort((a, b) => a.name.localeCompare(b.name))
+      const merged = Array.from(cmap.entries()).map(([name, val]) => ({ name, id: val.id, mobile: val.mobile, type: val.type })).sort((a, b) => a.name.localeCompare(b.name))
       setAllClients(merged)
     }
     loadClientNames()
@@ -1453,7 +1453,17 @@ export default function CreateEstimate() {
 
           <div className="field-row">
             <div className="field">
-              <label>Client Name *</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                Client Name *
+                {(() => {
+                  const sel = allClients.find(c => c.name.toUpperCase() === clientName.trim().toUpperCase());
+                  if (sel && sel.type) {
+                    const bg = sel.type === 'RED' ? '#ef4444' : sel.type === 'YELLOW' ? '#eab308' : '#22c55e';
+                    return <div className="no-print" style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: bg, flexShrink: 0 }} title={`Client Type: ${sel.type}`} />;
+                  }
+                  return null;
+                })()}
+              </label>
               <div className="autocomplete-wrap">
                 <input
                   ref={clientInputRef}
@@ -1487,7 +1497,10 @@ export default function CreateEstimate() {
                           setShowClientSuggestions(false)
                           if (!isEdit && s.id) fetchClientCurrentBalance(s.id)
                         }}>
-                        {s.name} {s.mobile ? `(${s.mobile})` : ''}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: s.type === 'RED' ? '#ef4444' : s.type === 'YELLOW' ? '#eab308' : '#22c55e', flexShrink: 0 }} />
+                          <span>{s.name} {s.mobile ? `(${s.mobile})` : ''}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
