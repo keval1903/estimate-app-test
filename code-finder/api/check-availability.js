@@ -18,7 +18,7 @@ export default async function handler(req) {
     });
   }
 
-  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const SUPABASE_FUNCTION_URL = process.env.SUPABASE_CHECK_AVAILABILITY_URL || `${SUPABASE_URL}/functions/v1/check-availability`;
   const PROXY_SECRET = process.env.CODE_FINDER_PROXY_SECRET;
 
