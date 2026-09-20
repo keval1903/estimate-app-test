@@ -175,13 +175,16 @@ export default function CreateEstimate() {
                product_id: it.current_product_id,
                product_name_snapshot: it.current_product_name || 'Manual Item',
                alternative_code_snapshot: it.alternative_code_snapshot,
-               actual_code_snapshot: it.is_mapped ? (it.current_product_name) : null,
+               actual_code_snapshot: it.is_mapped ? (it.current_product_code || it.current_product_name) : null,
+               length_snapshot: it.current_length || '',
+               width_snapshot: it.current_width || '',
+               unit_snapshot: it.current_unit || '',
                calculation_type_snapshot: it.current_calculation_type || 'QUANTITY',
                quantity: !isPieceBased ? (it.agreed_quantity || '') : '',
                nos: isPieceBased ? (it.agreed_quantity || '') : '',
                rate: baseRate,
                base_rate: baseRate,
-               has_stock: true,
+               has_stock: it.current_has_stock !== undefined ? it.current_has_stock : true,
                amount: 0
              };
              

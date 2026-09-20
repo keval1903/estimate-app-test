@@ -47,11 +47,11 @@ serve(async (req: Request) => {
     // Get all active push subscriptions for staff
     const { data: activeStaff } = await supabase
       .from('user_roles')
-      .select('user_id')
+      .select('id')
       .in('role', ['STAFF', 'ADMIN'])
       .eq('is_active', true)
       
-    const activeStaffIds = new Set((activeStaff || []).map(r => r.user_id))
+    const activeStaffIds = new Set((activeStaff || []).map(r => r.id))
 
     const { data: allSubs, error: subsErr } = await supabase
       .from('push_subscriptions')

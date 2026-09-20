@@ -41,11 +41,16 @@ function LamineaOnlyRoute({ children }) {
   return children;
 }
 
+const customerEnquiriesEnabled =
+  import.meta.env.VITE_ENABLE_CUSTOMER_ENQUIRIES !== undefined
+    ? import.meta.env.VITE_ENABLE_CUSTOMER_ENQUIRIES === 'true'
+    : import.meta.env.VITE_ENABLE_CODE_FINDER !== 'false';
+
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <EnquiryNotification />
+        {customerEnquiriesEnabled && <EnquiryNotification />}
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/choose-platform" element={<ProtectedRoute><ChoosePlatform /></ProtectedRoute>} />
@@ -63,8 +68,12 @@ export default function App() {
             <Route path="client-sites" element={<ClientSitesList />} />
             <Route path="client-sites/:clientId" element={<ClientSitesView />} />
             <Route path="client-sites/:clientId/edit/:siteId" element={<SiteDetailsEditor />} />
-            <Route path="customer-enquiries" element={<LamineaOnlyRoute><CustomerEnquiries /></LamineaOnlyRoute>} />
-            <Route path="customer-enquiries/:id" element={<LamineaOnlyRoute><CustomerDetail /></LamineaOnlyRoute>} />
+            {customerEnquiriesEnabled && (
+              <>
+                <Route path="customer-enquiries" element={<LamineaOnlyRoute><CustomerEnquiries /></LamineaOnlyRoute>} />
+                <Route path="customer-enquiries/:id" element={<LamineaOnlyRoute><CustomerDetail /></LamineaOnlyRoute>} />
+              </>
+            )}
             <Route path="selection-sheets" element={<SelectionSheetList />} />
             <Route path="selection-sheets/:id" element={<SelectionSheetEditor />} />
             <Route path="catalogue" element={<Catalogue />} />

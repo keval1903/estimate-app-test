@@ -79,7 +79,7 @@ serve(async (req: Request) => {
     const { data: enquiries, error: eqErr } = await supabaseAdmin
       .from('code_finder_enquiries')
       .select(`
-        id, enquiry_number, status, checked_at, created_at, updated_at,
+        id, enquiry_number, status, checked_at, created_at, updated_at, confirmed_at,
         code_finder_enquiry_items (
           id, alternative_code_snapshot, requested_quantity
         )
@@ -98,9 +98,7 @@ serve(async (req: Request) => {
         status: eq.status,
         checked_at: eq.checked_at,
         created_at: eq.created_at,
-        confirmed_at: eq.updated_at,
-        platform_estimate_number: null, // Left for backward compatibility if old clients expect the key, but always null
-        estimate_date: null,
+        confirmed_at: eq.confirmed_at,
         code_finder_enquiry_items: eq.code_finder_enquiry_items
       }
     })

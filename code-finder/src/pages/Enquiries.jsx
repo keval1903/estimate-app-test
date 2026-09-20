@@ -126,7 +126,7 @@ export default function Enquiries() {
                   )})}
                   
                   <div style={{ marginTop: '0.5rem', textAlign: 'right' }}>
-                    <button onClick={() => navigate('/app/chat')} style={{ padding: '4px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    <button onClick={() => navigate(`/app/chat?enquiry=${eq.id}`)} style={{ padding: '4px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>
                       Reply in Chat
                     </button>
                   </div>

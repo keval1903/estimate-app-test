@@ -213,11 +213,17 @@ export default function CustomerDetail() {
         mobile: customer?.mobile
       }
     };
-    navigate(`/${activePlatform}/estimate/new`, { state: { prefillEnquiry: enqWithUser, codeFinderUserId: id } });
+    navigate(`/${activePlatform}/estimate/new?type=ESTIMATE`, { state: { prefillEnquiry: enqWithUser, codeFinderUserId: id } });
   };
 
   const handleOpenProposalModal = async (enq) => {
     try {
+       // Auto-transition NEW to UNDER_REVIEW
+       if (enq.status === 'NEW') {
+         await supabase.rpc('update_enquiry_status', { p_enquiry_id: enq.id, p_new_status: 'UNDER_REVIEW' });
+         enq.status = 'UNDER_REVIEW'; // Optimistic update
+       }
+
        await supabase.rpc('recheck_enquiry_stock', { p_enquiry_id: enq.id });
        const { data: updatedItems, error } = await supabase.from('code_finder_enquiry_items').select('*').eq('enquiry_id', enq.id);
        if (error) throw error;
@@ -245,7 +251,7 @@ export default function CustomerDetail() {
     try {
       const payload = {
         p_enquiry_id: selectedEnquiry.id,
-        p_proposal_type: proposalType,
+        p_type: proposalType,
         p_staff_note: staffNote.trim() || null,
         p_items: proposalItems.map(p => ({
            enquiry_item_id: p.enquiry_item_id,
@@ -255,7 +261,7 @@ export default function CustomerDetail() {
         }))
       };
       
-      const { error } = await supabase.rpc('submit_code_finder_proposal', payload);
+      const { error } = await supabase.rpc('submit_proposal', payload);
       if (error) throw error;
       
       setProposalModalOpen(false);

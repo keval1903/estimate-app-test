@@ -113,7 +113,11 @@ export default function Home() {
           </div>
         </button>
 
-        {activePlatform === 'laminea' && import.meta.env.VITE_ENABLE_CODE_FINDER !== 'false' && (
+        {activePlatform === 'laminea' && (
+          import.meta.env.VITE_ENABLE_CUSTOMER_ENQUIRIES !== undefined
+            ? import.meta.env.VITE_ENABLE_CUSTOMER_ENQUIRIES === 'true'
+            : import.meta.env.VITE_ENABLE_CODE_FINDER !== 'false'
+        ) && (
           <button className="home-btn" onClick={() => navigate(`/${activePlatform}/customer-enquiries`)}>
             <div className="home-btn-icon" style={{ background: '#e0e7ff' }}>💬</div>
             <div>

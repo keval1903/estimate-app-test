@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../App';
 
 export default function Chat() {
@@ -86,6 +87,9 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const [searchParams] = useSearchParams();
+  const enquiryId = searchParams.get('enquiry');
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
@@ -97,7 +101,10 @@ export default function Chat() {
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: newMessage })
+        body: JSON.stringify({ 
+          message: newMessage.trim(),
+          enquiry_id: enquiryId || null 
+        })
       });
       const data = await res.json();
       
