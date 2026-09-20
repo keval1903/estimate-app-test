@@ -160,6 +160,7 @@ function App() {
 
   const [submitting, setSubmitting] = useState(false)
   const [enquiryIdempotencyKey, setEnquiryIdempotencyKey] = useState(null)
+  const [lastSubmittedPayload, setLastSubmittedPayload] = useState(null)
   
   const handleSubmitEnquiry = async () => {
     if (results.length === 0) return
@@ -172,11 +173,14 @@ function App() {
 
     if (requests.length === 0) return
 
-    // Generate idempotency key on first attempt; reuse on retries
+    const currentPayloadString = JSON.stringify(requests)
+
+    // Generate idempotency key on first attempt or if payload changes; reuse on exact retries
     let key = enquiryIdempotencyKey
-    if (!key) {
+    if (!key || currentPayloadString !== lastSubmittedPayload) {
       key = crypto.randomUUID()
       setEnquiryIdempotencyKey(key)
+      setLastSubmittedPayload(currentPayloadString)
     }
 
     setSubmitting(true)
@@ -201,6 +205,7 @@ function App() {
       setResults([])
       setRows([{ code: '', quantity: '' }, { code: '', quantity: '' }, { code: '', quantity: '' }])
       setEnquiryIdempotencyKey(null)
+      setLastSubmittedPayload(null)
     } catch (err) {
       // Don't reset idempotency key on error — allows retry with same key
       setError(err.message)

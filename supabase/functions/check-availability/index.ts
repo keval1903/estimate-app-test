@@ -16,14 +16,21 @@ const noCacheHeaders = {
 }
 
 async function hmacIpHash(rawIp: string, userId: string): Promise<string> {
-  const secret = Deno.env.get('RATE_LIMIT_HMAC_SECRET') || 'default-hmac-key'
-  const data = new TextEncoder().encode(`${rawIp}:${secret}`)
-  const hashBuf = await crypto.subtle.digest('SHA-256', data)
-  const ipPart = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
-  // Include user ID in hash so rate limiting is per-user+IP
-  const combined = new TextEncoder().encode(`${userId}:${ipPart}`)
-  const finalBuf = await crypto.subtle.digest('SHA-256', combined)
-  return Array.from(new Uint8Array(finalBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
+  const secret = Deno.env.get('RATE_LIMIT_HMAC_SECRET')
+  if (!secret) throw new Error('Server misconfiguration: RATE_LIMIT_HMAC_SECRET missing')
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+
+  const data = new TextEncoder().encode(`${userId}:${rawIp}`)
+  const signature = await crypto.subtle.sign('HMAC', key, data)
+
+  return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
 serve(async (req: Request) => {

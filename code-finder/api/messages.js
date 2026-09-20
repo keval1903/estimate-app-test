@@ -29,12 +29,15 @@ export default async function handler(req) {
       return createErrorResponse('Server misconfiguration', 500);
     }
 
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+
     const fetchOptions = {
       method: req.method,
       cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
         'x-code-finder-secret': PROXY_SECRET,
+        'x-forwarded-for': ip,
         'Authorization': `Bearer ${authData.accessToken}`
       }
     };
@@ -44,7 +47,14 @@ export default async function handler(req) {
       fetchOptions.body = JSON.stringify(body);
     }
 
-    const response = await fetch(SUPABASE_FUNCTION_URL, fetchOptions);
+    const incomingUrl = new URL(req.url);
+    const targetUrl = new URL(SUPABASE_FUNCTION_URL);
+    const after = incomingUrl.searchParams.get('after');
+    if (after) {
+      targetUrl.searchParams.set('after', after);
+    }
+
+    const response = await fetch(targetUrl.toString(), fetchOptions);
     const data = await response.text();
 
     return new Response(data, {

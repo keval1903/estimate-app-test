@@ -22,7 +22,8 @@ export default function Chat() {
         const msgs = data.messages || [];
         setMessages(msgs);
         if (msgs.length > 0) {
-          lastTimestampRef.current = msgs[msgs.length - 1].created_at;
+          const lastMsg = msgs[msgs.length - 1];
+          lastTimestampRef.current = `${lastMsg.created_at},${lastMsg.id}`;
         }
       }
     } catch (err) {
@@ -45,8 +46,14 @@ export default function Chat() {
       if (res.ok) {
         const newMsgs = data.messages || [];
         if (newMsgs.length > 0) {
-          setMessages(prev => [...prev, ...newMsgs]);
-          lastTimestampRef.current = newMsgs[newMsgs.length - 1].created_at;
+          setMessages(prev => {
+            // Ensure no duplicates by ID
+            const existingIds = new Set(prev.map(m => m.id));
+            const uniqueNew = newMsgs.filter(m => !existingIds.has(m.id));
+            return [...prev, ...uniqueNew];
+          });
+          const lastMsg = newMsgs[newMsgs.length - 1];
+          lastTimestampRef.current = `${lastMsg.created_at},${lastMsg.id}`;
         }
       }
     } catch (err) {
@@ -98,7 +105,7 @@ export default function Chat() {
       
       const sentMsg = data.message;
       setMessages(prev => [...prev, sentMsg]);
-      lastTimestampRef.current = sentMsg.created_at;
+      lastTimestampRef.current = `${sentMsg.created_at},${sentMsg.id}`;
       setNewMessage('');
     } catch (err) {
       setError(err.message);

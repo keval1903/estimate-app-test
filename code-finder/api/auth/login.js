@@ -45,10 +45,24 @@ export default async function handler(req) {
     const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || req.headers.get('x-real-ip')
       || 'unknown';
-    const hmacSecret = Deno?.env?.get?.('RATE_LIMIT_HMAC_SECRET') || process.env.RATE_LIMIT_HMAC_SECRET || 'default-hmac-key';
-    const ipKeyData = new TextEncoder().encode(rawIp + hmacSecret);
-    const ipHashBuf = await crypto.subtle.digest('SHA-256', ipKeyData);
-    const ipHash = Array.from(new Uint8Array(ipHashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const hmacSecret = process.env.RATE_LIMIT_HMAC_SECRET;
+    if (!hmacSecret) {
+      return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
+      });
+    }
+
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(hmacSecret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawIp));
+    const ipHash = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
 
     const { data: limitData, error: limitErr } = await supabaseAdmin.rpc('check_rate_limit_v2', {
       p_namespace: 'login',

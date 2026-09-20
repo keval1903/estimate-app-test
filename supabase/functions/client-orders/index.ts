@@ -102,15 +102,17 @@ serve(async (req: Request) => {
     if (estimateIds.length > 0) {
       const { data: estimates, error: estErr } = await supabaseAdmin
         .from('estimates')
-        .select('id, bill_number, created_at, doc_type')
+        .select('id, platform_estimate_number, bill_date, type')
         .in('id', estimateIds)
 
-      if (!estErr && estimates) {
+      if (estErr) throw estErr
+
+      if (estimates) {
         estimates.forEach((est: any) => {
           estimateMap[est.id] = {
-            platform_estimate_number: est.bill_number,
-            estimate_date: est.created_at,
-            doc_type: est.doc_type
+            platform_estimate_number: est.platform_estimate_number,
+            estimate_date: est.bill_date,
+            doc_type: est.type
           }
         })
       }

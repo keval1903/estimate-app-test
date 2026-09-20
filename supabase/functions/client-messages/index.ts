@@ -90,16 +90,29 @@ serve(async (req: Request) => {
         .from('code_finder_messages')
         .select('id, enquiry_id, sender_type, message, created_at')
         .eq('code_finder_user_id', cfUser.id)
-        .order('created_at', { ascending: true })
 
       if (afterParam) {
-        // Incremental poll: only messages after the given timestamp
-        query = query.gt('created_at', afterParam)
+        // Incremental poll: ?after=timestamp,id
+        const parts = afterParam.split(',')
+        const afterTs = parts[0]
+        const afterId = parts[1]
+        
+        if (afterId) {
+          query = query.or(`created_at.gt.${afterTs},and(created_at.eq.${afterTs},id.gt.${afterId})`)
+        } else {
+          query = query.gt('created_at', afterTs)
+        }
+        query = query.order('created_at', { ascending: true }).order('id', { ascending: true })
+      } else {
+        // Initial load: get latest 50
+        query = query.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(50)
       }
 
-      const { data: messages, error: msgErr } = await query
+      const { data: rawMessages, error: msgErr } = await query
 
       if (msgErr) throw msgErr
+
+      const messages = afterParam ? rawMessages : rawMessages.reverse()
 
       return new Response(JSON.stringify({ messages }), {
         headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' },

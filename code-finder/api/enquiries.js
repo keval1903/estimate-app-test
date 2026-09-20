@@ -29,12 +29,15 @@ export default async function handler(req) {
       return createErrorResponse('Server misconfiguration', 500);
     }
 
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+
     const fetchOptions = {
       method: req.method,
       cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
         'x-code-finder-secret': PROXY_SECRET,
+        'x-forwarded-for': ip,
         'Authorization': `Bearer ${authData.accessToken}`
       }
     };
