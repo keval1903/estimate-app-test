@@ -114,6 +114,20 @@ export function AuthProvider({ children }) {
           }
           keysToRemove.forEach(k => localStorage.removeItem(k))
 
+          // Unsubscribe from push notifications on this device
+          if ('serviceWorker' in navigator && 'PushManager' in window) {
+            try {
+              const registration = await navigator.serviceWorker.ready;
+              const subscription = await registration.pushManager.getSubscription();
+              if (subscription) {
+                await subscription.unsubscribe();
+                await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
+              }
+            } catch (err) {
+              console.error('Failed to unsubscribe push on logout:', err);
+            }
+          }
+
           if (mounted) {
             setUser(null)
             setRole(null)
