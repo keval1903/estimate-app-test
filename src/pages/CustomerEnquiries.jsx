@@ -88,9 +88,7 @@ export default function CustomerEnquiries() {
           lastInteraction
         };
       }).sort((a,b) => {
-        if (b.hasUnreadChat !== a.hasUnreadChat) return b.hasUnreadChat ? 1 : -1;
-        if (b.pendingCount > 0 && a.pendingCount === 0) return 1;
-        if (a.pendingCount > 0 && b.pendingCount === 0) return -1;
+        // Pure chronological sorting based on newest interaction
         return b.lastInteraction - a.lastInteraction;
       });
       
@@ -291,13 +289,20 @@ export default function CustomerEnquiries() {
                 key={customer.id} 
                 className="card"
                 onClick={() => navigate(`/${activePlatform}/customer-enquiries/${customer.id}`)}
-                style={{ cursor: 'pointer', border: customer.hasUnreadChat ? '2px solid var(--accent)' : '1px solid var(--border-light)' }}
+                style={{ cursor: 'pointer', border: customer.hasUnreadChat ? '2px solid #ef4444' : '1px solid var(--border-light)' }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{customer.client_name}</div>
-                  {customer.hasUnreadChat && (
-                    <div style={{ width: '10px', height: '10px', background: 'var(--accent)', borderRadius: '50%' }}></div>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {customer.lastInteraction > 0 && (
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {format(new Date(customer.lastInteraction), 'MMM d, h:mm a')}
+                      </span>
+                    )}
+                    {customer.hasUnreadChat && (
+                      <div style={{ width: '10px', height: '10px', background: '#ef4444', borderRadius: '50%' }}></div>
+                    )}
+                  </div>
                 </div>
                 <div style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '8px' }}>
                   @{customer.username} {customer.mobile && `• ${customer.mobile}`}
