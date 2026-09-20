@@ -159,6 +159,9 @@ export default function CreateEstimate() {
         if (enq.code_finder_users?.client_name) {
           setClientName(enq.code_finder_users.client_name);
         }
+        if (enq.code_finder_users?.mobile) {
+          setClientMobile(enq.code_finder_users.mobile);
+        }
         
         if (data && Array.isArray(data)) {
           const prefillItems = data.map(it => {

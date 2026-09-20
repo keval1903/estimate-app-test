@@ -206,7 +206,14 @@ export default function CustomerDetail() {
 
   const handleCreateEstimate = async (enq) => {
     // Navigate to CreateEstimate with prefill
-    navigate(`/${activePlatform}/estimate/new`, { state: { prefillEnquiry: enq, codeFinderUserId: id } });
+    const enqWithUser = {
+      ...enq,
+      code_finder_users: {
+        client_name: customer?.client_name,
+        mobile: customer?.mobile
+      }
+    };
+    navigate(`/${activePlatform}/estimate/new`, { state: { prefillEnquiry: enqWithUser, codeFinderUserId: id } });
   };
 
   const handleOpenProposalModal = async (enq) => {
