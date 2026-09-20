@@ -386,20 +386,42 @@ export default function SiteDetailsEditor() {
           </div>
 
           <div>
-            <div style={{ display: 'flex', gap: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem' }}>
-              <h3
-                style={{ margin: 0, color: activeTab === 'details' ? 'var(--text-color)' : 'var(--text-light)', cursor: 'pointer', opacity: activeTab === 'details' ? 1 : 0.6 }}
-                onClick={() => setActiveTab('details')}
-              >
-                Material Description
-              </h3>
-              {siteId !== 'new' && (
+            <div style={{ display: 'flex', gap: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '1.5rem', flex: 1 }}>
                 <h3
-                  style={{ margin: 0, color: activeTab === 'selection_sheet' ? 'var(--text-color)' : 'var(--text-light)', cursor: 'pointer', opacity: activeTab === 'selection_sheet' ? 1 : 0.6 }}
-                  onClick={() => setActiveTab('selection_sheet')}
+                  style={{ margin: 0, color: activeTab === 'details' ? 'var(--text-color)' : 'var(--text-light)', cursor: 'pointer', opacity: activeTab === 'details' ? 1 : 0.6 }}
+                  onClick={() => setActiveTab('details')}
                 >
-                  Selection Sheets
+                  Material Description
                 </h3>
+                {siteId !== 'new' && (
+                  <h3
+                    style={{ margin: 0, color: activeTab === 'selection_sheet' ? 'var(--text-color)' : 'var(--text-light)', cursor: 'pointer', opacity: activeTab === 'selection_sheet' ? 1 : 0.6 }}
+                    onClick={() => setActiveTab('selection_sheet')}
+                  >
+                    Selection Sheets
+                  </h3>
+                )}
+              </div>
+              {activeTab === 'selection_sheet' && details.selectionSheetTable && details.selectionSheetTable.length > 0 && (
+                <button 
+                  className="btn btn-primary"
+                  style={{ padding: '0.4rem 1rem', fontSize: '0.9rem' }}
+                  onClick={() => {
+                    navigate(`/${activePlatform}/estimate/new`, { 
+                      state: { 
+                        prefillSelectionSheet: {
+                          clientName: client?.name || '',
+                          clientMobile: client?.mobile || '',
+                          siteName: siteData.site_name,
+                          items: details.selectionSheetTable
+                        }
+                      } 
+                    })
+                  }}
+                >
+                  Convert to Quotation
+                </button>
               )}
             </div>
 

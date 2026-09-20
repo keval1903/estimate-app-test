@@ -203,6 +203,80 @@ export default function CreateEstimate() {
     loadPrefill();
   }, [isEdit, prefillApplied, location.state]);
 
+  const [prefillSelectionSheetApplied, setPrefillSelectionSheetApplied] = useState(false);
+
+  useEffect(() => {
+    if (isEdit || prefillSelectionSheetApplied || !location.state?.prefillSelectionSheet) return;
+    if (searchOptions.length === 0) return; // Wait for products to load
+
+    try {
+      const sheet = location.state.prefillSelectionSheet;
+      
+      if (sheet.clientName) setClientName(sheet.clientName);
+      if (sheet.clientMobile) setClientMobile(sheet.clientMobile);
+      if (sheet.siteName) setSiteName(sheet.siteName);
+
+      const itemsFromSheet = sheet.items || [];
+      const prefillItems = itemsFromSheet.filter(it => it.sheetCode?.trim() || it.remark?.trim()).map(it => {
+        const q = (it.sheetCode || '').trim().toLowerCase();
+        
+        let foundProduct = null;
+        if (q) {
+          const qNoSpace = q.replace(/\s+/g, '');
+          const searchTerms = q.split(/\s+/);
+          const results = searchOptions.filter(p => {
+            const pName = (p.display_label || p.product_name).toLowerCase();
+            const matchesAllTerms = searchTerms.every(term => pName.includes(term));
+            return pName.includes(q) ||
+                   pName.replace(/\s+/g, '').includes(qNoSpace) ||
+                   matchesAllTerms ||
+                   isFuzzyMatch(qNoSpace, pName);
+          });
+          if (results.length > 0) {
+            foundProduct = results[0]; // Take the best match
+          }
+        }
+        
+        const mappedItem = {
+           ...EMPTY_ITEM,
+           id: crypto.randomUUID(),
+           product_id: foundProduct ? foundProduct.id : null,
+           product_name_snapshot: foundProduct ? foundProduct.product_name : (it.sheetCode || 'Manual Item'),
+           alternative_code_snapshot: foundProduct ? foundProduct.alternative_code_snapshot : null,
+           actual_code_snapshot: foundProduct ? foundProduct.actual_code_snapshot : null,
+           calculation_type_snapshot: foundProduct ? foundProduct.calculation_type : 'QUANTITY',
+           rate: foundProduct ? foundProduct.rate : 0,
+           base_rate: foundProduct ? foundProduct.rate : 0,
+           has_stock: foundProduct ? foundProduct.has_stock : false,
+           amount: 0,
+           remark: [it.roomType, it.remark].filter(Boolean).join(' - ')
+        };
+
+        const isPieceBased = mappedItem.calculation_type_snapshot === 'SQFT' || mappedItem.calculation_type_snapshot === 'INCH' || mappedItem.calculation_type_snapshot === 'FEET';
+        if (isPieceBased) {
+           mappedItem.nos = it.qty || '';
+           mappedItem.quantity = '';
+        } else {
+           mappedItem.quantity = it.qty || '';
+           mappedItem.nos = '';
+        }
+        
+        const { quantity, amount } = calcItem(mappedItem);
+        if (!isPieceBased) {
+          mappedItem.quantity = quantity || '';
+        }
+        mappedItem.amount = amount;
+        return mappedItem;
+      });
+      
+      setItems(prefillItems);
+      setOriginalItems(prefillItems);
+      setPrefillSelectionSheetApplied(true);
+    } catch (err) {
+      console.error("Failed to load selection sheet prefill:", err);
+    }
+  }, [isEdit, prefillSelectionSheetApplied, location.state, searchOptions]);
+
   // new product state
   const [showProductModal, setShowProductModal] = useState(false)
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM)

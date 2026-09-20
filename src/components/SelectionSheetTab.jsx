@@ -7,6 +7,8 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
+import { usePlatform } from '../context/PlatformContext'
+import { isFuzzyMatch } from '../lib/searchUtils'
 
 // Helper to compress image
 function compressImage(file, maxWidth = 1200) {
@@ -64,6 +66,58 @@ const SelectionSheetTab = forwardRef(({ initialContent, tableData, clientName, s
   const [exporting, setExporting] = useState(null)
   const [activeRoomDropdown, setActiveRoomDropdown] = useState(null)
   const [highlightedDropdownIndex, setHighlightedDropdownIndex] = useState(-1)
+  
+  const { activePlatform } = usePlatform()
+  const [products, setProducts] = useState([])
+  const [activeSheetCodeDropdown, setActiveSheetCodeDropdown] = useState(null)
+  const [highlightedSheetCodeIndex, setHighlightedSheetCodeIndex] = useState(-1)
+
+  useEffect(() => {
+    async function loadProducts() {
+      if (!activePlatform) return
+      try {
+        const [batch1, batch2] = await Promise.all([
+          supabase.from('products').select('id, product_name, product_code, in_laminea, in_ccai, in_dc, in_phs').order('product_name').range(0, 999),
+          supabase.from('products').select('id, product_name, product_code, in_laminea, in_ccai, in_dc, in_phs').order('product_name').range(1000, 1999)
+        ])
+        let altCodes = []
+        if (activePlatform === 'laminea') {
+          let from = 0
+          const limit = 1000
+          while (true) {
+            const { data, error } = await supabase
+              .from('laminea_product_codes')
+              .select('id, product_id, code, products(product_code, product_name)')
+              .eq('is_active', true)
+              .order('id')
+              .range(from, from + limit - 1)
+            if (error || !data || data.length === 0) break
+            altCodes.push(...data)
+            if (data.length < limit) break
+            from += limit
+          }
+        }
+        
+        const rawData = [...(batch1.data || []), ...(batch2.data || [])]
+        const mapped = rawData.filter(p => p[`in_${activePlatform}`] === true)
+        let options = [...mapped]
+        if (activePlatform === 'laminea' && altCodes.length > 0) {
+          altCodes.forEach(alt => {
+            const actualProduct = mapped.find(p => p.id === alt.product_id)
+            if (actualProduct) {
+               options.push({
+                 ...actualProduct,
+                 display_label: `${alt.code} (${actualProduct.product_code || actualProduct.product_name})`,
+                 search_code: alt.code
+               })
+            }
+          })
+        }
+        setProducts(options)
+      } catch (err) {}
+    }
+    loadProducts()
+  }, [activePlatform])
 
   const editor = useEditor({
     extensions: [
@@ -576,15 +630,70 @@ const SelectionSheetTab = forwardRef(({ initialContent, tableData, clientName, s
                       <span>{row.roomType}</span>
                     )}
                   </td>
-                  <td style={{ padding: '0.5rem', borderRight: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '0.5rem', borderRight: '1px solid #e2e8f0', position: 'relative' }}>
                     {isEditing ? (
-                      <input 
-                        type="text" 
-                        value={row.sheetCode} 
-                        onChange={e => handleTableChange(i, 'sheetCode', e.target.value)}
-                        style={{ width: '100%', padding: '0.4rem', border: '1px solid #cbd5e1', borderRadius: '4px', boxSizing: 'border-box' }}
-                        placeholder="Sheet Code"
-                      />
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          value={row.sheetCode} 
+                          onChange={e => {
+                            handleTableChange(i, 'sheetCode', e.target.value);
+                            if (e.target.value.trim()) setActiveSheetCodeDropdown(i);
+                            else setActiveSheetCodeDropdown(null);
+                          }}
+                          onFocus={() => {
+                            if (row.sheetCode.trim()) setActiveSheetCodeDropdown(i);
+                          }}
+                          onBlur={() => setTimeout(() => setActiveSheetCodeDropdown(null), 200)}
+                          style={{ width: '100%', padding: '0.4rem', border: '1px solid #cbd5e1', borderRadius: '4px', boxSizing: 'border-box' }}
+                          placeholder="Sheet Code"
+                        />
+                        {activeSheetCodeDropdown === i && row.sheetCode.trim() && (
+                          <div style={{ 
+                            position: 'absolute', top: '100%', left: 0, right: 0, 
+                            background: 'white', border: '1px solid #cbd5e1',
+                            borderRadius: 4, zIndex: 50, maxHeight: 150, overflowY: 'auto',
+                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', marginTop: 4
+                          }}>
+                            {(() => {
+                              const q = row.sheetCode.trim().toLowerCase()
+                              const qNoSpace = q.replace(/\s+/g, '')
+                              const searchTerms = q.split(/\s+/)
+                              
+                              const results = products.filter(p => {
+                                const pName = (p.display_label || p.product_name).toLowerCase()
+                                const matchesAllTerms = searchTerms.every(term => pName.includes(term))
+                                return pName.includes(q) ||
+                                       pName.replace(/\s+/g, '').includes(qNoSpace) ||
+                                       matchesAllTerms ||
+                                       isFuzzyMatch(qNoSpace, pName)
+                              }).slice(0, 10)
+                              
+                              if (results.length === 0) return null
+                              
+                              return results.map((p, optIdx) => (
+                                <div 
+                                  key={optIdx} 
+                                  style={{ 
+                                    padding: '0.5rem 0.75rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '0.85rem',
+                                    background: highlightedSheetCodeIndex === optIdx ? '#f8fafc' : 'transparent',
+                                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    const codeToSet = p.search_code || p.product_code || p.product_name;
+                                    handleTableChange(i, 'sheetCode', codeToSet);
+                                    setActiveSheetCodeDropdown(null);
+                                  }}
+                                  onMouseEnter={() => setHighlightedSheetCodeIndex(optIdx)}
+                                >
+                                  {p.display_label || p.product_name}
+                                </div>
+                              ))
+                            })()}
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <span>{row.sheetCode}</span>
                     )}
