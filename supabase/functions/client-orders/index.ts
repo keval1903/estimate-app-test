@@ -82,6 +82,12 @@ serve(async (req: Request) => {
         id, enquiry_number, status, checked_at, created_at, updated_at, confirmed_at,
         code_finder_enquiry_items (
           id, alternative_code_snapshot, requested_quantity
+        ),
+        code_finder_proposals (
+          id, response, superseded_at,
+          code_finder_proposal_items (
+            enquiry_item_id, proposed_quantity
+          )
         )
       `)
       .eq('code_finder_user_id', cfUser.id)
@@ -92,6 +98,8 @@ serve(async (req: Request) => {
 
     // Build response — only expose safe fields, never internal codes/rates/stock
     const orders = (enquiries || []).map((eq: any) => {
+      const acceptedProposal = (eq.code_finder_proposals || []).find((p: any) => p.response === 'ACCEPTED' && p.superseded_at === null);
+
       return {
         id: eq.id,
         enquiry_number: eq.enquiry_number,
@@ -99,7 +107,19 @@ serve(async (req: Request) => {
         checked_at: eq.checked_at,
         created_at: eq.created_at,
         confirmed_at: eq.confirmed_at,
-        code_finder_enquiry_items: eq.code_finder_enquiry_items
+        code_finder_enquiry_items: (eq.code_finder_enquiry_items || []).map((item: any) => {
+          let qty = item.requested_quantity;
+          if (acceptedProposal) {
+            const pItem = (acceptedProposal.code_finder_proposal_items || []).find((pi: any) => pi.enquiry_item_id === item.id);
+            if (pItem) {
+              qty = pItem.proposed_quantity;
+            }
+          }
+          return {
+            alternative_code: item.alternative_code_snapshot,
+            quantity: qty
+          };
+        })
       }
     })
 

@@ -218,30 +218,59 @@ export default function CustomerDetail() {
 
   const handleOpenProposalModal = async (enq) => {
     try {
-       // Auto-transition NEW to UNDER_REVIEW
-       if (enq.status === 'NEW') {
-         await supabase.rpc('update_enquiry_status', { p_enquiry_id: enq.id, p_new_status: 'UNDER_REVIEW' });
-         enq.status = 'UNDER_REVIEW'; // Optimistic update
-       }
+      let workingEnquiry = enq;
 
-       await supabase.rpc('recheck_enquiry_stock', { p_enquiry_id: enq.id });
-       const { data: updatedItems, error } = await supabase.from('code_finder_enquiry_items').select('*').eq('enquiry_id', enq.id);
-       if (error) throw error;
-       
-       setSelectedEnquiry(enq);
-       setProposalType('QUANTITY_PROPOSAL');
-       setStaffNote('');
-       setProposalItems(updatedItems.map(item => ({
+      if (enq.status === 'NEW') {
+        const { error: statusError } = await supabase.rpc(
+          'update_enquiry_status',
+          {
+            p_enquiry_id: enq.id,
+            p_new_status: 'UNDER_REVIEW'
+          }
+        );
+
+        if (statusError) throw statusError;
+
+        workingEnquiry = {
+          ...enq,
+          status: 'UNDER_REVIEW'
+        };
+      }
+
+      const { error: recheckError } = await supabase.rpc(
+        'recheck_enquiry_stock',
+        { p_enquiry_id: enq.id }
+      );
+
+      if (recheckError) throw recheckError;
+
+      const { data: updatedItems, error: itemsError } = await supabase
+        .from('code_finder_enquiry_items')
+        .select('*')
+        .eq('enquiry_id', enq.id);
+
+      if (itemsError) throw itemsError;
+
+      setSelectedEnquiry(workingEnquiry);
+      setProposalType('QUANTITY_PROPOSAL');
+      setStaffNote('');
+
+      setProposalItems(
+        (updatedItems || []).map(item => ({
           enquiry_item_id: item.id,
           original_code: item.alternative_code_snapshot,
           original_qty: item.requested_quantity,
           proposed_quantity: item.requested_quantity,
           item_note: '',
           availability_status: item.availability_status
-       })));
-       setProposalModalOpen(true);
+        }))
+      );
+
+      setProposalModalOpen(true);
+      fetchData();
     } catch (err) {
-       alert("Error checking stock: " + err.message);
+      fetchData();
+      alert(`Error checking stock: ${err.message}`);
     }
   };
 
@@ -466,7 +495,7 @@ export default function CustomerDetail() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>Order #{ord.enquiry_number}</div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Confirmed on {format(new Date(ord.code_finder_proposals?.find(p => p.response === 'ACCEPTED')?.updated_at || ord.updated_at), 'MMM d, yyyy h:mm a')}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Confirmed on {format(new Date(ord.confirmed_at || ord.updated_at), 'MMM d, yyyy h:mm a')}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#dcfce7', color: '#166534', borderRadius: '12px' }}>
@@ -493,12 +522,20 @@ export default function CustomerDetail() {
                       </tr>
                     </thead>
                     <tbody>
-                      {ord.code_finder_enquiry_items?.map(item => (
-                        <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-                          <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.alternative_code_snapshot}</td>
-                          <td style={{ padding: '8px' }}>{item.requested_quantity}</td>
-                        </tr>
-                      ))}
+                      {ord.code_finder_enquiry_items?.map(item => {
+                        let displayQty = item.requested_quantity;
+                        const acceptedProposal = ord.code_finder_proposals?.find(p => p.response === 'ACCEPTED' && p.superseded_at === null);
+                        if (acceptedProposal) {
+                          const pItem = acceptedProposal.code_finder_proposal_items?.find(pi => pi.enquiry_item_id === item.id);
+                          if (pItem) displayQty = pItem.proposed_quantity;
+                        }
+                        return (
+                          <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                            <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.alternative_code_snapshot}</td>
+                            <td style={{ padding: '8px' }}>{displayQty}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
