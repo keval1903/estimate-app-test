@@ -104,11 +104,11 @@ export function AuthProvider({ children }) {
             }
           }
         } else {
-          // User is logged out or session expired, discard all drafts
+          // User is logged out or session expired, discard all drafts and offline cache
           const keysToRemove = []
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i)
-            if (key && key.includes('_draft_')) {
+            if (key && (key.includes('_draft_') || key.startsWith('offline_cache_'))) {
               keysToRemove.push(key)
             }
           }
