@@ -83,7 +83,7 @@ export default function Enquiries() {
                   {eq.code_finder_proposals.map(prop => {
                     const isSuperseded = !!prop.superseded_at;
                     return (
-                    <div key={prop.id} className="proposal-card" style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '4px', marginBottom: '0.5rem', opacity: isSuperseded ? 0.6 : 1 }}>
+                    <div key={prop.id} className="proposal-card" style={{ background: '#f8fafc', color: '#1e293b', padding: '0.75rem', borderRadius: '4px', marginBottom: '0.5rem', opacity: isSuperseded ? 0.6 : 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                          <span style={{ fontWeight: '600', fontSize: '0.9rem', textDecoration: isSuperseded ? 'line-through' : 'none' }}>
                            {prop.proposal_type === 'QUANTITY_PROPOSAL' ? 'Quantity Proposal' : 'Clarification'} (Rev {prop.revision})

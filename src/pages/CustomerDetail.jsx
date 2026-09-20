@@ -2,12 +2,23 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { useEnquirySubscription } from '../hooks/useEnquirySubscription';
 import { CustomerAccountManager } from '../components/CustomerAccountManager';
 import { usePlatform } from '../context/PlatformContext';
 
-export default function CustomerDetail() {
+const safeFormat = (dateStr, fmt) => {
+  if (!dateStr) return 'N/A';
+  const d = new Date(dateStr);
+  return isValid(d) ? format(d, fmt) : 'Invalid Date';
+};
+
+const safeReplace = (str, regex, replacement) => {
+  if (typeof str !== 'string') return String(str || '');
+  return str.replace(regex, replacement);
+};
+
+function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { role } = useAuth();
@@ -69,7 +80,44 @@ export default function CustomerDetail() {
           confirmedOrds.push(eq);
         }
       }
-      setEnquiries(activeEnqs);
+
+      const pendingStatuses = ['NEW', 'UNDER_REVIEW', 'AWAITING_CLIENT'];
+      const enquiriesWithStock = await Promise.all(
+        activeEnqs.map(async eq => {
+          if (!pendingStatuses.includes(eq.status)) {
+            return {
+              ...eq,
+              resolved_items: []
+            };
+          }
+
+          const { data, error } = await supabase.rpc(
+            'resolve_enquiry_items',
+            { p_enquiry_id: eq.id }
+          );
+
+          if (error) {
+            console.error(`Could not resolve enquiry ${eq.id}:`, error);
+            return {
+              ...eq,
+              resolved_items: [],
+              stock_error: error.message
+            };
+          }
+
+          let parsedData = data;
+          if (typeof data === 'string') {
+            try { parsedData = JSON.parse(data); } catch (e) { parsedData = []; }
+          }
+
+          return {
+            ...eq,
+            resolved_items: Array.isArray(parsedData) ? parsedData : []
+          };
+        })
+      );
+
+      setEnquiries(enquiriesWithStock);
       setOrders(confirmedOrds);
 
       const { data: msgs, error: msgErr } = await supabase
@@ -142,7 +190,9 @@ export default function CustomerDetail() {
   useEffect(() => {
     if (activeTab === 'ENQUIRIES' && enquiries.length > 0) {
       enquiries.forEach((eq) => {
-        supabase.rpc('mark_enquiry_read', { p_enquiry_id: eq.id }).catch(console.error);
+        supabase.rpc('mark_enquiry_read', { p_enquiry_id: eq.id }).then(({ error }) => {
+          if (error) console.error(error);
+        });
       });
     }
   }, [activeTab, enquiries]);
@@ -244,26 +294,54 @@ export default function CustomerDetail() {
 
       if (recheckError) throw recheckError;
 
-      const { data: updatedItems, error: itemsError } = await supabase
-        .from('code_finder_enquiry_items')
-        .select('*')
-        .eq('enquiry_id', enq.id);
+      const [
+        { data: updatedItems, error: itemsError },
+        { data: resolvedItems, error: resolvedError }
+      ] = await Promise.all([
+        supabase
+          .from('code_finder_enquiry_items')
+          .select('*')
+          .eq('enquiry_id', enq.id),
+        supabase.rpc('resolve_enquiry_items', {
+          p_enquiry_id: enq.id
+        })
+      ]);
 
       if (itemsError) throw itemsError;
+      if (resolvedError) throw resolvedError;
+
+      let parsedResolvedItems = resolvedItems;
+      if (typeof resolvedItems === 'string') {
+        try { parsedResolvedItems = JSON.parse(resolvedItems); } catch (e) { parsedResolvedItems = []; }
+      }
+
+      const safeResolvedItems = Array.isArray(parsedResolvedItems) ? parsedResolvedItems : [];
 
       setSelectedEnquiry(workingEnquiry);
       setProposalType('QUANTITY_PROPOSAL');
       setStaffNote('');
 
       setProposalItems(
-        (updatedItems || []).map(item => ({
-          enquiry_item_id: item.id,
-          original_code: item.alternative_code_snapshot,
-          original_qty: item.requested_quantity,
-          proposed_quantity: item.requested_quantity,
-          item_note: '',
-          availability_status: item.availability_status
-        }))
+        (updatedItems || []).map(item => {
+          const resolved = safeResolvedItems.find(
+            r => r.enquiry_item_id === item.id
+          );
+
+          return {
+            enquiry_item_id: item.id,
+            original_code: item.alternative_code_snapshot,
+            original_qty: item.requested_quantity,
+            proposed_quantity:
+              resolved?.agreed_quantity ??
+              item.requested_quantity,
+            item_note: '',
+            availability_status: item.availability_status,
+            current_stock: resolved?.current_stock ?? null,
+            current_has_stock: resolved?.current_has_stock ?? false,
+            is_mapped: resolved?.is_mapped ?? false,
+            is_disabled: resolved?.is_disabled ?? false
+          };
+        })
       );
 
       setProposalModalOpen(true);
@@ -332,22 +410,38 @@ export default function CustomerDetail() {
                   <thead>
                     <tr style={{ borderBottom: '2px solid var(--border-light)', textAlign: 'left' }}>
                       <th style={{ padding: '8px' }}>Code</th>
-                      <th style={{ padding: '8px' }}>Live Stock</th>
-                      <th style={{ padding: '8px', width: '80px' }}>Qty</th>
+                      <th style={{ padding: '8px', textAlign: 'center' }}>Req Qty</th>
+                      <th style={{ padding: '8px', textAlign: 'center' }}>Live Stock</th>
+                      <th style={{ padding: '8px' }}>Status</th>
+                      <th style={{ padding: '8px', width: '80px' }}>Prop Qty</th>
                       <th style={{ padding: '8px' }}>Item Note</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {proposalItems.map((item, idx) => (
+                    {proposalItems.map((item, idx) => {
+                      const requiredQuantity = Number(item.proposed_quantity || 0);
+                      const stockNumber = Number(item.current_stock);
+                      const hasLiveStock = item.is_mapped && !item.is_disabled && item.current_has_stock === true && Number.isFinite(stockNumber);
+                      const hasShortage = hasLiveStock && stockNumber < requiredQuantity;
+
+                      return (
                       <tr key={item.enquiry_item_id} style={{ borderBottom: '1px solid #eee' }}>
                         <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.original_code}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>{item.original_qty}</td>
+                        <td style={{ padding: '8px', textAlign: 'center', color: hasShortage ? '#dc2626' : 'inherit', fontWeight: hasShortage ? 'bold' : 'normal' }}>
+                          {!item.is_mapped || item.is_disabled
+                            ? 'Mapping unavailable'
+                            : item.current_has_stock !== true
+                              ? 'Not tracked'
+                              : stockNumber}
+                        </td>
                         <td style={{ padding: '8px' }}>
                           <span style={{ 
                             padding: '2px 6px', fontSize: '11px', borderRadius: '4px', fontWeight: 'bold',
                             background: item.availability_status === 'AVAILABLE' ? '#dcfce7' : item.availability_status === 'CODE_NOT_FOUND' ? '#fee2e2' : '#fef3c7',
                             color: item.availability_status === 'AVAILABLE' ? '#166534' : item.availability_status === 'CODE_NOT_FOUND' ? '#991b1b' : '#92400e'
                            }}>
-                            {item.availability_status.replace(/_/g, ' ')}
+                            {safeReplace(item.availability_status, /_/g, ' ')}
                           </span>
                         </td>
                         <td style={{ padding: '8px' }}>
@@ -379,7 +473,8 @@ export default function CustomerDetail() {
                           />
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -427,11 +522,11 @@ export default function CustomerDetail() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>Enquiry #{enq.enquiry_number}</div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{format(new Date(enq.created_at), 'MMM d, yyyy h:mm a')}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{safeFormat(enq.created_at, 'MMM d, yyyy h:mm a')}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#fef3c7', color: '#92400e', borderRadius: '12px' }}>
-                        {enq.status.replace(/_/g, ' ')}
+                        {safeReplace(enq.status, /_/g, ' ')}
                       </span>
                       {enq.status === 'UNDER_REVIEW' && (
                          <>
@@ -460,26 +555,67 @@ export default function CustomerDetail() {
                     <thead>
                       <tr style={{ borderBottom: '2px solid var(--border-light)', textAlign: 'left' }}>
                         <th style={{ padding: '8px' }}>Code</th>
-                        <th style={{ padding: '8px' }}>Requested</th>
+                        <th style={{ padding: '8px', textAlign: 'center' }}>Req Qty</th>
+                        <th style={{ padding: '8px', textAlign: 'center' }}>Live Stock</th>
                         <th style={{ padding: '8px' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {enq.code_finder_enquiry_items?.map(item => (
-                        <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-                          <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.alternative_code_snapshot}</td>
-                          <td style={{ padding: '8px' }}>{item.requested_quantity}</td>
-                          <td style={{ padding: '8px' }}>
-                            <span style={{ 
-                              padding: '2px 6px', fontSize: '11px', borderRadius: '4px', fontWeight: 'bold',
-                              background: item.availability_status === 'AVAILABLE' ? '#dcfce7' : item.availability_status === 'CODE_NOT_FOUND' ? '#fee2e2' : '#fef3c7',
-                              color: item.availability_status === 'AVAILABLE' ? '#166534' : item.availability_status === 'CODE_NOT_FOUND' ? '#991b1b' : '#92400e'
-                             }}>
-                              {item.availability_status.replace(/_/g, ' ')}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {enq.code_finder_enquiry_items?.map(item => {
+                        const resolved = enq.resolved_items?.find(
+                          r => r.enquiry_item_id === item.id
+                        );
+
+                        const requiredQuantity = Number(
+                          resolved?.agreed_quantity ??
+                          item.requested_quantity ??
+                          0
+                        );
+
+                        const stockNumber = Number(resolved?.current_stock);
+
+                        const hasLiveStock =
+                          resolved?.is_mapped &&
+                          !resolved?.is_disabled &&
+                          resolved?.current_has_stock === true &&
+                          Number.isFinite(stockNumber);
+
+                        const hasShortage =
+                          hasLiveStock &&
+                          stockNumber < requiredQuantity;
+
+                        return (
+                          <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
+                            <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.alternative_code_snapshot}</td>
+                            <td style={{ padding: '8px', textAlign: 'center' }}>
+                              {item.requested_quantity}
+                              {requiredQuantity !== Number(item.requested_quantity) && (
+                                <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: 'bold' }}>
+                                  Agreed: {requiredQuantity}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'center', color: hasShortage ? '#dc2626' : 'inherit', fontWeight: hasShortage ? 'bold' : 'normal' }}>
+                              {!resolved
+                                ? 'Unable to load'
+                                : !resolved.is_mapped || resolved.is_disabled
+                                  ? 'Mapping unavailable'
+                                  : resolved.current_has_stock !== true
+                                    ? 'Not tracked'
+                                    : stockNumber}
+                            </td>
+                            <td style={{ padding: '8px' }}>
+                              <span style={{ 
+                                padding: '2px 6px', fontSize: '11px', borderRadius: '4px', fontWeight: 'bold',
+                                background: item.availability_status === 'AVAILABLE' ? '#dcfce7' : item.availability_status === 'CODE_NOT_FOUND' ? '#fee2e2' : '#fef3c7',
+                                color: item.availability_status === 'AVAILABLE' ? '#166534' : item.availability_status === 'CODE_NOT_FOUND' ? '#991b1b' : '#92400e'
+                               }}>
+                                {item.availability_status ? safeReplace(item.availability_status, /_/g, ' ') : 'PENDING CHECK'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -495,11 +631,11 @@ export default function CustomerDetail() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>Order #{ord.enquiry_number}</div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Confirmed on {format(new Date(ord.confirmed_at || ord.updated_at), 'MMM d, yyyy h:mm a')}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Confirmed on {safeFormat(ord.confirmed_at || ord.updated_at || ord.created_at, 'MMM d, yyyy h:mm a')}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#dcfce7', color: '#166534', borderRadius: '12px' }}>
-                        {ord.status.replace(/_/g, ' ')}
+                        {safeReplace(ord.status, /_/g, ' ')}
                       </span>
                       {ord.converted_estimate_id ? (
                         <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 'bold' }}>Internal Document Linked</span>
@@ -568,7 +704,7 @@ export default function CustomerDetail() {
                       }}>
                         {msg.message}
                         <div style={{ fontSize: '11px', marginTop: '4px', opacity: 0.8, textAlign: 'right' }}>
-                          {format(new Date(msg.created_at), 'MMM d, h:mm a')}
+                          {safeFormat(msg.created_at, 'MMM d, h:mm a')}
                         </div>
                       </div>
                       {isStaffMsg && (
@@ -605,5 +741,44 @@ export default function CustomerDetail() {
         </div>
       </div>
     </div>
+  );
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', color: 'red', background: '#fee2e2', borderRadius: '8px', margin: '20px', fontFamily: 'monospace' }}>
+          <h2>React Crash in CustomerDetail.jsx</h2>
+          <details style={{ whiteSpace: 'pre-wrap', marginTop: '10px' }} open>
+            <summary style={{ fontWeight: 'bold', cursor: 'pointer' }}>Error Details (Please take a screenshot of this)</summary>
+            <br />
+            <strong>{this.state.error && this.state.error.toString()}</strong>
+            <br /><br />
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
+          </details>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function CustomerDetailWrapper(props) {
+  return (
+    <ErrorBoundary>
+      <CustomerDetail {...props} />
+    </ErrorBoundary>
   );
 }

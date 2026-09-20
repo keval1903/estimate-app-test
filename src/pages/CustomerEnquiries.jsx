@@ -29,7 +29,7 @@ export default function CustomerEnquiries() {
       const { data, error: err } = await supabase
         .from('code_finder_enquiries')
         .select(`
-          id, enquiry_number, status, created_at,
+          id, enquiry_number, code_finder_user_id, status, created_at,
           code_finder_users ( id, client_name ),
           code_finder_enquiry_items ( id ),
           code_finder_enquiry_reads ( staff_user_id, read_at )
@@ -295,7 +295,14 @@ export default function CustomerEnquiries() {
               <div 
                 key={enquiry.id}
                 className="card"
-                onClick={() => navigate(`/${activePlatform}/customer-enquiries/${enquiry.code_finder_users.id}`)}
+                onClick={() => {
+                  const customerId = enquiry.code_finder_user_id || enquiry.code_finder_users?.id;
+                  if (!customerId) {
+                    setError('Customer account is not linked to this enquiry.');
+                    return;
+                  }
+                  navigate(`/${activePlatform}/customer-enquiries/${customerId}`);
+                }}
                 style={{ cursor: 'pointer', borderLeft: enquiry.isUnread ? '4px solid var(--accent)' : '4px solid transparent' }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
