@@ -519,28 +519,28 @@ function CustomerDetail() {
             <div>
               {enquiries.map(enq => (
                 <div key={enq.id} className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>Enquiry #{enq.enquiry_number}</div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{safeFormat(enq.created_at, 'MMM d, yyyy h:mm a')}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{safeFormat(enq.created_at, 'MMM d, yyyy h:mm a')}</div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#fef3c7', color: '#92400e', borderRadius: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#fef3c7', color: '#92400e', borderRadius: '12px', whiteSpace: 'nowrap' }}>
                         {safeReplace(enq.status, /_/g, ' ')}
                       </span>
                       {enq.status === 'UNDER_REVIEW' && (
                          <>
-                           <button onClick={() => handleUpdateStatus(enq.id, 'CONFIRMED')} className="btn btn-sm" style={{ background: '#16a34a', color: '#fff' }}>Confirm</button>
-                           <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm">Propose Changes</button>
+                           <button onClick={() => handleUpdateStatus(enq.id, 'CONFIRMED')} className="btn btn-sm" style={{ background: '#16a34a', color: '#fff', fontSize: '11px', padding: '6px 10px' }}>Confirm</button>
+                           <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Propose Changes</button>
                          </>
                       )}
                       {enq.status === 'NEW' && (
                          <>
-                           <button onClick={() => handleUpdateStatus(enq.id, 'UNDER_REVIEW')} className="btn btn-primary btn-sm">Start Review</button>
-                           <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm">Propose Changes</button>
+                           <button onClick={() => handleUpdateStatus(enq.id, 'UNDER_REVIEW')} className="btn btn-primary btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Start Review</button>
+                           <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Propose Changes</button>
                          </>
                       )}
-                      <button onClick={() => handleUpdateStatus(enq.id, 'REJECTED')} className="btn btn-danger btn-sm">Reject</button>
+                      <button onClick={() => handleUpdateStatus(enq.id, 'REJECTED')} className="btn btn-danger btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Reject</button>
                     </div>
                   </div>
                   
