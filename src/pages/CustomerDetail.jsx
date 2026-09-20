@@ -148,17 +148,39 @@ export default function CustomerDetail() {
     if (!chatInput.trim()) return;
 
     try {
-      const user = (await supabase.auth.getUser()).data.user;
+      const { data: { session } } = await supabase.auth.getSession();
       const { error } = await supabase.from('code_finder_messages').insert({
         code_finder_user_id: id,
+        sender_auth_user_id: session.user.id,
         sender_type: 'STAFF',
-        sender_auth_user_id: user.id,
         message: chatInput.trim()
       });
       if (error) throw error;
       setChatInput('');
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!window.confirm("Are you sure you want to permanently delete ALL messages in this chat?")) return;
+    try {
+      const { error } = await supabase.from('code_finder_messages').delete().eq('code_finder_user_id', id);
+      if (error) throw error;
+      setMessages([]);
+    } catch (err) {
+      alert("Error clearing chat: " + err.message);
+    }
+  };
+
+  const handleDeleteMessage = async (msgId) => {
+    if (!window.confirm("Delete this message?")) return;
+    try {
+      const { error } = await supabase.from('code_finder_messages').delete().eq('id', msgId);
+      if (error) throw error;
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+    } catch (err) {
+      alert("Error deleting message: " + err.message);
     }
   };
 
@@ -322,11 +344,19 @@ export default function CustomerDetail() {
 
           {activeTab === 'CHAT' && (
             <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '60vh', padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', background: '#f9f9f9' }}>
+                <button onClick={handleClearChat} className="btn btn-sm btn-danger" style={{ fontSize: '12px' }}>
+                  Clear Chat
+                </button>
+              </div>
               <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {messages.map((msg, i) => {
                   const isStaffMsg = msg.sender_type === 'STAFF' || msg.sender_type === 'SYSTEM';
                   return (
-                    <div key={msg.id || i} style={{ display: 'flex', justifyContent: isStaffMsg ? 'flex-end' : 'flex-start' }}>
+                    <div key={msg.id || i} style={{ display: 'flex', justifyContent: isStaffMsg ? 'flex-end' : 'flex-start', alignItems: 'center', gap: '8px' }}>
+                      {!isStaffMsg && (
+                        <button onClick={() => handleDeleteMessage(msg.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px', opacity: 0.5, padding: '0 4px' }} title="Delete Message">×</button>
+                      )}
                       <div style={{ 
                         maxWidth: '75%', padding: '10px 14px', borderRadius: '8px',
                         background: msg.sender_type === 'SYSTEM' ? '#f0f0f0' : msg.sender_type === 'STAFF' ? 'var(--accent)' : '#e5e5e5',
@@ -339,6 +369,9 @@ export default function CustomerDetail() {
                           {format(new Date(msg.created_at), 'MMM d, h:mm a')}
                         </div>
                       </div>
+                      {isStaffMsg && (
+                        <button onClick={() => handleDeleteMessage(msg.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px', opacity: 0.5, padding: '0 4px' }} title="Delete Message">×</button>
+                      )}
                     </div>
                   );
                 })}
