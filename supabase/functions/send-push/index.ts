@@ -45,19 +45,29 @@ serve(async (req: Request) => {
     }
 
     // Get all active push subscriptions for staff
-    const { data: subs, error: subsErr } = await supabase
+    const { data: activeStaff } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .in('role', ['STAFF', 'ADMIN'])
+      .eq('is_active', true)
+      
+    const activeStaffIds = new Set((activeStaff || []).map(r => r.user_id))
+
+    const { data: allSubs, error: subsErr } = await supabase
       .from('push_subscriptions')
       .select('id, user_id, endpoint, keys_p256dh, keys_auth')
 
-    if (subsErr || !subs || subs.length === 0) {
+    const subs = (allSubs || []).filter(s => activeStaffIds.has(s.user_id))
+
+    if (subsErr || subs.length === 0) {
       await supabase.from('notification_outbox').update({ processed_at: new Date().toISOString() }).eq('id', outboxId)
-      return new Response('No subscriptions', { status: 200 })
+      return new Response('No subscriptions or no active staff', { status: 200 })
     }
 
     // Determine notification content based on event_type
     let title = 'Laminea Code Finder'
     let body = 'New activity in Customer Enquiries'
-    const url = '/customer-enquiries'
+    const url = '/laminea/customer-enquiries'
 
     if (claim.event_type === 'NEW_ENQUIRY') {
       body = 'A customer submitted a new enquiry'

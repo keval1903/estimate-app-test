@@ -146,6 +146,60 @@ export default function CreateEstimate() {
   const [prefillApplied, setPrefillApplied] = useState(false)
   const location = useLocation()
 
+  useEffect(() => {
+    async function loadPrefill() {
+      if (isEdit || prefillApplied || !location.state?.prefillEnquiry) return;
+      try {
+        const enq = location.state.prefillEnquiry;
+        const { data, error } = await supabase.rpc('resolve_enquiry_items', { p_enquiry_id: enq.id });
+        if (error) throw error;
+        
+        setEnquiryId(enq.id);
+        setEnquiryIdempotency(crypto.randomUUID());
+        if (enq.code_finder_users?.client_name) {
+          setClientName(enq.code_finder_users.client_name);
+        }
+        
+        if (data && Array.isArray(data)) {
+          const prefillItems = data.map(it => {
+             const baseRate = it.current_rate || 0;
+             const isPieceBased = it.current_calculation_type === 'SQFT' || it.current_calculation_type === 'INCH' || it.current_calculation_type === 'FEET';
+             
+             const mappedItem = {
+               ...EMPTY_ITEM,
+               id: crypto.randomUUID(), // local UI key
+               enquiry_item_id: it.enquiry_item_id,
+               product_id: it.current_product_id,
+               product_name_snapshot: it.current_product_name || 'Manual Item',
+               alternative_code_snapshot: it.alternative_code_snapshot,
+               actual_code_snapshot: it.is_mapped ? (it.current_product_name) : null,
+               calculation_type_snapshot: it.current_calculation_type || 'QUANTITY',
+               quantity: !isPieceBased ? (it.agreed_quantity || '') : '',
+               nos: isPieceBased ? (it.agreed_quantity || '') : '',
+               rate: baseRate,
+               base_rate: baseRate,
+               has_stock: true,
+               amount: 0
+             };
+             
+             const { quantity, amount } = calcItem(mappedItem);
+             mappedItem.quantity = quantity || '';
+             mappedItem.amount = amount;
+             return mappedItem;
+          });
+          
+          setItems(prefillItems);
+          setOriginalItems(prefillItems);
+        }
+        
+        setPrefillApplied(true);
+      } catch (err) {
+        console.error("Failed to load enquiry prefill:", err);
+      }
+    }
+    loadPrefill();
+  }, [isEdit, prefillApplied, location.state]);
+
   // new product state
   const [showProductModal, setShowProductModal] = useState(false)
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT_FORM)
@@ -980,36 +1034,7 @@ export default function CreateEstimate() {
         }
       }
 
-      // --- ENQUIRY CONVERSION (NEW LOGIC) ---
-      if (enquiryId && !isEdit) {
-         const { data: estData, error: rpcErr } = await supabase.rpc('create_estimate_from_enquiry', {
-           p_enquiry_id: enquiryId,
-           p_idempotency_key: enquiryIdempotency,
-           p_platform: activePlatform,
-           p_doc_type: 'ESTIMATE',
-           p_bill_date: billDate,
-           p_client_id: finalClientId || null,
-           p_client_name: finalClientId ? null : clientName.trim().toUpperCase(),
-           p_client_mobile: finalClientId ? null : clientMobile.trim(),
-           p_prepared_by: preparedBy.trim().toUpperCase(),
-           p_order_by: orderBy.trim().toUpperCase(),
-           p_site_name: siteName.trim().toUpperCase() || null,
-           p_totals: t,
-           p_items: items,
-           p_previous_balance: parseFloat(previousBalance) || 0
-         })
-         
-         if (rpcErr) {
-           console.error('RPC Error:', rpcErr);
-           throw rpcErr;
-         }
-         
-         await saveSite(siteName.trim().toUpperCase())
-         localStorage.removeItem(draftKey)
-         showToast(`Estimate created and linked to enquiry ✓`)
-         navigate(`/${activePlatform}/estimate/view/${estData.id}`)
-         return
-      }
+      // Enquiry conversion is now handled in the else block below (Create new estimate/quotation)
 
       if (isEdit) {
         // UPDATE existing estimate
@@ -1130,12 +1155,8 @@ export default function CreateEstimate() {
         navigate(`/${activePlatform}/estimate/view/${id}`)
 
       } else {
-        // CREATE new estimate — get atomic bill number
-        const { data: seqData, error: seqErr } = await supabase
-          .rpc('get_next_bill_number', { p_platform: activePlatform })
-        if (seqErr) throw seqErr
-        const billNumber = seqData
-
+        // CREATE new estimate / quotation
+        
         let saveBalance = Number(previousBalance) || 0;
         if (finalClientId) {
           const { data: estData } = await supabase.from('estimates').select('grand_total, type, is_archived').eq('platform', activePlatform).eq('client_id', finalClientId).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
@@ -1147,6 +1168,60 @@ export default function CreateEstimate() {
           const payTotal = (payData || []).filter(p => !p.is_archived).reduce((sum, p) => sum + Number(p.amount || 0), 0)
           saveBalance = Number(cData?.opening_balance || 0) + estTotal - returnTotal - payTotal
         }
+
+        if (enquiryId && enquiryIdempotency) {
+            const rpcItems = items.map((it, i) => ({
+              product_id: it.product_id,
+              enquiry_item_id: it.enquiry_item_id || null,
+              product_name_snapshot: it.product_name_snapshot,
+              alternative_code_snapshot: it.alternative_code_snapshot || null,
+              actual_code_snapshot: it.actual_code_snapshot || null,
+              length_snapshot: it.length_snapshot,
+              width_snapshot: it.width_snapshot,
+              nos: parseFloat(it.nos) || null,
+              quantity: parseFloat(it.quantity) || null,
+              unit_snapshot: it.unit_snapshot,
+              rate: parseFloat(it.rate),
+              discount_percent: parseFloat(it.discount_percent) || 0,
+              calculation_type_snapshot: it.calculation_type_snapshot,
+              amount: it.amount,
+              remark: it.remark ? it.remark.trim() : null
+            }));
+
+            const { data: estResult, error: rpcErr } = await supabase.rpc('create_estimate_from_enquiry', {
+                p_enquiry_id: enquiryId,
+                p_idempotency_key: enquiryIdempotency,
+                p_platform: activePlatform,
+                p_doc_type: docType,
+                p_bill_date: billDate,
+                p_client_id: finalClientId,
+                p_client_name: clientName.trim().toUpperCase(),
+                p_client_mobile: clientMobile.trim(),
+                p_prepared_by: preparedBy.trim().toUpperCase(),
+                p_order_by: orderBy.trim().toUpperCase(),
+                p_site_name: siteName.trim().toUpperCase(),
+                p_totals: t,
+                p_items: rpcItems,
+                p_previous_balance: saveBalance
+            });
+            
+            if (rpcErr) throw rpcErr;
+            if (estResult && estResult.duplicate) {
+                // Was already converted
+            }
+            
+            await saveSite(siteName.trim().toUpperCase())
+            localStorage.removeItem(draftKey) 
+            showToast(`${docType === 'QUOTATION' ? 'Quotation' : 'Estimate'} created from Enquiry ✓`)
+            navigate(`/${activePlatform}/estimate/view/${estResult.estimate_id}`)
+            return;
+        }
+
+        // CREATE new estimate — get atomic bill number (NORMAL MANUAL FLOW)
+        const { data: seqData, error: seqErr } = await supabase
+          .rpc('get_next_bill_number', { p_platform: activePlatform })
+        if (seqErr) throw seqErr
+        const billNumber = seqData
 
         const { data: est, error: estErr } = await supabase.from('estimates').insert({
           bill_number: billNumber,

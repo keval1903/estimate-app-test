@@ -28,17 +28,17 @@ serve(async (req: Request) => {
       return new Response('Unauthorized token', { status: 401, headers: corsHeaders })
     }
 
-    // Verify staff role
-    const { data: staffCheck } = await supabaseAdmin
+    // Verify admin role
+    const { data: adminCheck } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('id', user.id)
       .eq('is_active', true)
-      .in('role', ['ADMIN', 'STAFF'])
+      .eq('role', 'ADMIN')
       .single()
 
-    if (!staffCheck) {
-      return new Response('Forbidden: Staff only', { status: 403, headers: corsHeaders })
+    if (!adminCheck) {
+      return new Response('Forbidden: Admin only', { status: 403, headers: corsHeaders })
     }
 
     const payload = await req.json()

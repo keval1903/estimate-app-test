@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Enquiries() {
   const [enquiries, setEnquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchEnquiries();
@@ -78,11 +80,17 @@ export default function Enquiries() {
               {eq.code_finder_proposals && eq.code_finder_proposals.length > 0 && (
                 <div className="proposals-section" style={{ marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
                   <h4 style={{ margin: '0 0 0.5rem 0' }}>Proposals & Updates</h4>
-                  {eq.code_finder_proposals.map(prop => (
-                    <div key={prop.id} className="proposal-card" style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '4px', marginBottom: '0.5rem' }}>
+                  {eq.code_finder_proposals.map(prop => {
+                    const isSuperseded = !!prop.superseded_at;
+                    return (
+                    <div key={prop.id} className="proposal-card" style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '4px', marginBottom: '0.5rem', opacity: isSuperseded ? 0.6 : 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                         <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{prop.proposal_type === 'QUANTITY_PROPOSAL' ? 'Quantity Proposal' : 'Clarification'} (Rev {prop.revision})</span>
-                         {prop.response ? (
+                         <span style={{ fontWeight: '600', fontSize: '0.9rem', textDecoration: isSuperseded ? 'line-through' : 'none' }}>
+                           {prop.proposal_type === 'QUANTITY_PROPOSAL' ? 'Quantity Proposal' : 'Clarification'} (Rev {prop.revision})
+                         </span>
+                         {isSuperseded ? (
+                            <span className="status-badge" style={{ fontSize: '0.7rem', background: '#e2e8f0', color: '#475569' }}>SUPERSEDED</span>
+                         ) : prop.response ? (
                             <span className="status-badge" style={{ fontSize: '0.7rem' }}>{prop.response}</span>
                          ) : (
                             <span className="status-badge" style={{ fontSize: '0.7rem', background: '#fef3c7', color: '#92400e' }}>AWAITING YOUR RESPONSE</span>
@@ -94,14 +102,19 @@ export default function Enquiries() {
                         <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                           <strong>Proposed Items:</strong>
                           <ul style={{ margin: '0.25rem 0', paddingLeft: '1.25rem' }}>
-                             {prop.code_finder_proposal_items.map(pi => (
-                               <li key={pi.enquiry_item_id}>Qty: {pi.proposed_quantity} {pi.item_note ? `(${pi.item_note})` : ''}</li>
-                             ))}
+                             {prop.code_finder_proposal_items.map(pi => {
+                               const originalItem = eq.code_finder_enquiry_items.find(i => i.id === pi.enquiry_item_id);
+                               return (
+                                 <li key={pi.enquiry_item_id}>
+                                   <strong>{originalItem ? originalItem.alternative_code_snapshot : 'Item'}</strong> - Qty: {pi.proposed_quantity} {pi.item_note ? `(${pi.item_note})` : ''}
+                                 </li>
+                               );
+                             })}
                           </ul>
                         </div>
                       )}
 
-                      {!prop.response && eq.status === 'AWAITING_CLIENT' && (
+                      {!isSuperseded && !prop.response && eq.status === 'AWAITING_CLIENT' && (
                         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                            {prop.proposal_type === 'QUANTITY_PROPOSAL' && (
                               <button onClick={() => handleProposalResponse(prop.id, 'ACCEPTED')} style={{ padding: '4px 8px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Accept Proposal</button>
@@ -110,7 +123,13 @@ export default function Enquiries() {
                         </div>
                       )}
                     </div>
-                  ))}
+                  )})}
+                  
+                  <div style={{ marginTop: '0.5rem', textAlign: 'right' }}>
+                    <button onClick={() => navigate('/app/chat')} style={{ padding: '4px 12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      Reply in Chat
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

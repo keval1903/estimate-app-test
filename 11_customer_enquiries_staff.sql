@@ -497,8 +497,8 @@ BEGIN
         RAISE EXCEPTION 'Enquiry must be CONFIRMED before creating an estimate';
     END IF;
 
-    IF p_platform IS DISTINCT FROM 'laminea' OR p_doc_type IS DISTINCT FROM 'ESTIMATE' THEN
-      RAISE EXCEPTION 'This operation creates Laminea estimates only';
+    IF p_platform IS DISTINCT FROM 'laminea' OR p_doc_type NOT IN ('ESTIMATE', 'QUOTATION') THEN
+      RAISE EXCEPTION 'This operation creates Laminea estimates or quotations only';
     END IF;
     IF p_idempotency_key IS NULL THEN RAISE EXCEPTION 'Idempotency key required'; END IF;
     IF NOT EXISTS (
@@ -507,7 +507,7 @@ BEGIN
     ) THEN RAISE EXCEPTION 'Link the customer to the correct Laminea client first'; END IF;
     IF v_enquiry.converted_estimate_id IS NOT NULL THEN
       SELECT type INTO v_type FROM public.estimates WHERE id=v_enquiry.converted_estimate_id;
-      IF v_type IS DISTINCT FROM 'ESTIMATE' THEN
+      IF v_type NOT IN ('ESTIMATE', 'QUOTATION') THEN
         RAISE EXCEPTION 'Existing linked document requires internal review; do not create another';
       END IF;
       RETURN jsonb_build_object('success',true,'estimate_id',v_enquiry.converted_estimate_id,'duplicate',true);

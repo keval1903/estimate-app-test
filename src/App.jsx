@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import Home from './pages/Home'
@@ -33,6 +33,14 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function LamineaOnlyRoute({ children }) {
+  const { platform } = useParams();
+  if (platform !== 'laminea') {
+    return <Navigate to={`/${platform}`} replace />;
+  }
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -55,8 +63,8 @@ export default function App() {
             <Route path="client-sites" element={<ClientSitesList />} />
             <Route path="client-sites/:clientId" element={<ClientSitesView />} />
             <Route path="client-sites/:clientId/edit/:siteId" element={<SiteDetailsEditor />} />
-            <Route path="customer-enquiries" element={<CustomerEnquiries />} />
-            <Route path="customer-enquiries/:id" element={<CustomerDetail />} />
+            <Route path="customer-enquiries" element={<LamineaOnlyRoute><CustomerEnquiries /></LamineaOnlyRoute>} />
+            <Route path="customer-enquiries/:id" element={<LamineaOnlyRoute><CustomerDetail /></LamineaOnlyRoute>} />
             <Route path="selection-sheets" element={<SelectionSheetList />} />
             <Route path="selection-sheets/:id" element={<SelectionSheetEditor />} />
             <Route path="catalogue" element={<Catalogue />} />

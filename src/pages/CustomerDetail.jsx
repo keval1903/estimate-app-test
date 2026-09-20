@@ -25,6 +25,13 @@ export default function CustomerDetail() {
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef(null);
 
+  const [proposalModalOpen, setProposalModalOpen] = useState(false);
+  const [selectedEnquiry, setSelectedEnquiry] = useState(null);
+  const [proposalType, setProposalType] = useState('QUANTITY_PROPOSAL');
+  const [staffNote, setStaffNote] = useState('');
+  const [proposalItems, setProposalItems] = useState([]);
+  const [submittingProposal, setSubmittingProposal] = useState(false);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -83,16 +90,11 @@ export default function CustomerDetail() {
         .single();
         
       const lastReadTime = myRead ? new Date(myRead.last_read_message_created_at).getTime() : 0;
-      const unreads = msgs.filter(m => new Date(m.created_at).getTime() > lastReadTime);
+      const unreads = msgs.filter(m => m.is_from_client && new Date(m.created_at).getTime() > lastReadTime);
       
       setUnreadChatCount(unreads.length);
 
-      // Mark read enquiries
-      if (activeEnqs.length > 0) {
-        activeEnqs.forEach(async (eq) => {
-          await supabase.rpc('mark_enquiry_read', { p_enquiry_id: eq.id });
-        });
-      }
+      // Enquiries are now marked as read by a separate useEffect when activeTab === 'ENQUIRIES'
       
       // Mark chat as read only if currently on chat tab
       if (activeTab === 'CHAT' && unreads.length > 0) {
@@ -136,6 +138,14 @@ export default function CustomerDetail() {
       });
     }
   }, [activeTab, unreadChatCount, messages, id]);
+
+  useEffect(() => {
+    if (activeTab === 'ENQUIRIES' && enquiries.length > 0) {
+      enquiries.forEach((eq) => {
+        supabase.rpc('mark_enquiry_read', { p_enquiry_id: eq.id }).catch(console.error);
+      });
+    }
+  }, [activeTab, enquiries]);
 
   useEffect(() => {
     if (activeTab === 'CHAT' && chatEndRef.current) {
@@ -199,12 +209,148 @@ export default function CustomerDetail() {
     navigate(`/${activePlatform}/estimate/new`, { state: { prefillEnquiry: enq, codeFinderUserId: id } });
   };
 
+  const handleOpenProposalModal = async (enq) => {
+    try {
+       await supabase.rpc('recheck_enquiry_stock', { p_enquiry_id: enq.id });
+       const { data: updatedItems, error } = await supabase.from('code_finder_enquiry_items').select('*').eq('enquiry_id', enq.id);
+       if (error) throw error;
+       
+       setSelectedEnquiry(enq);
+       setProposalType('QUANTITY_PROPOSAL');
+       setStaffNote('');
+       setProposalItems(updatedItems.map(item => ({
+          enquiry_item_id: item.id,
+          original_code: item.alternative_code_snapshot,
+          original_qty: item.requested_quantity,
+          proposed_quantity: item.requested_quantity,
+          item_note: '',
+          availability_status: item.availability_status
+       })));
+       setProposalModalOpen(true);
+    } catch (err) {
+       alert("Error checking stock: " + err.message);
+    }
+  };
+
+  const handleSubmitProposal = async (e) => {
+    e.preventDefault();
+    setSubmittingProposal(true);
+    try {
+      const payload = {
+        p_enquiry_id: selectedEnquiry.id,
+        p_proposal_type: proposalType,
+        p_staff_note: staffNote.trim() || null,
+        p_items: proposalItems.map(p => ({
+           enquiry_item_id: p.enquiry_item_id,
+           proposed_quantity: Number(p.proposed_quantity),
+           item_note: p.item_note.trim() || null,
+           availability_status: p.availability_status
+        }))
+      };
+      
+      const { error } = await supabase.rpc('submit_code_finder_proposal', payload);
+      if (error) throw error;
+      
+      setProposalModalOpen(false);
+      fetchData();
+    } catch (err) {
+      alert("Failed to submit proposal: " + err.message);
+    } finally {
+      setSubmittingProposal(false);
+    }
+  };
+
   if (!isStaff) return <div style={{ padding: '2rem', textAlign: 'center', color: 'red' }}>Unauthorized</div>;
   if (loading && !customer) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>;
   if (!customer) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Customer not found</div>;
 
   return (
     <div className="app-container">
+      {proposalModalOpen && selectedEnquiry && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '600px', margin: '20px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Propose Changes - Enquiry #{selectedEnquiry.enquiry_number}</h3>
+            <form onSubmit={handleSubmitProposal}>
+              <div className="field">
+                <label>Proposal Type</label>
+                <select value={proposalType} onChange={e => setProposalType(e.target.value)} className="input">
+                  <option value="QUANTITY_PROPOSAL">Quantity Proposal</option>
+                  <option value="CLARIFICATION">Clarification (No Quantity Change)</option>
+                </select>
+              </div>
+              
+              <div className="field">
+                <label>Staff Note to Customer</label>
+                <textarea value={staffNote} onChange={e => setStaffNote(e.target.value)} className="input" rows="3" placeholder="Explain the changes or ask for clarification..." />
+              </div>
+
+              <div style={{ marginTop: '16px', marginBottom: '16px' }}>
+                <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>Items</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border-light)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px' }}>Code</th>
+                      <th style={{ padding: '8px' }}>Live Stock</th>
+                      <th style={{ padding: '8px', width: '80px' }}>Qty</th>
+                      <th style={{ padding: '8px' }}>Item Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proposalItems.map((item, idx) => (
+                      <tr key={item.enquiry_item_id} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.original_code}</td>
+                        <td style={{ padding: '8px' }}>
+                          <span style={{ 
+                            padding: '2px 6px', fontSize: '11px', borderRadius: '4px', fontWeight: 'bold',
+                            background: item.availability_status === 'AVAILABLE' ? '#dcfce7' : item.availability_status === 'CODE_NOT_FOUND' ? '#fee2e2' : '#fef3c7',
+                            color: item.availability_status === 'AVAILABLE' ? '#166534' : item.availability_status === 'CODE_NOT_FOUND' ? '#991b1b' : '#92400e'
+                           }}>
+                            {item.availability_status.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px' }}>
+                          <input 
+                            type="number" 
+                            min="0" 
+                            value={item.proposed_quantity} 
+                            onChange={(e) => {
+                              const newItems = [...proposalItems];
+                              newItems[idx].proposed_quantity = e.target.value;
+                              setProposalItems(newItems);
+                            }}
+                            style={{ width: '100%', padding: '4px' }} 
+                            className="input" 
+                          />
+                        </td>
+                        <td style={{ padding: '8px' }}>
+                          <input 
+                            type="text" 
+                            value={item.item_note} 
+                            onChange={(e) => {
+                              const newItems = [...proposalItems];
+                              newItems[idx].item_note = e.target.value;
+                              setProposalItems(newItems);
+                            }}
+                            placeholder="Optional"
+                            style={{ width: '100%', padding: '4px' }} 
+                            className="input" 
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                <button type="submit" disabled={submittingProposal} className="btn btn-primary" style={{ flex: 1 }}>{submittingProposal ? 'Submitting...' : 'Submit Proposal'}</button>
+                <button type="button" onClick={() => setProposalModalOpen(false)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="top-nav" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span className="nav-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => navigate(`/${activePlatform}/customer-enquiries`)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>←</button>
@@ -246,10 +392,16 @@ export default function CustomerDetail() {
                         {enq.status.replace(/_/g, ' ')}
                       </span>
                       {enq.status === 'UNDER_REVIEW' && (
-                         <button onClick={() => handleUpdateStatus(enq.id, 'CONFIRMED')} className="btn btn-sm" style={{ background: '#16a34a', color: '#fff' }}>Confirm</button>
+                         <>
+                           <button onClick={() => handleUpdateStatus(enq.id, 'CONFIRMED')} className="btn btn-sm" style={{ background: '#16a34a', color: '#fff' }}>Confirm</button>
+                           <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm">Propose Changes</button>
+                         </>
                       )}
                       {enq.status === 'NEW' && (
-                         <button onClick={() => handleUpdateStatus(enq.id, 'UNDER_REVIEW')} className="btn btn-primary btn-sm">Start Review</button>
+                         <>
+                           <button onClick={() => handleUpdateStatus(enq.id, 'UNDER_REVIEW')} className="btn btn-primary btn-sm">Start Review</button>
+                           <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm">Propose Changes</button>
+                         </>
                       )}
                       <button onClick={() => handleUpdateStatus(enq.id, 'REJECTED')} className="btn btn-danger btn-sm">Reject</button>
                     </div>
@@ -301,7 +453,7 @@ export default function CustomerDetail() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>Order #{ord.enquiry_number}</div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Confirmed on {format(new Date(ord.updated_at), 'MMM d, yyyy h:mm a')}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Confirmed on {format(new Date(ord.code_finder_proposals?.find(p => p.response === 'ACCEPTED')?.updated_at || ord.updated_at), 'MMM d, yyyy h:mm a')}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#dcfce7', color: '#166534', borderRadius: '12px' }}>

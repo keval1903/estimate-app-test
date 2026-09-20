@@ -13,6 +13,9 @@ export default function CustomerEnquiries() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 20;
   
   const navigate = useNavigate();
   const { role } = useAuth();
@@ -29,7 +32,7 @@ export default function CustomerEnquiries() {
           id, enquiry_number, status, created_at,
           code_finder_users ( id, client_name ),
           code_finder_enquiry_items ( id ),
-          code_finder_enquiry_reads ( read_at )
+          code_finder_enquiry_reads ( staff_user_id, read_at )
         `)
         .in('status', ['NEW', 'UNDER_REVIEW', 'AWAITING_CLIENT'])
         .order('created_at', { ascending: false });
@@ -44,6 +47,10 @@ export default function CustomerEnquiries() {
           ...e,
           isUnread: !myRead || new Date(myRead.read_at) < new Date(e.created_at)
         };
+      }).sort((a, b) => {
+        if (a.isUnread && !b.isUnread) return -1;
+        if (!a.isUnread && b.isUnread) return 1;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
       setEnquiries(formatted);
     } catch (err) {
@@ -60,9 +67,9 @@ export default function CustomerEnquiries() {
         .from('code_finder_users')
         .select(`
           id, client_name, username, mobile, is_active, last_login_at,
-          code_finder_enquiries ( id, status ),
-          code_finder_messages ( id, created_at ),
-          code_finder_message_reads ( last_read_message_created_at )
+          code_finder_enquiries ( id, status, created_at ),
+          code_finder_messages ( id, created_at, is_from_client ),
+          code_finder_message_reads ( staff_user_id, last_read_message_created_at )
         `);
 
       if (err) throw err;
@@ -74,8 +81,9 @@ export default function CustomerEnquiries() {
         const myRead = c.code_finder_message_reads?.find(r => r.staff_user_id === userId);
         
         const latestMsg = c.code_finder_messages?.sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        const latestIncomingMsg = c.code_finder_messages?.filter(m => m.is_from_client).sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
         const latestMsgDate = latestMsg ? new Date(latestMsg.created_at).getTime() : 0;
-        const hasUnreadChat = latestMsg && (!myRead || new Date(myRead.last_read_message_created_at) < new Date(latestMsg.created_at));
+        const hasUnreadChat = latestIncomingMsg && (!myRead || new Date(myRead.last_read_message_created_at) < new Date(latestIncomingMsg.created_at));
 
         const latestEnq = c.code_finder_enquiries?.sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
         const latestEnqDate = latestEnq ? new Date(latestEnq.created_at).getTime() : 0;
@@ -88,7 +96,8 @@ export default function CustomerEnquiries() {
           lastInteraction
         };
       }).sort((a,b) => {
-        // Pure chronological sorting based on newest interaction
+        if (a.hasUnreadChat && !b.hasUnreadChat) return -1;
+        if (!a.hasUnreadChat && b.hasUnreadChat) return 1;
         return b.lastInteraction - a.lastInteraction;
       });
       
@@ -101,6 +110,7 @@ export default function CustomerEnquiries() {
   };
 
   useEffect(() => {
+    setPage(1); // Reset page on tab change
     if (activeTab === 'PENDING') fetchPending();
     else fetchCustomers();
   }, [activeTab]);
@@ -111,6 +121,18 @@ export default function CustomerEnquiries() {
   }, [activeTab]);
 
   useEnquirySubscription(handleRealtimeUpdate);
+
+  const filteredEnquiries = enquiries.filter(e => 
+    e.enquiry_number?.toString().includes(searchTerm) ||
+    e.code_finder_users?.client_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const paginatedEnquiries = filteredEnquiries.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+  const filteredCustomers = customers.filter(c => 
+    c.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.username?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const paginatedCustomers = filteredCustomers.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({ username: '', password: '', client_name: '', contact_person: '', mobile: '' });
@@ -251,13 +273,24 @@ export default function CustomerEnquiries() {
           )}
         </div>
 
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <input
+            type="text"
+            className="input"
+            style={{ flex: 1, padding: '8px' }}
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
+          />
+        </div>
+
         {error && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: '4px', marginBottom: '16px' }}>{error}</div>}
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading...</div>
         ) : activeTab === 'PENDING' ? (
           <div>
-            {enquiries.map((enquiry) => (
+            {paginatedEnquiries.map((enquiry) => (
               <div 
                 key={enquiry.id}
                 className="card"
@@ -278,13 +311,20 @@ export default function CustomerEnquiries() {
                 </div>
               </div>
             ))}
-            {enquiries.length === 0 && (
+            {paginatedEnquiries.length === 0 && (
               <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No pending enquiries found.</div>
+            )}
+            {filteredEnquiries.length > itemsPerPage && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '16px' }}>
+                <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="btn btn-secondary">Prev</button>
+                <span>Page {page} of {Math.ceil(filteredEnquiries.length / itemsPerPage)}</span>
+                <button disabled={page >= Math.ceil(filteredEnquiries.length / itemsPerPage)} onClick={() => setPage(p => p + 1)} className="btn btn-secondary">Next</button>
+              </div>
             )}
           </div>
         ) : (
           <div>
-            {customers.map((customer) => (
+            {paginatedCustomers.map((customer) => (
               <div 
                 key={customer.id} 
                 className="card"
@@ -321,8 +361,15 @@ export default function CustomerEnquiries() {
                 </div>
               </div>
             ))}
-            {customers.length === 0 && (
+            {paginatedCustomers.length === 0 && (
               <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No customers found.</div>
+            )}
+            {filteredCustomers.length > itemsPerPage && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '16px' }}>
+                <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="btn btn-secondary">Prev</button>
+                <span>Page {page} of {Math.ceil(filteredCustomers.length / itemsPerPage)}</span>
+                <button disabled={page >= Math.ceil(filteredCustomers.length / itemsPerPage)} onClick={() => setPage(p => p + 1)} className="btn btn-secondary">Next</button>
+              </div>
             )}
           </div>
         )}

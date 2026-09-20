@@ -197,7 +197,9 @@ export function AuthProvider({ children }) {
     role,
     alias,
     loading,
-    onlineUsers
+    onlineUsers,
+    isAdmin: role === 'ADMIN',
+    isStaff: role === 'ADMIN' || role === 'STAFF'
   }
 
   return (

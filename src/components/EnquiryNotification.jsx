@@ -13,36 +13,58 @@ export function EnquiryNotification() {
       if (!user) return;
       const { data: role } = await supabase.from('user_roles').select('role').eq('id', user.id).eq('is_active', true).single();
       if (role && ['ADMIN', 'STAFF'].includes(role.role)) {
-        subscribeToOutbox();
+        subscribeToEvents();
       }
     };
     checkStaff();
 
-    const subscribeToOutbox = () => {
+    const subscribeToEvents = () => {
       const channel = supabase.channel('notification_toast')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notification_outbox' }, (payload) => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'code_finder_enquiries' }, (payload) => {
            const record = payload.new;
-           const newNotif = {
+           handleNewNotif({
              id: record.id,
-             tag: record.notification_tag,
-             type: record.event_type,
-             payload: record.event_payload
-           };
-
-           setNotifications(prev => {
-             // Deduplicate by tag
-             const filtered = prev.filter(n => n.tag !== newNotif.tag);
-             return [...filtered, newNotif];
+             tag: `enquiry_${record.id}`,
+             type: 'NEW_ENQUIRY',
+             payload: { user_id: record.code_finder_user_id }
            });
-
-           // Auto dismiss after 5 seconds
-           setTimeout(() => {
-             setNotifications(prev => prev.filter(n => n.id !== newNotif.id));
-           }, 5000);
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'code_finder_messages' }, (payload) => {
+           const record = payload.new;
+           if (record.is_from_client) {
+             handleNewNotif({
+               id: record.id,
+               tag: `msg_${record.id}`,
+               type: 'NEW_MESSAGE',
+               payload: { user_id: record.code_finder_user_id }
+             });
+           }
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'code_finder_proposals' }, (payload) => {
+           const record = payload.new;
+           const oldRecord = payload.old;
+           if (record.response && (!oldRecord || !oldRecord.response)) {
+             handleNewNotif({
+               id: record.id,
+               tag: `proposal_${record.id}`,
+               type: 'PROPOSAL_RESPONSE',
+               payload: { user_id: record.responded_by, response: record.response }
+             });
+           }
         })
         .subscribe();
       
       return () => { supabase.removeChannel(channel) };
+    };
+
+    const handleNewNotif = (newNotif) => {
+       setNotifications(prev => {
+         const filtered = prev.filter(n => n.tag !== newNotif.tag);
+         return [...filtered, newNotif];
+       });
+       setTimeout(() => {
+         setNotifications(prev => prev.filter(n => n.id !== newNotif.id));
+       }, 5000);
     };
   }, []);
 
