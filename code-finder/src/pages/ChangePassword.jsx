@@ -33,9 +33,10 @@ export default function ChangePassword() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to change password');
 
-      // Update local user state
-      login({ ...user, must_change_password: false });
-      navigate('/app/check-stock', { replace: true });
+      // Password changed successfully, old session is now invalid on the server
+      alert('Password updated successfully. Please log in with your new password.');
+      logout();
+      navigate('/login', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
