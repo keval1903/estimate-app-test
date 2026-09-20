@@ -18,6 +18,10 @@ import LamineaCodes from './pages/LamineaCodes'
 import ChoosePlatform from './pages/ChoosePlatform'
 import { PlatformProvider } from './context/PlatformContext'
 
+import CustomerEnquiries from './pages/CustomerEnquiries'
+import CustomerDetail from './pages/CustomerDetail'
+import { EnquiryNotification } from './components/EnquiryNotification'
+
 import ClientSitesList from './pages/ClientSitesList'
 import ClientSitesView from './pages/ClientSitesView'
 import SiteDetailsEditor from './pages/SiteDetailsEditor'
@@ -33,6 +37,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <EnquiryNotification />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/choose-platform" element={<ProtectedRoute><ChoosePlatform /></ProtectedRoute>} />
@@ -50,6 +55,8 @@ export default function App() {
             <Route path="client-sites" element={<ClientSitesList />} />
             <Route path="client-sites/:clientId" element={<ClientSitesView />} />
             <Route path="client-sites/:clientId/edit/:siteId" element={<SiteDetailsEditor />} />
+            <Route path="customer-enquiries" element={<CustomerEnquiries />} />
+            <Route path="customer-enquiries/:id" element={<CustomerDetail />} />
             <Route path="selection-sheets" element={<SelectionSheetList />} />
             <Route path="selection-sheets/:id" element={<SelectionSheetEditor />} />
             <Route path="catalogue" element={<Catalogue />} />

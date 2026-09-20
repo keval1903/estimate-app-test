@@ -113,6 +113,16 @@ export default function Home() {
           </div>
         </button>
 
+        {activePlatform === 'laminea' && (
+          <button className="home-btn" onClick={() => navigate(`/${activePlatform}/customer-enquiries`)}>
+            <div className="home-btn-icon" style={{ background: '#e0e7ff' }}>💬</div>
+            <div>
+              <div className="home-btn-text">CUSTOMER ENQUIRIES</div>
+              <div className="home-btn-sub">View Code Finder enquiries, orders, and chat</div>
+            </div>
+          </button>
+        )}
+
         <button className="home-btn" onClick={() => navigate(`/${activePlatform}/estimates?tab=quotations`)}>
           <div className="home-btn-icon" style={{ background: '#fce7f3' }}>📜</div>
           <div>

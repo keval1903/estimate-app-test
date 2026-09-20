@@ -22,6 +22,23 @@ export default function Enquiries() {
     }
   };
 
+  const handleProposalResponse = async (proposalId, response) => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/proposal-response', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal_id: proposalId, response })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit response');
+      await fetchEnquiries();
+    } catch (err) {
+      alert(err.message);
+      setLoading(false);
+    }
+  };
+
   if (loading) return <div className="page-loader">Loading enquiries...</div>;
   if (error) return <div className="error-container">{error}</div>;
 
@@ -55,6 +72,45 @@ export default function Enquiries() {
               {eq.client_note && (
                 <div className="note-box">
                   <strong>Note:</strong> {eq.client_note}
+                </div>
+              )}
+              
+              {eq.code_finder_proposals && eq.code_finder_proposals.length > 0 && (
+                <div className="proposals-section" style={{ marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0' }}>Proposals & Updates</h4>
+                  {eq.code_finder_proposals.map(prop => (
+                    <div key={prop.id} className="proposal-card" style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '4px', marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                         <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{prop.proposal_type === 'QUANTITY_PROPOSAL' ? 'Quantity Proposal' : 'Clarification'} (Rev {prop.revision})</span>
+                         {prop.response ? (
+                            <span className="status-badge" style={{ fontSize: '0.7rem' }}>{prop.response}</span>
+                         ) : (
+                            <span className="status-badge" style={{ fontSize: '0.7rem', background: '#fef3c7', color: '#92400e' }}>AWAITING YOUR RESPONSE</span>
+                         )}
+                      </div>
+                      {prop.staff_note && <p style={{ fontSize: '0.85rem', margin: '0 0 0.5rem 0' }}><strong>Staff:</strong> {prop.staff_note}</p>}
+                      
+                      {prop.code_finder_proposal_items && prop.code_finder_proposal_items.length > 0 && (
+                        <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                          <strong>Proposed Items:</strong>
+                          <ul style={{ margin: '0.25rem 0', paddingLeft: '1.25rem' }}>
+                             {prop.code_finder_proposal_items.map(pi => (
+                               <li key={pi.enquiry_item_id}>Qty: {pi.proposed_quantity} {pi.item_note ? `(${pi.item_note})` : ''}</li>
+                             ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {!prop.response && eq.status === 'AWAITING_CLIENT' && (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                           {prop.proposal_type === 'QUANTITY_PROPOSAL' && (
+                              <button onClick={() => handleProposalResponse(prop.id, 'ACCEPTED')} style={{ padding: '4px 8px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Accept Proposal</button>
+                           )}
+                           <button onClick={() => handleProposalResponse(prop.id, 'CANCELLED')} style={{ padding: '4px 8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Cancel Order</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../hooks/useToast.jsx'
@@ -139,6 +139,12 @@ export default function CreateEstimate() {
   const [suggestionIdx, setSuggestionIdx] = useState(-1)
   const [allProducts, setAllProducts] = useState([])
   const [searchOptions, setSearchOptions] = useState([])
+
+  // Enquiry Prefill State
+  const [enquiryId, setEnquiryId] = useState(null)
+  const [enquiryIdempotency, setEnquiryIdempotency] = useState(null)
+  const [prefillApplied, setPrefillApplied] = useState(false)
+  const location = useLocation()
 
   // new product state
   const [showProductModal, setShowProductModal] = useState(false)
@@ -972,6 +978,37 @@ export default function CreateEstimate() {
         if (found) {
           finalClientId = found.id
         }
+      }
+
+      // --- ENQUIRY CONVERSION (NEW LOGIC) ---
+      if (enquiryId && !isEdit) {
+         const { data: estData, error: rpcErr } = await supabase.rpc('create_estimate_from_enquiry', {
+           p_enquiry_id: enquiryId,
+           p_idempotency_key: enquiryIdempotency,
+           p_platform: activePlatform,
+           p_doc_type: 'ESTIMATE',
+           p_bill_date: billDate,
+           p_client_id: finalClientId || null,
+           p_client_name: finalClientId ? null : clientName.trim().toUpperCase(),
+           p_client_mobile: finalClientId ? null : clientMobile.trim(),
+           p_prepared_by: preparedBy.trim().toUpperCase(),
+           p_order_by: orderBy.trim().toUpperCase(),
+           p_site_name: siteName.trim().toUpperCase() || null,
+           p_totals: t,
+           p_items: items,
+           p_previous_balance: parseFloat(previousBalance) || 0
+         })
+         
+         if (rpcErr) {
+           console.error('RPC Error:', rpcErr);
+           throw rpcErr;
+         }
+         
+         await saveSite(siteName.trim().toUpperCase())
+         localStorage.removeItem(draftKey)
+         showToast(`Estimate created and linked to enquiry ✓`)
+         navigate(`/${activePlatform}/estimate/view/${estData.id}`)
+         return
       }
 
       if (isEdit) {

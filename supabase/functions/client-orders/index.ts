@@ -75,60 +75,32 @@ serve(async (req: Request) => {
       })
     }
 
-    // Get converted enquiries with linked estimate details
+    // Get confirmed enquiries without leaking internal estimate data
     const { data: enquiries, error: eqErr } = await supabaseAdmin
       .from('code_finder_enquiries')
       .select(`
-        id, enquiry_number, status, checked_at, created_at,
-        converted_estimate_id,
+        id, enquiry_number, status, checked_at, created_at, updated_at,
         code_finder_enquiry_items (
           id, alternative_code_snapshot, requested_quantity
         )
       `)
       .eq('code_finder_user_id', cfUser.id)
-      .eq('status', 'CONVERTED_TO_ESTIMATE')
-      .not('converted_estimate_id', 'is', null)
+      .eq('status', 'CONFIRMED')
       .order('created_at', { ascending: false })
 
     if (eqErr) throw eqErr
 
-    // Fetch linked estimate details (only safe fields)
-    const estimateIds = (enquiries || [])
-      .map((e: any) => e.converted_estimate_id)
-      .filter(Boolean)
-
-    let estimateMap: Record<string, any> = {}
-
-    if (estimateIds.length > 0) {
-      const { data: estimates, error: estErr } = await supabaseAdmin
-        .from('estimates')
-        .select('id, platform_estimate_number, bill_date, type')
-        .in('id', estimateIds)
-
-      if (estErr) throw estErr
-
-      if (estimates) {
-        estimates.forEach((est: any) => {
-          estimateMap[est.id] = {
-            platform_estimate_number: est.platform_estimate_number,
-            estimate_date: est.bill_date,
-            doc_type: est.type
-          }
-        })
-      }
-    }
-
     // Build response — only expose safe fields, never internal codes/rates/stock
     const orders = (enquiries || []).map((eq: any) => {
-      const estimate = estimateMap[eq.converted_estimate_id] || null
       return {
         id: eq.id,
         enquiry_number: eq.enquiry_number,
         status: eq.status,
         checked_at: eq.checked_at,
         created_at: eq.created_at,
-        platform_estimate_number: estimate?.platform_estimate_number || null,
-        estimate_date: estimate?.estimate_date || null,
+        confirmed_at: eq.updated_at,
+        platform_estimate_number: null, // Left for backward compatibility if old clients expect the key, but always null
+        estimate_date: null,
         code_finder_enquiry_items: eq.code_finder_enquiry_items
       }
     })

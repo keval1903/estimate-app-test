@@ -96,6 +96,12 @@ serve(async (req: Request) => {
           id, enquiry_number, status, client_note, checked_at, created_at,
           code_finder_enquiry_items (
             id, alternative_code_snapshot, requested_quantity, availability_status
+          ),
+          code_finder_proposals (
+            id, revision, proposal_type, staff_note, submitted_at, response, responded_at,
+            code_finder_proposal_items (
+              enquiry_item_id, proposed_quantity, item_note
+            )
           )
         `)
         .eq('code_finder_user_id', cfUser.id)
@@ -186,9 +192,12 @@ serve(async (req: Request) => {
       }
 
       const codeToStock: Record<string, number> = {}
+      const codeToProductId: Record<string, string> = {}
+      
       mappings.forEach((m: any) => {
          const norm = m.alternative_code.replace(/\s+/g, '').toUpperCase()
          codeToStock[norm] = stockMap[m.product_id] || 0
+         codeToProductId[norm] = m.product_id
       })
 
       const checkedAt = new Date().toISOString()
@@ -212,7 +221,10 @@ serve(async (req: Request) => {
           alternative_code_snapshot: displayCode,
           requested_quantity: reqQty,
           availability_status: status,
-          checked_at: checkedAt
+          checked_at: checkedAt,
+          product_id_snapshot: codeToProductId[normCode] || null,
+          product_code_snapshot: displayCode,
+          mapping_revision_at: checkedAt
         })
       }
 
