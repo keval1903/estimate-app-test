@@ -68,7 +68,7 @@ export default function CustomerEnquiries() {
         .select(`
           id, client_name, username, mobile, is_active, last_login_at,
           code_finder_enquiries ( id, status, created_at ),
-          code_finder_messages ( id, created_at, is_from_client ),
+          code_finder_messages ( id, created_at, sender_type ),
           code_finder_message_reads ( staff_user_id, last_read_message_created_at )
         `);
 
@@ -81,7 +81,8 @@ export default function CustomerEnquiries() {
         const myRead = c.code_finder_message_reads?.find(r => r.staff_user_id === userId);
         
         const latestMsg = c.code_finder_messages?.sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
-        const latestIncomingMsg = c.code_finder_messages?.filter(m => m.is_from_client).sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        const latestIncomingMsg = c.code_finder_messages?.filter(m => m.sender_type === 'CLIENT').sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
         const latestMsgDate = latestMsg ? new Date(latestMsg.created_at).getTime() : 0;
         const hasUnreadChat = latestIncomingMsg && (!myRead || new Date(myRead.last_read_message_created_at) < new Date(latestIncomingMsg.created_at));
 

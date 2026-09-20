@@ -31,7 +31,7 @@ export function EnquiryNotification() {
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'code_finder_messages' }, (payload) => {
            const record = payload.new;
-           if (record.is_from_client) {
+           if (record.sender_type === 'CLIENT') {
              handleNewNotif({
                id: record.id,
                tag: `msg_${record.id}`,

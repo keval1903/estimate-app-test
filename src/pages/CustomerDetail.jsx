@@ -90,7 +90,7 @@ export default function CustomerDetail() {
         .single();
         
       const lastReadTime = myRead ? new Date(myRead.last_read_message_created_at).getTime() : 0;
-      const unreads = msgs.filter(m => m.is_from_client && new Date(m.created_at).getTime() > lastReadTime);
+      const unreads = msgs.filter(m => m.sender_type === 'CLIENT' && new Date(m.created_at).getTime() > lastReadTime);
       
       setUnreadChatCount(unreads.length);
 
