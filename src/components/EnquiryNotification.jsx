@@ -1,25 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export function EnquiryNotification() {
   const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
+  const { user, isStaff } = useAuth();
 
   useEffect(() => {
-    // Only subscribe to notifications if the user is STAFF/ADMIN
-    const checkStaff = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: role } = await supabase.from('user_roles').select('role').eq('id', user.id).eq('is_active', true).single();
-      if (role && ['ADMIN', 'STAFF'].includes(role.role)) {
-        subscribeToEvents();
-      }
-    };
-    checkStaff();
+    if (!user || !isStaff) return;
 
-    const subscribeToEvents = () => {
-      const channel = supabase.channel('notification_toast')
+    const channel = supabase.channel('notification_toast')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'code_finder_enquiries' }, (payload) => {
            const record = payload.new;
            handleNewNotif({
@@ -54,19 +46,18 @@ export function EnquiryNotification() {
         })
         .subscribe();
       
-      return () => { supabase.removeChannel(channel) };
-    };
+    return () => { supabase.removeChannel(channel) };
+  }, [user, isStaff]);
 
-    const handleNewNotif = (newNotif) => {
-       setNotifications(prev => {
-         const filtered = prev.filter(n => n.tag !== newNotif.tag);
-         return [...filtered, newNotif];
-       });
-       setTimeout(() => {
-         setNotifications(prev => prev.filter(n => n.id !== newNotif.id));
-       }, 5000);
-    };
-  }, []);
+  const handleNewNotif = (newNotif) => {
+     setNotifications(prev => {
+       const filtered = prev.filter(n => n.tag !== newNotif.tag);
+       return [...filtered, newNotif];
+     });
+     setTimeout(() => {
+       setNotifications(prev => prev.filter(n => n.id !== newNotif.id));
+     }, 5000);
+  };
 
   const handleClick = (notif) => {
     setNotifications(prev => prev.filter(n => n.id !== notif.id));

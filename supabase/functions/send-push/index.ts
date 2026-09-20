@@ -12,6 +12,11 @@ if (VAPID_PUBLIC && VAPID_PRIVATE) {
 
 serve(async (req: Request) => {
   try {
+    if (!PUSH_WEBHOOK_SECRET) {
+      console.error('PUSH_WEBHOOK_SECRET is not configured')
+      return new Response('Server configuration error', { status: 500 })
+    }
+
     const authHeader = req.headers.get('authorization')
     if (authHeader !== `Bearer ${PUSH_WEBHOOK_SECRET}`) {
       return new Response('Unauthorized', { status: 401 })

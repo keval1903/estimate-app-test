@@ -1,0 +1,7 @@
+project_id = "ogpcvcyixwiurnlwcdrq"
+
+[functions.send-push]
+verify_jwt = false
+
+[functions.process-push-retries]
+verify_jwt = false

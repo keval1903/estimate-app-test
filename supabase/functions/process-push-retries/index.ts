@@ -5,6 +5,11 @@ const PUSH_WEBHOOK_SECRET = Deno.env.get('PUSH_WEBHOOK_SECRET')
 
 serve(async (req: Request) => {
   try {
+    if (!PUSH_WEBHOOK_SECRET) {
+      console.error('PUSH_WEBHOOK_SECRET is not configured')
+      return new Response('Server configuration error', { status: 500 })
+    }
+
     const authHeader = req.headers.get('authorization')
     if (authHeader !== `Bearer ${PUSH_WEBHOOK_SECRET}`) {
       return new Response('Unauthorized', { status: 401 })
@@ -33,18 +38,25 @@ serve(async (req: Request) => {
 
     // Trigger send-push for each pending message
     // Note: We don't wait for them to finish, just fire off the webhook POSTs
-    const promises = pending.map(outboxRow => {
-       return fetch(`${supabaseUrl}/functions/v1/send-push`, {
-         method: 'POST',
-         headers: {
-           'Content-Type': 'application/json',
-           'Authorization': `Bearer ${PUSH_WEBHOOK_SECRET}`
-         },
-         body: JSON.stringify({ id: outboxRow.id })
-       }).catch(err => console.error('Failed to trigger send-push for', outboxRow.id, err))
-    })
+    const responses = await Promise.all(
+      pending.map(async outboxRow => {
+        const response = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${PUSH_WEBHOOK_SECRET}`
+          },
+          body: JSON.stringify({ id: outboxRow.id })
+        })
 
-    await Promise.all(promises)
+        if (!response.ok) {
+          const body = await response.text()
+          throw new Error(`send-push failed for ${outboxRow.id}: ${response.status} ${body}`)
+        }
+
+        return response
+      })
+    )
 
     return new Response(JSON.stringify({ success: true, processed: pending.length }), { 
       headers: { 'Content-Type': 'application/json' } 

@@ -9,8 +9,8 @@ self.addEventListener('push', function(event) {
   const title = data.title || 'New Notification'
   const options = {
     body: data.body || 'You have a new update.',
-    icon: '/vite.svg',
-    badge: '/vite.svg',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/badge-96.png',
     data: { url: data.url || '/' },
     tag: data.tag || 'default'
   }

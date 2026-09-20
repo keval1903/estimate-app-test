@@ -26,11 +26,16 @@ export function usePushNotifications() {
   useEffect(() => {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       setIsSupported(true)
-      checkSubscription()
+      if (user?.id) {
+        checkSubscription()
+      } else {
+        setLoading(false)
+        setIsSubscribed(false)
+      }
     } else {
       setLoading(false)
     }
-  }, [])
+  }, [user?.id])
 
   const checkSubscription = async () => {
     try {
