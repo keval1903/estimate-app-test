@@ -174,9 +174,9 @@ export default function Chat() {
       <div className="chat-input-area" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
         {error && <div className="error-text small" style={{ marginBottom: '8px' }}>{error}</div>}
         {replyingTo && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f1f5f9', padding: '8px 12px', borderRadius: '4px', marginBottom: '8px', borderLeft: '3px solid var(--accent)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card, #1e293b)', color: '#fff', padding: '8px 12px', borderRadius: '4px', marginBottom: '8px', borderLeft: '3px solid var(--accent)' }}>
             <div style={{ fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <strong>Replying to {replyingTo.sender_type === 'CLIENT' ? 'You' : 'Staff'}:</strong> {replyingTo.message}
+              <strong>Replying to {replyingTo.sender_type === 'CLIENT' ? 'You' : 'Staff'}:</strong> <span style={{ opacity: 0.8 }}>{replyingTo.message}</span>
             </div>
             <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '16px', padding: '0 4px' }}>×</button>
           </div>
