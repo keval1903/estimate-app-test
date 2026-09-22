@@ -34,7 +34,7 @@ export default function CustomerEnquiries() {
           code_finder_enquiry_items ( id ),
           code_finder_enquiry_reads ( staff_user_id, read_at )
         `)
-        .in('status', ['NEW', 'UNDER_REVIEW', 'AWAITING_CLIENT'])
+        .in('status', ['NEW', 'AWAITING_CLIENT', 'READY_TO_ORDER'])
         .order('created_at', { ascending: false });
 
       if (err) throw err;
@@ -77,7 +77,7 @@ export default function CustomerEnquiries() {
       const userId = (await supabase.auth.getUser()).data.user?.id;
 
       const formatted = data.map(c => {
-        const pendingCount = c.code_finder_enquiries?.filter(e => ['NEW', 'UNDER_REVIEW', 'AWAITING_CLIENT'].includes(e.status)).length || 0;
+        const pendingCount = c.code_finder_enquiries?.filter(e => ['NEW', 'AWAITING_CLIENT', 'READY_TO_ORDER'].includes(e.status)).length || 0;
         const myRead = c.code_finder_message_reads?.find(r => r.staff_user_id === userId);
         
         const latestMsg = c.code_finder_messages?.sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];

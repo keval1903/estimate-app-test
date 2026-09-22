@@ -105,6 +105,7 @@ serve(async (req: Request) => {
           )
         `)
         .eq('code_finder_user_id', cfUser.id)
+        .in('status', ['NEW', 'AWAITING_CLIENT', 'READY_TO_ORDER'])
         .order('created_at', { ascending: false })
 
       if (eqErr) throw eqErr

@@ -74,14 +74,15 @@ function CustomerDetail() {
       const confirmedOrds = [];
       
       for (const eq of allEnquiries) {
-        if (['NEW', 'UNDER_REVIEW', 'AWAITING_CLIENT', 'REJECTED'].includes(eq.status)) {
+        if (['NEW', 'AWAITING_CLIENT', 'READY_TO_ORDER'].includes(eq.status)) {
           activeEnqs.push(eq);
-        } else if (['CONFIRMED', 'CANCELLED'].includes(eq.status)) {
+        } else if (['ORDER_PLACED'].includes(eq.status)) {
           confirmedOrds.push(eq);
         }
+        // CANCELLED status is ignored in these lists for now as per "not in Orders tab" rule
       }
 
-      const pendingStatuses = ['NEW', 'UNDER_REVIEW', 'AWAITING_CLIENT'];
+      const pendingStatuses = ['NEW', 'AWAITING_CLIENT', 'READY_TO_ORDER'];
       const enquiriesWithStock = await Promise.all(
         activeEnqs.map(async eq => {
           if (!pendingStatuses.includes(eq.status)) {
@@ -245,12 +246,23 @@ function CustomerDetail() {
   };
 
   const handleUpdateStatus = async (enquiryId, newStatus) => {
+    // Legacy fallback, mostly unused now except for CANCELLED from Orders if needed
     try {
       const { error } = await supabase.rpc('update_enquiry_status', { p_enquiry_id: enquiryId, p_new_status: newStatus });
       if (error) throw error;
       fetchData();
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleConfirmEnquiry = async (enquiryId) => {
+    try {
+      const { error } = await supabase.rpc('confirm_code_finder_enquiry', { p_enquiry_id: enquiryId });
+      if (error) throw error;
+      fetchData();
+    } catch (err) {
+      alert("Error confirming enquiry: " + err.message);
     }
   };
 
@@ -269,23 +281,6 @@ function CustomerDetail() {
   const handleOpenProposalModal = async (enq) => {
     try {
       let workingEnquiry = enq;
-
-      if (enq.status === 'NEW') {
-        const { error: statusError } = await supabase.rpc(
-          'update_enquiry_status',
-          {
-            p_enquiry_id: enq.id,
-            p_new_status: 'UNDER_REVIEW'
-          }
-        );
-
-        if (statusError) throw statusError;
-
-        workingEnquiry = {
-          ...enq,
-          status: 'UNDER_REVIEW'
-        };
-      }
 
       const { error: recheckError } = await supabase.rpc(
         'recheck_enquiry_stock',
@@ -528,19 +523,21 @@ function CustomerDetail() {
                       <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#fef3c7', color: '#92400e', borderRadius: '12px', whiteSpace: 'nowrap' }}>
                         {safeReplace(enq.status, /_/g, ' ')}
                       </span>
-                      {enq.status === 'UNDER_REVIEW' && (
+                      {enq.status === 'READY_TO_ORDER' && (
                          <>
-                           <button onClick={() => handleUpdateStatus(enq.id, 'CONFIRMED')} className="btn btn-sm" style={{ background: '#16a34a', color: '#fff', fontSize: '11px', padding: '6px 10px' }}>Confirm</button>
+                           <span style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)' }}>Confirmed &mdash; Waiting for Customer</span>
                            <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Propose Changes</button>
                          </>
+                      )}
+                      {enq.status === 'AWAITING_CLIENT' && (
+                         <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Edit Proposal</button>
                       )}
                       {enq.status === 'NEW' && (
                          <>
-                           <button onClick={() => handleUpdateStatus(enq.id, 'UNDER_REVIEW')} className="btn btn-primary btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Start Review</button>
+                           <button onClick={() => handleConfirmEnquiry(enq.id)} className="btn btn-sm" style={{ background: '#16a34a', color: '#fff', fontSize: '11px', padding: '6px 10px' }}>Confirm</button>
                            <button onClick={() => handleOpenProposalModal(enq)} className="btn btn-secondary btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Propose Changes</button>
                          </>
                       )}
-                      <button onClick={() => handleUpdateStatus(enq.id, 'REJECTED')} className="btn btn-danger btn-sm" style={{ fontSize: '11px', padding: '6px 10px' }}>Reject</button>
                     </div>
                   </div>
                   
@@ -653,7 +650,7 @@ function CustomerDetail() {
                           </span>
                         </div>
                       )}
-                      {ord.status === 'CONFIRMED' && (
+                      {ord.status === 'ORDER_PLACED' && (
                          <button onClick={() => handleUpdateStatus(ord.id, 'CANCELLED')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>Cancel Order</button>
                       )}
                     </div>
@@ -669,7 +666,7 @@ function CustomerDetail() {
                     <tbody>
                       {ord.code_finder_enquiry_items?.map(item => {
                         let displayQty = item.requested_quantity;
-                        const acceptedProposal = ord.code_finder_proposals?.find(p => p.response === 'ACCEPTED' && p.superseded_at === null);
+                        const acceptedProposal = ord.code_finder_proposals?.find(p => p.response === 'ACCEPTED' && !p.superseded_at);
                         if (acceptedProposal) {
                           const pItem = acceptedProposal.code_finder_proposal_items?.find(pi => pi.enquiry_item_id === item.id);
                           if (pItem) displayQty = pItem.proposed_quantity;

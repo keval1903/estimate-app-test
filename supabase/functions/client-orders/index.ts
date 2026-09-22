@@ -91,7 +91,7 @@ serve(async (req: Request) => {
         )
       `)
       .eq('code_finder_user_id', cfUser.id)
-      .eq('status', 'CONFIRMED')
+      .eq('status', 'ORDER_PLACED')
       .order('created_at', { ascending: false })
 
     if (eqErr) throw eqErr

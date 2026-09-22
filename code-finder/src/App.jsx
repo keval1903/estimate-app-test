@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, createContext, useContext } from 'react';
-import { Package, FileText, ClipboardList, MessageCircle, User, LogOut } from 'lucide-react';
+import { Package, FileText, ClipboardList, MessageCircle, User, LogOut, Bell, BellOff } from 'lucide-react';
+import { usePushNotifications } from './hooks/usePushNotifications';
 
 import CheckStock from './pages/CheckStock';
 import Login from './pages/Login';
@@ -70,6 +71,7 @@ function Layout({ children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isSupported, isSubscribed, subscribe, unsubscribe, loading } = usePushNotifications();
 
   return (
     <div className="app-layout">
@@ -79,6 +81,16 @@ function Layout({ children }) {
             <h1>Client Portal</h1>
           </div>
           <div className="header-user">
+            {isSupported && (
+              <button 
+                onClick={isSubscribed ? unsubscribe : subscribe} 
+                className="btn-logout" 
+                title={isSubscribed ? "Disable Notifications" : "Enable Notifications"}
+                disabled={loading}
+              >
+                {isSubscribed ? <Bell size={18} /> : <BellOff size={18} />}
+              </button>
+            )}
             <span className="client-name"><User size={16} /> {user?.client_name}</span>
             <button onClick={() => { logout(); navigate('/login'); }} className="btn-logout" title="Logout">
               <LogOut size={18} />

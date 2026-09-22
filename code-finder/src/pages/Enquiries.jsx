@@ -41,6 +41,32 @@ export default function Enquiries() {
     }
   };
 
+  const handlePlaceOrder = async (enquiryId) => {
+    try {
+      setLoading(true);
+      const storageKey = `place-order-key:${enquiryId}`;
+      let idempotencyKey = sessionStorage.getItem(storageKey);
+      if (!idempotencyKey) {
+        idempotencyKey = crypto.randomUUID();
+        sessionStorage.setItem(storageKey, idempotencyKey);
+      }
+
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enquiry_id: enquiryId, idempotency_key: idempotencyKey })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to place order');
+      
+      sessionStorage.removeItem(storageKey);
+      navigate('/app/orders');
+    } catch (err) {
+      alert(err.message);
+      setLoading(false);
+    }
+  };
+
   if (loading) return <div className="page-loader">Loading enquiries...</div>;
   if (error) return <div className="error-container">{error}</div>;
 
@@ -130,6 +156,14 @@ export default function Enquiries() {
                       Reply in Chat
                     </button>
                   </div>
+                </div>
+              )}
+              
+              {eq.status === 'READY_TO_ORDER' && (
+                <div style={{ marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '1rem', textAlign: 'right' }}>
+                  <button onClick={() => handlePlaceOrder(eq.id)} style={{ padding: '8px 16px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                    Place Order
+                  </button>
                 </div>
               )}
             </div>

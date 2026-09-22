@@ -5,7 +5,7 @@ export const config = {
 };
 
 export default async function handler(req) {
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return createErrorResponse('Method not allowed', 405);
   }
 
@@ -29,9 +29,40 @@ export default async function handler(req) {
       return createErrorResponse('Server misconfiguration', 500);
     }
 
+    if (req.method === 'POST') {
+      const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      if (!SUPABASE_ANON_KEY) {
+        return createErrorResponse('Server misconfiguration', 500);
+      }
+      
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: `Bearer ${authData.accessToken}` } }
+      });
+
+      const { enquiry_id, idempotency_key } = await req.json();
+      if (!enquiry_id || !idempotency_key) {
+        return createErrorResponse('Missing required fields', 400);
+      }
+
+      const { data: orderData, error } = await supabase.rpc('place_code_finder_order', {
+        p_enquiry_id: enquiry_id,
+        p_idempotency_key: idempotency_key
+      });
+
+      if (error) {
+        return createErrorResponse(error.message, 400);
+      }
+
+      return new Response(JSON.stringify({ success: true, order: orderData }), {
+        status: 200,
+        headers: headers
+      });
+    }
+
     const fetchOptions = {
       method: req.method,
-      cache: 'no-store',
+      cache: 'no-store, no-cache, must-revalidate',
       headers: {
         'Content-Type': 'application/json',
         'x-code-finder-secret': PROXY_SECRET,

@@ -27,10 +27,10 @@ export default function Orders() {
 
   return (
     <div className="page-container">
-      <h2>Confirmed Orders</h2>
+      <h2>Placed Orders</h2>
       {orders.length === 0 ? (
         <div className="empty-state">
-          <p>No confirmed orders yet. Converted enquiries will appear here after internal confirmation.</p>
+          <p>No placed orders yet.</p>
         </div>
       ) : (
         <div className="card-list">
@@ -38,12 +38,12 @@ export default function Orders() {
             <div key={order.id} className="item-card order-card">
               <div className="card-header">
                 <h3>Enquiry #{order.enquiry_number}</h3>
-                <span className="status-badge confirmed">CONFIRMED</span>
+                <span className="status-badge confirmed">ORDER PLACED</span>
               </div>
               <p className="date-text">
-                {order.confirmed_at
-                  ? `Confirmed Date: ${new Date(order.confirmed_at).toLocaleString()}`
-                  : `Enquiry Date: ${new Date(order.checked_at).toLocaleString()}`}
+                {order.order_placed_at
+                  ? `Order Date: ${new Date(order.order_placed_at).toLocaleString()}`
+                  : `Enquiry Date: ${new Date(order.checked_at || order.created_at).toLocaleString()}`}
               </p>
               
               <div className="items-list">
