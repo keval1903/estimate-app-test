@@ -3,7 +3,8 @@ self.addEventListener('push', function(event) {
   try {
     data = event.data.json()
   } catch (e) {
-    console.error('Error parsing push data', e)
+    console.warn('Push payload is not JSON, falling back to text:', e)
+    data = { body: event.data.text() }
   }
 
   const title = data.title || 'New Notification'
