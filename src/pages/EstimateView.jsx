@@ -33,7 +33,9 @@ export default function EstimateView() {
   const [layoutMode, setLayoutMode] = useState('full')
   const [converting, setConverting] = useState(false)
   const [isExportingSingleImage, setIsExportingSingleImage] = useState(false)
-  const [isChallanMode, setIsChallanMode] = useState(false)
+  const [viewMode, setViewMode] = useState('standard')
+  const isChallanMode = viewMode === 'challan'
+  const isPackingMode = viewMode === 'packing'
   const [scale, setScale] = useState(1)
   const [previewHeight, setPreviewHeight] = useState(0)
   const previewRef = useRef()
@@ -555,9 +557,10 @@ export default function EstimateView() {
             <option value="full">Layout: Full</option>
             <option value="compact">Layout: Compact</option>
           </select>
-          <select className="btn btn-secondary btn-sm" value={isChallanMode ? 'challan' : 'standard'} onChange={e => setIsChallanMode(e.target.value === 'challan')}>
+          <select className="btn btn-secondary btn-sm" value={viewMode} onChange={e => setViewMode(e.target.value)}>
             <option value="standard">Mode: Standard</option>
             <option value="challan">Mode: Challan</option>
+            {activePlatform === 'laminea' && <option value="packing">Mode: Packing Slip</option>}
           </select>
         </div>
 
@@ -606,25 +609,36 @@ export default function EstimateView() {
                 <div key={pageIndex} className="estimate-page" style={{ pageBreakAfter: page.isLast ? 'auto' : 'always', position: 'relative' }}>
                   <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', border: '1.5px solid #000', fontFamily: 'Arial, sans-serif', fontSize: 13, color: '#000', background: '#fff' }}>
                     <colgroup>
-                      <col style={{ width: 42 }} />     {/* Sr No */}
-                      <col style={{ width: 'auto' }} /> {/* Description */}
-                      <col style={{ width: isChallanMode ? 55 : 42 }} />     {/* Nos. */}
-                      <col style={{ width: isChallanMode ? 100 : 68 }} />     {/* Quantity */}
-                      {!isChallanMode && <col style={{ width: 78 }} />}     {/* Rate */}
-                      {!isChallanMode && <col style={{ width: 110 }} />}     {/* Amount */}
+                      {isPackingMode ? (
+                        <>
+                          <col style={{ width: 42 }} />
+                          <col style={{ width: 'auto' }} />
+                          <col style={{ width: 'auto' }} />
+                          <col style={{ width: 80 }} />
+                        </>
+                      ) : (
+                        <>
+                          <col style={{ width: 42 }} />
+                          <col style={{ width: 'auto' }} />
+                          <col style={{ width: isChallanMode ? 55 : 42 }} />
+                          <col style={{ width: isChallanMode ? 100 : 68 }} />
+                          {!isChallanMode && <col style={{ width: 78 }} />}
+                          {!isChallanMode && <col style={{ width: 110 }} />}
+                        </>
+                      )}
                     </colgroup>
                     <tbody>
                       {/* Title row */}
                       <tr>
-                        <td colSpan={isChallanMode ? 4 : 6} style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, letterSpacing: 2, padding: '6px 0', borderBottom: '1px solid #000' }}>
-                          {isChallanMode ? 'DELIVERY CHALLAN' : estimate.type === 'QUOTATION' ? 'Q U O T A T I O N' : estimate.type === 'RETURN' ? 'S A L E S   R E T U R N' : 'E S T I M A T E'}
+                        <td colSpan={isPackingMode ? 4 : isChallanMode ? 4 : 6} style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, letterSpacing: 2, padding: '6px 0', borderBottom: '1px solid #000' }}>
+                          {isPackingMode ? 'P A C K A G I N G   S L I P' : isChallanMode ? 'DELIVERY CHALLAN' : estimate.type === 'QUOTATION' ? 'Q U O T A T I O N' : estimate.type === 'RETURN' ? 'S A L E S   R E T U R N' : 'E S T I M A T E'}
                           {pages.length > 1 && <span style={{ fontSize: 10, fontWeight: 400, position: 'absolute', right: 8, top: 8 }}>(Page {pageIndex + 1}/{pages.length})</span>}
                         </td>
                       </tr>
 
                       {/* Meta details */}
                       <tr>
-                        <td colSpan={isChallanMode ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000', borderRight: '1px solid #000' }}>
+                        <td colSpan={(isChallanMode || isPackingMode) ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000', borderRight: '1px solid #000' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                             <tbody>
                               {[
@@ -641,7 +655,7 @@ export default function EstimateView() {
                             </tbody>
                           </table>
                         </td>
-                        <td colSpan={isChallanMode ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000' }}>
+                        <td colSpan={(isChallanMode || isPackingMode) ? 2 : 3} style={{ padding: '6px 10px', borderBottom: '1px solid #000' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                             <tbody>
                               {[
@@ -662,21 +676,22 @@ export default function EstimateView() {
 
                       {/* Table header */}
                       <tr style={{ background: '#f0f0f0' }}>
-                        {['Sr No', 'Description of Goods', 'Nos.', 'Quantity', 'Rate', 'Amount']
-                          .filter(h => !isChallanMode || (h !== 'Rate' && h !== 'Amount'))
-                          .map((h, i) => (
+                        {(isPackingMode
+                          ? ['Sr No', 'Actual Code', 'Sticker Code', 'Quantity']
+                          : ['Sr No', 'Description of Goods', 'Nos.', 'Quantity', 'Rate', 'Amount']
+                              .filter(h => !isChallanMode || (h !== 'Rate' && h !== 'Amount'))
+                        ).map((h) => (
                             <td key={h} style={{
                               border: '1px solid #000', padding: '6px 4px', fontWeight: 700,
-                              textAlign: h === 'Description of Goods' ? 'left' : 'center',
+                              textAlign: (h === 'Description of Goods' || h === 'Actual Code' || h === 'Sticker Code') ? 'left' : 'center',
                               fontSize: 12,
                               whiteSpace: 'nowrap',
-                              width: h === 'Sr No' ? 42 : h === 'Description of Goods' ? 'auto' : h === 'Nos.' ? 42 : h === 'Quantity' ? 68 : h === 'Rate' ? 72 : 94
                             }}>{h}</td>
                           ))}
                       </tr>
 
                       {/* Brought Forward Row */}
-                      {page.brought && (
+                      {page.brought && !isPackingMode && (
                         <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
                           <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>Brought Forward</td>
                           <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
@@ -697,30 +712,50 @@ export default function EstimateView() {
                       {page.items.map(it => (
                         <tr key={it.id}>
                           <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>{it.serial_number}</td>
-                          <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
-                            {isChallanMode && it.alternative_code_snapshot
-                              ? it.alternative_code_snapshot
-                              : `${getInternalItemName(it, estimate.type)}${it.remark ? ` - ${it.remark}` : ''}`}
-                          </td>
-                          <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
-                            {(() => {
-                              const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
-                              const val = isPieceBased ? it.nos : it.quantity;
-                              return val % 1 === 0 ? val : Number(val).toFixed(2);
-                            })()}
-                          </td>
-                          <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
-                            {it.quantity} {it.unit_snapshot}
-                          </td>
-                          {!isChallanMode && (
-                            <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
-                              {fmtMoney(it.rate)}
-                            </td>
-                          )}
-                          {!isChallanMode && (
-                            <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
-                              {fmtMoney(it.amount)}
-                            </td>
+                          {isPackingMode ? (
+                            <>
+                              <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
+                                {it.actual_code_snapshot || it.product_name_snapshot}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
+                                {it.alternative_code_snapshot || '—'}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
+                                {(() => {
+                                  const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+                                  const val = isPieceBased ? it.nos : it.quantity;
+                                  return val % 1 === 0 ? val : Number(val).toFixed(2);
+                                })()}
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>
+                                {isChallanMode && it.alternative_code_snapshot
+                                  ? it.alternative_code_snapshot
+                                  : `${getInternalItemName(it, estimate.type)}${it.remark ? ` - ${it.remark}` : ''}`}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
+                                {(() => {
+                                  const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+                                  const val = isPieceBased ? it.nos : it.quantity;
+                                  return val % 1 === 0 ? val : Number(val).toFixed(2);
+                                })()}
+                              </td>
+                              <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'center', fontSize: 12 }}>
+                                {it.quantity} {it.unit_snapshot}
+                              </td>
+                              {!isChallanMode && (
+                                <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
+                                  {fmtMoney(it.rate)}
+                                </td>
+                              )}
+                              {!isChallanMode && (
+                                <td style={{ border: '1px solid #000', padding: '2px 4px', textAlign: 'right', fontSize: 12 }}>
+                                  {fmtMoney(it.amount)}
+                                </td>
+                              )}
+                            </>
                           )}
                         </tr>
                       ))}
@@ -732,13 +767,13 @@ export default function EstimateView() {
                           <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                           <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
                           <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>
-                          {!isChallanMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
-                          {!isChallanMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
+                          {!isChallanMode && !isPackingMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
+                          {!isChallanMode && !isPackingMode && <td style={{ border: '1px solid #000', padding: '2px 4px', fontSize: 12 }}>&nbsp;</td>}
                         </tr>
                       ))}
 
                       {/* Carried Forward Row */}
-                      {page.carried && (
+                      {page.carried && !isPackingMode && (
                         <tr style={{ background: '#fcfcfc', fontStyle: 'italic' }}>
                           <td colSpan={2} style={{ border: '1px solid #000', padding: '4px 8px', textAlign: 'right', fontSize: 12, fontWeight: 600 }}>Carried Forward</td>
                           <td style={{ border: '1px solid #000', padding: '4px 4px', textAlign: 'center', fontSize: 12 }}>
@@ -756,7 +791,7 @@ export default function EstimateView() {
                       )}
 
                       {/* Totals row (only on last page) */}
-                      {page.isLast && (
+                      {page.isLast && !isPackingMode && (
                         <>
                           {estimate?.gst_percent > 0 ? (
                             <>
@@ -841,6 +876,20 @@ export default function EstimateView() {
                             </>
                           )}
                         </>
+                      )}
+                      {page.isLast && isPackingMode && (
+                        <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
+                          <td colSpan={3} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'right', fontSize: 13 }}>Total Qty</td>
+                          <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 14, fontWeight: 700 }}>
+                            {(() => {
+                              const total = items.reduce((sum, it) => {
+                                const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
+                                return sum + Number(isPieceBased ? it.nos : it.quantity);
+                              }, 0);
+                              return total % 1 === 0 ? total : total.toFixed(2);
+                            })()}
+                          </td>
+                        </tr>
                       )}
                     </tbody>
                   </table>
