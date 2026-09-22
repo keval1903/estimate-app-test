@@ -28,4 +28,19 @@ BEGIN
 END;
 $$;
 
+ALTER TABLE public.notification_outbox
+    DROP CONSTRAINT IF EXISTS notification_outbox_event_type_check;
+
+ALTER TABLE public.notification_outbox
+    ADD CONSTRAINT notification_outbox_event_type_check
+    CHECK (event_type IN (
+        'NEW_ENQUIRY',
+        'NEW_MESSAGE',
+        'NEW_STAFF_MESSAGE',
+        'PROPOSAL_RESPONSE',
+        'ENQUIRY_CONFIRMED',
+        'PROPOSAL_SUBMITTED',
+        'ORDER_PLACED'
+    ));
+
 COMMIT;
