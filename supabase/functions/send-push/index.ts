@@ -51,21 +51,10 @@ serve(async (req: Request) => {
 
     let activeTargetIds = new Set<string>()
 
-    if (claim.event_type === 'NEW_STAFF_MESSAGE') {
-      // Find the specific client's auth_user_id based on their code_finder_user_id
-      const cfUserId = claim.event_payload?.code_finder_user_id
-      if (cfUserId) {
-        const { data: cfUser } = await supabase
-          .from('code_finder_users')
-          .select('auth_user_id')
-          .eq('id', cfUserId)
-          .single()
-        
-        if (cfUser?.auth_user_id) {
-          activeTargetIds.add(cfUser.auth_user_id)
-        }
-      }
-    } else {
+    if (claim.target_audience === 'USER' && claim.target_user_id) {
+      // Send only to the specified user
+      activeTargetIds.add(claim.target_user_id)
+    } else if (claim.target_audience === 'STAFF') {
       // Broadcast to all active staff/admins
       const { data: activeStaff } = await supabase
         .from('user_roles')
@@ -90,14 +79,13 @@ serve(async (req: Request) => {
     // Determine notification content based on event_type
     let title = 'Laminea Code Finder'
     let body = 'New activity in Customer Enquiries'
-    const url = '/laminea/customer-enquiries'
+    let url = '/laminea/customer-enquiries'
 
     if (claim.event_type === 'NEW_ENQUIRY') {
       body = 'A customer submitted a new enquiry'
     } else if (claim.event_type === 'NEW_MESSAGE') {
-      body = 'A customer sent a new message'
-    } else if (claim.event_type === 'NEW_STAFF_MESSAGE') {
-      body = 'You have a new message from Support'
+      body = claim.target_audience === 'USER' ? 'You have a new message from Support' : 'A customer sent a new message'
+      url = claim.target_audience === 'USER' ? '/app/chat' : '/laminea/customer-enquiries'
     } else if (claim.event_type === 'PROPOSAL_RESPONSE') {
       body = `Customer responded to a proposal: ${claim.event_payload.response}`
     }
