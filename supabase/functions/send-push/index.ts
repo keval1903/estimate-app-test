@@ -49,24 +49,42 @@ serve(async (req: Request) => {
       return new Response('Already processing or processed', { status: 200 })
     }
 
-    // Get all active push subscriptions for staff
-    const { data: activeStaff } = await supabase
-      .from('user_roles')
-      .select('id')
-      .in('role', ['STAFF', 'ADMIN'])
-      .eq('is_active', true)
-      
-    const activeStaffIds = new Set((activeStaff || []).map(r => r.id))
+    let activeTargetIds = new Set<string>()
+
+    if (claim.event_type === 'NEW_STAFF_MESSAGE') {
+      // Find the specific client's auth_user_id based on their code_finder_user_id
+      const cfUserId = claim.event_payload?.code_finder_user_id
+      if (cfUserId) {
+        const { data: cfUser } = await supabase
+          .from('code_finder_users')
+          .select('auth_user_id')
+          .eq('id', cfUserId)
+          .single()
+        
+        if (cfUser?.auth_user_id) {
+          activeTargetIds.add(cfUser.auth_user_id)
+        }
+      }
+    } else {
+      // Broadcast to all active staff/admins
+      const { data: activeStaff } = await supabase
+        .from('user_roles')
+        .select('id')
+        .in('role', ['STAFF', 'ADMIN'])
+        .eq('is_active', true)
+        
+      activeTargetIds = new Set((activeStaff || []).map(r => r.id))
+    }
 
     const { data: allSubs, error: subsErr } = await supabase
       .from('push_subscriptions')
       .select('id, user_id, endpoint, keys_p256dh, keys_auth')
 
-    const subs = (allSubs || []).filter(s => activeStaffIds.has(s.user_id))
+    const subs = (allSubs || []).filter(s => activeTargetIds.has(s.user_id))
 
     if (subsErr || subs.length === 0) {
       await supabase.from('notification_outbox').update({ processed_at: new Date().toISOString() }).eq('id', outboxId)
-      return new Response('No subscriptions or no active staff', { status: 200 })
+      return new Response('No subscriptions or no active targets', { status: 200 })
     }
 
     // Determine notification content based on event_type
@@ -78,6 +96,8 @@ serve(async (req: Request) => {
       body = 'A customer submitted a new enquiry'
     } else if (claim.event_type === 'NEW_MESSAGE') {
       body = 'A customer sent a new message'
+    } else if (claim.event_type === 'NEW_STAFF_MESSAGE') {
+      body = 'You have a new message from Support'
     } else if (claim.event_type === 'PROPOSAL_RESPONSE') {
       body = `Customer responded to a proposal: ${claim.event_payload.response}`
     }
