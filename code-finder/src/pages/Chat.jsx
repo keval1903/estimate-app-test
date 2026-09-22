@@ -8,6 +8,7 @@ export default function Chat() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
   
   const { user } = useAuth();
   const messagesEndRef = useRef(null);
@@ -103,7 +104,8 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: newMessage.trim(),
-          enquiry_id: enquiryId || null 
+          enquiry_id: enquiryId || null,
+          reply_to_message_id: replyingTo ? replyingTo.id : null
         })
       });
       const data = await res.json();
@@ -114,6 +116,7 @@ export default function Chat() {
       setMessages(prev => [...prev, sentMsg]);
       lastTimestampRef.current = `${sentMsg.created_at},${sentMsg.id}`;
       setNewMessage('');
+      setReplyingTo(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -135,21 +138,50 @@ export default function Chat() {
             <p>Send a message to start chatting with our support team.</p>
           </div>
         ) : (
-          messages.map(msg => (
-            <div key={msg.id} className={`message-bubble ${msg.sender_type === 'CLIENT' ? 'sent' : 'received'}`}>
-              <div className="message-content">{msg.message}</div>
-              <div className="message-time">
-                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          messages.map((msg, i) => {
+            const repliedToMsg = msg.reply_to_message_id ? messages.find(m => m.id === msg.reply_to_message_id) : null;
+            return (
+              <div key={msg.id || i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender_type === 'CLIENT' ? 'flex-end' : 'flex-start', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: msg.sender_type === 'CLIENT' ? 'row-reverse' : 'row' }}>
+                  <div className={`message-bubble ${msg.sender_type === 'CLIENT' ? 'sent' : 'received'}`}>
+                    {repliedToMsg && (
+                      <div style={{ 
+                        background: 'rgba(0,0,0,0.1)', padding: '6px 8px', borderRadius: '4px', marginBottom: '6px', 
+                        borderLeft: `3px solid ${msg.sender_type === 'CLIENT' ? '#fff' : 'var(--accent)'}`,
+                        fontSize: '12px', opacity: 0.9,
+                        overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
+                      }}>
+                        <strong>{repliedToMsg.sender_type === 'CLIENT' ? 'You' : 'Staff'}</strong><br/>
+                        {repliedToMsg.message}
+                      </div>
+                    )}
+                    <div className="message-content">{msg.message}</div>
+                    <div className="message-time">
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                  {msg.sender_type !== 'SYSTEM' && (
+                    <button onClick={() => setReplyingTo(msg)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '14px', opacity: 0.7, padding: '4px' }} title="Reply">↰</button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="chat-input-area">
-        {error && <div className="error-text small">{error}</div>}
-        <form onSubmit={handleSend} className="chat-form">
+      <div className="chat-input-area" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        {error && <div className="error-text small" style={{ marginBottom: '8px' }}>{error}</div>}
+        {replyingTo && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f1f5f9', padding: '8px 12px', borderRadius: '4px', marginBottom: '8px', borderLeft: '3px solid var(--accent)' }}>
+            <div style={{ fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <strong>Replying to {replyingTo.sender_type === 'CLIENT' ? 'You' : 'Staff'}:</strong> {replyingTo.message}
+            </div>
+            <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '16px', padding: '0 4px' }}>×</button>
+          </div>
+        )}
+        <form onSubmit={handleSend} className="chat-form" style={{ display: 'flex', gap: '8px', width: '100%' }}>
           <input
             type="text"
             value={newMessage}
@@ -157,6 +189,7 @@ export default function Chat() {
             placeholder="Type a message..."
             maxLength={2000}
             disabled={sending}
+            style={{ flex: 1 }}
           />
           <button type="submit" disabled={!newMessage.trim() || sending} className="btn-primary">
             Send

@@ -106,7 +106,7 @@ serve(async (req: Request) => {
 
       let query = supabaseAdmin
         .from('code_finder_messages')
-        .select('id, enquiry_id, sender_type, message, created_at')
+        .select('id, enquiry_id, sender_type, message, created_at, reply_to_message_id')
         .eq('code_finder_user_id', cfUser.id)
 
       if (afterParam) {
@@ -169,6 +169,7 @@ serve(async (req: Request) => {
       const payload = await req.json()
       const messageText = payload.message?.trim() || ''
       const enquiryId = payload.enquiry_id || null
+      const replyToMessageId = payload.reply_to_message_id || null
 
       if (!messageText || messageText.length === 0 || messageText.length > 2000) {
         return new Response(JSON.stringify({ error: 'Invalid message length' }), { status: 400, headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } })
@@ -195,9 +196,10 @@ serve(async (req: Request) => {
           enquiry_id: enquiryId,
           sender_type: 'CLIENT',
           sender_auth_user_id: user.id,
-          message: messageText
+          message: messageText,
+          reply_to_message_id: replyToMessageId
         })
-        .select('id, enquiry_id, sender_type, message, created_at')
+        .select('id, enquiry_id, sender_type, message, created_at, reply_to_message_id')
         .single()
 
       if (insertErr) throw insertErr
