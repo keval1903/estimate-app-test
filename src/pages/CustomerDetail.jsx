@@ -34,6 +34,7 @@ function CustomerDetail() {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [chatInput, setChatInput] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
   const chatEndRef = useRef(null);
 
   const [proposalModalOpen, setProposalModalOpen] = useState(false);
@@ -63,7 +64,8 @@ function CustomerDetail() {
           code_finder_proposals(
             *,
             code_finder_proposal_items(*)
-          )
+          ),
+          estimates:converted_estimate_id(bill_number, type)
         `)
         .eq('code_finder_user_id', id)
         .order('created_at', { ascending: false });
@@ -214,10 +216,12 @@ function CustomerDetail() {
         code_finder_user_id: id,
         sender_auth_user_id: session.user.id,
         sender_type: 'STAFF',
-        message: chatInput.trim()
+        message: chatInput.trim(),
+        reply_to_message_id: replyingTo ? replyingTo.id : null
       });
       if (error) throw error;
       setChatInput('');
+      setReplyingTo(null);
     } catch (err) {
       alert(err.message);
     }
@@ -246,7 +250,7 @@ function CustomerDetail() {
   };
 
   const handleUpdateStatus = async (enquiryId, newStatus) => {
-    // Legacy fallback, mostly unused now except for CANCELLED from Orders if needed
+    if (newStatus === 'CANCELLED' && !window.confirm("Are you sure you want to cancel this order?")) return;
     try {
       const { error } = await supabase.rpc('update_enquiry_status', { p_enquiry_id: enquiryId, p_new_status: newStatus });
       if (error) throw error;
@@ -635,7 +639,9 @@ function CustomerDetail() {
                         {safeReplace(ord.status, /_/g, ' ')}
                       </span>
                       {ord.converted_estimate_id ? (
-                        <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 'bold' }}>Internal Document Linked</span>
+                        <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 'bold' }}>
+                          Linked: {ord.estimates?.type === 'QUOTATION' ? 'Quotation' : ord.estimates?.type === 'ESTIMATE' ? 'Estimate' : 'Document'} #{ord.estimates?.bill_number || ord.converted_estimate_id.toString().slice(0, 8)}
+                        </span>
                       ) : customer?.laminea_client_id ? (
                         <button onClick={() => handleCreateEstimate(ord)} className="btn btn-primary btn-sm">
                           Create Estimate
@@ -696,25 +702,45 @@ function CustomerDetail() {
               <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {messages.map((msg, i) => {
                   const isStaffMsg = msg.sender_type === 'STAFF' || msg.sender_type === 'SYSTEM';
+                  const repliedToMsg = msg.reply_to_message_id ? messages.find(m => m.id === msg.reply_to_message_id) : null;
+                  
                   return (
                     <div key={msg.id || i} style={{ display: 'flex', justifyContent: isStaffMsg ? 'flex-end' : 'flex-start', alignItems: 'center', gap: '8px' }}>
                       {!isStaffMsg && (
-                        <button onClick={() => handleDeleteMessage(msg.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px', opacity: 0.5, padding: '0 4px' }} title="Delete Message">×</button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <button onClick={() => handleDeleteMessage(msg.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px', opacity: 0.5, padding: '0 4px' }} title="Delete Message">×</button>
+                          <button onClick={() => setReplyingTo(msg)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '14px', opacity: 0.7, padding: '0 4px' }} title="Reply">↰</button>
+                        </div>
                       )}
                       <div style={{ 
                         maxWidth: '75%', padding: '10px 14px', borderRadius: '8px',
                         background: msg.sender_type === 'SYSTEM' ? '#f0f0f0' : msg.sender_type === 'STAFF' ? 'var(--accent)' : '#e5e5e5',
                         color: msg.sender_type === 'SYSTEM' ? '#555' : msg.sender_type === 'STAFF' ? '#fff' : '#000',
                         fontStyle: msg.sender_type === 'SYSTEM' ? 'italic' : 'normal',
-                        fontSize: '14px', whiteSpace: 'pre-wrap'
+                        fontSize: '14px', whiteSpace: 'pre-wrap',
+                        display: 'flex', flexDirection: 'column'
                       }}>
+                        {repliedToMsg && (
+                          <div style={{ 
+                            background: 'rgba(0,0,0,0.1)', padding: '6px 8px', borderRadius: '4px', marginBottom: '6px', 
+                            borderLeft: `3px solid ${isStaffMsg ? '#fff' : 'var(--accent)'}`,
+                            fontSize: '12px', opacity: 0.9,
+                            overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
+                          }}>
+                            <strong>{repliedToMsg.sender_type === 'CLIENT' ? customer?.client_name || 'Client' : 'Staff'}</strong><br/>
+                            {repliedToMsg.message}
+                          </div>
+                        )}
                         {msg.message}
                         <div style={{ fontSize: '11px', marginTop: '4px', opacity: 0.8, textAlign: 'right' }}>
                           {safeFormat(msg.created_at, 'MMM d, h:mm a')}
                         </div>
                       </div>
                       {isStaffMsg && (
-                        <button onClick={() => handleDeleteMessage(msg.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px', opacity: 0.5, padding: '0 4px' }} title="Delete Message">×</button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <button onClick={() => handleDeleteMessage(msg.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px', opacity: 0.5, padding: '0 4px' }} title="Delete Message">×</button>
+                          <button onClick={() => setReplyingTo(msg)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '14px', opacity: 0.7, padding: '0 4px' }} title="Reply">↰</button>
+                        </div>
                       )}
                     </div>
                   );
@@ -722,6 +748,14 @@ function CustomerDetail() {
                 <div ref={chatEndRef} />
               </div>
               <div style={{ padding: '16px', borderTop: '1px solid var(--border-light)', background: '#fff' }}>
+                {replyingTo && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f1f5f9', padding: '8px 12px', borderRadius: '4px', marginBottom: '8px', borderLeft: '3px solid var(--accent)' }}>
+                    <div style={{ fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <strong>Replying to {replyingTo.sender_type === 'CLIENT' ? customer?.client_name || 'Client' : 'Staff'}:</strong> {replyingTo.message}
+                    </div>
+                    <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '16px', padding: '0 4px' }}>×</button>
+                  </div>
+                )}
                 <form onSubmit={sendMessage} style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
