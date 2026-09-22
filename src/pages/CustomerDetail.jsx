@@ -639,10 +639,19 @@ function CustomerDetail() {
                       </span>
                       {ord.converted_estimate_id ? (
                         <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 'bold' }}>Internal Document Linked</span>
-                      ) : (
+                      ) : customer?.laminea_client_id ? (
                         <button onClick={() => handleCreateEstimate(ord)} className="btn btn-primary btn-sm">
                           Create Estimate
                         </button>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                          <button disabled className="btn btn-primary btn-sm" style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                            Create Estimate
+                          </button>
+                          <span style={{ fontSize: '11px', color: '#b91c1c', maxWidth: '200px', textAlign: 'right', background: '#fee2e2', padding: '4px 6px', borderRadius: '4px' }}>
+                            Link this Code Finder customer to a Laminea client before creating an estimate.
+                          </span>
+                        </div>
                       )}
                       {ord.status === 'CONFIRMED' && (
                          <button onClick={() => handleUpdateStatus(ord.id, 'CANCELLED')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>Cancel Order</button>

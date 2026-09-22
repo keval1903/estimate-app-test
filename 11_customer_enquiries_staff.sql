@@ -86,7 +86,7 @@ CREATE TABLE public.code_finder_message_reads (
     code_finder_user_id UUID NOT NULL REFERENCES public.code_finder_users(id) ON DELETE CASCADE,
     staff_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     last_read_message_created_at TIMESTAMPTZ,
-    last_read_message_id UUID REFERENCES public.code_finder_messages(id),
+    last_read_message_id UUID REFERENCES public.code_finder_messages(id) ON DELETE SET NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (code_finder_user_id, staff_user_id)
 );

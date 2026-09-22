@@ -139,9 +139,29 @@ export default function CustomerEnquiries() {
   const [createForm, setCreateForm] = useState({ username: '', password: '', client_name: '', contact_person: '', mobile: '' });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState(null);
+  
+  // New linking fields
+  const [lamineaClients, setLamineaClients] = useState([]);
+  const [linkMode, setLinkMode] = useState('CREATE_NEW'); // CREATE_NEW, LINK_EXISTING
+  const [selectedExistingClientId, setSelectedExistingClientId] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+
+  useEffect(() => {
+    if (showCreateModal) {
+      // Fetch clients for dropdown
+      supabase.from('clients').select('id, name, mobile').eq('platform', 'laminea').order('name')
+        .then(({ data }) => setLamineaClients(data || []))
+        .catch(console.error);
+    }
+  }, [showCreateModal]);
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
+    if (linkMode === 'LINK_EXISTING' && !selectedExistingClientId) {
+      setCreateError('Please select an existing client to link.');
+      return;
+    }
+    
     setCreateLoading(true);
     setCreateError(null);
     try {
@@ -154,7 +174,9 @@ export default function CustomerEnquiries() {
         },
         body: JSON.stringify({
           action: 'CREATE',
-          ...createForm
+          ...createForm,
+          create_new_client: linkMode === 'CREATE_NEW',
+          link_existing_client_id: linkMode === 'LINK_EXISTING' ? selectedExistingClientId : null
         })
       });
       if (!res.ok) {
@@ -163,6 +185,9 @@ export default function CustomerEnquiries() {
       }
       setShowCreateModal(false);
       setCreateForm({ username: '', password: '', client_name: '', contact_person: '', mobile: '' });
+      setLinkMode('CREATE_NEW');
+      setSelectedExistingClientId('');
+      setClientSearch('');
       if (activeTab === 'CUSTOMERS') fetchCustomers();
     } catch (err) {
       setCreateError(err.message);
@@ -202,6 +227,56 @@ export default function CustomerEnquiries() {
                 <label>Mobile Number</label>
                 <input type="text" value={createForm.mobile} onChange={e => setCreateForm({...createForm, mobile: e.target.value})} />
               </div>
+
+              <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginTop: '16px', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px' }}>Laminea Client Link</label>
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                    <input type="radio" name="linkMode" checked={linkMode === 'CREATE_NEW'} onChange={() => setLinkMode('CREATE_NEW')} />
+                    <span style={{ fontSize: '14px' }}>Automatically create a new Laminea client</span>
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                    <input type="radio" name="linkMode" checked={linkMode === 'LINK_EXISTING'} onChange={() => setLinkMode('LINK_EXISTING')} />
+                    <span style={{ fontSize: '14px' }}>Link an existing Laminea client</span>
+                  </label>
+                </div>
+                
+                {linkMode === 'LINK_EXISTING' && (
+                  <div style={{ marginTop: '8px', paddingLeft: '24px' }}>
+                    <input 
+                      type="text" 
+                      placeholder="Search clients..." 
+                      className="input" 
+                      style={{ width: '100%', marginBottom: '8px', padding: '6px' }}
+                      value={clientSearch}
+                      onChange={e => {
+                        setClientSearch(e.target.value);
+                        if (e.target.value && !selectedExistingClientId) {
+                           const found = lamineaClients.find(c => c.name.toLowerCase().includes(e.target.value.toLowerCase()));
+                           if (found) setSelectedExistingClientId(found.id);
+                        }
+                      }}
+                    />
+                    <select 
+                      value={selectedExistingClientId} 
+                      onChange={e => setSelectedExistingClientId(e.target.value)} 
+                      className="input" 
+                      style={{ width: '100%', padding: '6px' }}
+                    >
+                      <option value="">-- Select Client --</option>
+                      {lamineaClients
+                        .filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()) || (c.mobile && c.mobile.includes(clientSearch)))
+                        .slice(0, 30)
+                        .map(c => (
+                        <option key={c.id} value={c.id}>{c.name} {c.mobile ? `(${c.mobile})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                 <button type="submit" disabled={createLoading} className="btn btn-primary" style={{ flex: 1 }}>{createLoading ? 'Creating...' : 'Create User'}</button>
                 <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>

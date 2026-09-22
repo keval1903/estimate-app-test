@@ -46,6 +46,7 @@ serve(async (req: Request) => {
 
     if (action === 'CREATE') {
       const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@codefinder.local`
+      const { link_existing_client_id, create_new_client } = payload
       
       const { data: authData, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: email,
@@ -56,7 +57,7 @@ serve(async (req: Request) => {
 
       if (createErr) throw createErr
 
-      const { error: profileErr } = await supabaseAdmin
+      const { data: profileData, error: profileErr } = await supabaseAdmin
         .from('code_finder_users')
         .insert({
           auth_user_id: authData.user.id,
@@ -64,13 +65,39 @@ serve(async (req: Request) => {
           client_name: client_name.trim(),
           contact_person: contact_person ? contact_person.trim() : null,
           mobile: mobile ? mobile.trim() : null,
-          laminea_client_id: laminea_client_id || null,
           must_change_password: true
         })
+        .select('id')
+        .single()
 
       if (profileErr) {
         await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
         throw profileErr
+      }
+
+      const cfUserId = profileData.id;
+
+      try {
+        if (create_new_client) {
+          const { error: rpcErr } = await supabaseAdmin.rpc('create_and_link_laminea_client', {
+            p_cf_user_id: cfUserId,
+            p_client_name: client_name.trim(),
+            p_mobile: mobile ? mobile.trim() : null,
+            p_contact_person: contact_person ? contact_person.trim() : null
+          });
+          if (rpcErr) throw rpcErr;
+        } else if (link_existing_client_id) {
+          const { error: rpcErr } = await supabaseAdmin.rpc('link_code_finder_client', {
+            p_cf_user_id: cfUserId,
+            p_client_id: link_existing_client_id
+          });
+          if (rpcErr) throw rpcErr;
+        }
+      } catch (linkErr) {
+        // Rollback on linking failure
+        await supabaseAdmin.from('code_finder_users').delete().eq('id', cfUserId);
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        throw linkErr;
       }
 
       return new Response(JSON.stringify({ success: true, user_id: authData.user.id }), {
