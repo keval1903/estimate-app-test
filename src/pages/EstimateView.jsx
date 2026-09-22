@@ -820,7 +820,7 @@ export default function EstimateView() {
                               )}
                             </tr>
                           )}
-                          {estimate?.type === 'ESTIMATE' && estimate?.client_id && !isChallanMode && (
+                          {estimate?.type === 'ESTIMATE' && estimate?.client_id && !isChallanMode && !(activePlatform === 'laminea' && clientBalance === 0) && (
                             <>
                               <tr>
                                 <td colSpan={3} style={{ border: '1px solid #000', padding: '4px 8px', borderRight: 'none' }}></td>
