@@ -1963,7 +1963,7 @@ export default function CreateEstimate() {
                         {itemForm.calculation_type_snapshot === 'SQFT' ? (
                           `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} = ${(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0)).toFixed(2)} Sq.Ft`
                         ) : (
-                          `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} × ₹${itemForm.rate} = ₹${Math.ceil(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0) * (parseFloat(itemForm.rate) || 0)).toLocaleString('en-IN')} (Qty: ${itemForm.nos} ${itemForm.unit_snapshot})`
+                          `${itemForm.length_snapshot} × ${itemForm.width_snapshot} × ${itemForm.nos} × ₹${itemForm.rate} = ₹${Math.ceil(itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0) * (parseFloat(itemForm.rate) || 0)).toLocaleString('en-IN')} (Qty: ${Number((itemForm.length_snapshot * itemForm.width_snapshot * (parseFloat(itemForm.nos) || 0)).toFixed(2))} ${itemForm.unit_snapshot})`
                         )}
                       </div>
                     )}
