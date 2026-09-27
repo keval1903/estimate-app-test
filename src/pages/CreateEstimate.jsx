@@ -206,6 +206,57 @@ export default function CreateEstimate() {
     loadPrefill();
   }, [isEdit, prefillApplied, location.state]);
 
+  // ── Copy from previous estimate/quotation ──
+  const [copyPrefillApplied, setCopyPrefillApplied] = useState(false);
+
+  useEffect(() => {
+    if (isEdit || copyPrefillApplied || !location.state?.copyFromId) return;
+    async function loadCopy() {
+      try {
+        const copyId = location.state.copyFromId;
+        const { data: est, error } = await supabase
+          .from('estimates').select('*').eq('id', copyId).eq('platform', activePlatform).single();
+        if (error || !est) return;
+
+        setClientName(est.client_name || est.transport || '');
+        setClientMobile(est.client_mobile || '');
+        setOrderBy(est.order_by || '');
+        setSiteName(est.site_name || '');
+        setGstPercent(est.gst_percent ? String(est.gst_percent) : '');
+        setDocType('QUOTATION');
+
+        const { data: eitems } = await supabase
+          .from('estimate_items').select('*')
+          .eq('estimate_id', copyId).order('serial_number');
+        if (eitems && eitems.length > 0) {
+          const copiedItems = eitems.map(it => ({
+            product_id: it.product_id,
+            product_name_snapshot: it.product_name_snapshot,
+            alternative_code_snapshot: it.alternative_code_snapshot || null,
+            actual_code_snapshot: it.actual_code_snapshot || null,
+            length_snapshot: it.length_snapshot,
+            width_snapshot: it.width_snapshot,
+            nos: it.nos ?? '',
+            quantity: it.quantity ?? '',
+            unit_snapshot: it.unit_snapshot,
+            rate: it.rate,
+            discount_percent: it.discount_percent ?? '',
+            calculation_type_snapshot: it.calculation_type_snapshot,
+            amount: it.amount,
+            remark: it.remark || ''
+          }));
+          setItems(copiedItems);
+        }
+
+        setCopyPrefillApplied(true);
+        setTimeout(() => showToast('Copied from Bill #' + est.bill_number + ' — save to create new'), 500);
+      } catch (err) {
+        console.error('Failed to load copy source:', err);
+      }
+    }
+    loadCopy();
+  }, [isEdit, copyPrefillApplied, location.state, activePlatform]);
+
   const [prefillSelectionSheetApplied, setPrefillSelectionSheetApplied] = useState(false);
 
   useEffect(() => {
@@ -858,6 +909,8 @@ export default function CreateEstimate() {
     const p = allProducts.find(prod => prod.id === it.product_id)
     const baseRate = p ? (parseFloat(p.rate) || parseFloat(it.rate)) : parseFloat(it.rate)
     const discPercent = it.discount_percent !== undefined && it.discount_percent !== '' ? it.discount_percent : 0
+    setBulkAddMode(false)
+    setBulkSelectedItems([])
     setItemForm({
       ...it,
       base_rate: baseRate,

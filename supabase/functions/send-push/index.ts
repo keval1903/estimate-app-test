@@ -136,10 +136,12 @@ serve(async (req: Request) => {
         console.error(`Push failed for sub ${sub.id}:`, err)
         
         const isExpired = err.statusCode === 404 || err.statusCode === 410
+        const errDetail = err.statusCode ? `FAILED-${err.statusCode}` : 'FAILED-UNKNOWN'
+        
         await supabase.from('push_delivery_log').upsert({
           outbox_id: outboxId,
           subscription_id: sub.id,
-          status: isExpired ? 'EXPIRED' : 'FAILED',
+          status: isExpired ? 'EXPIRED' : errDetail,
           attempted_at: new Date().toISOString()
         }, { onConflict: 'outbox_id,subscription_id' })
 

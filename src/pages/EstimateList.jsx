@@ -454,6 +454,10 @@ export default function EstimateList() {
                         onClick={(e) => { e.stopPropagation(); navigate(`/${activePlatform}/estimate/edit/${est.id}`); }}>
                         ✏️ Edit
                       </button>
+                      <button className="btn btn-secondary btn-sm"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/${activePlatform}/estimate/new`, { state: { copyFromId: est.id } }); }}>
+                        📋 Copy
+                      </button>
                       {activeTab === 'QUOTATION' ? (
                         <button className="btn btn-primary btn-sm"
                           style={{ background: 'var(--success-color, #10b981)', border: 'none', color: '#fff' }}

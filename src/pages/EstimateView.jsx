@@ -578,6 +578,8 @@ export default function EstimateView() {
         )}
         <button className="btn btn-secondary btn-sm"
           onClick={() => navigate(`/${activePlatform}/estimate/edit/${id}`)}>✏️ Edit</button>
+        <button className="btn btn-secondary btn-sm"
+          onClick={() => navigate(`/${activePlatform}/estimate/new`, { state: { copyFromId: id } })}>📋 Copy</button>
         <button className="btn btn-primary btn-sm"
           onClick={handlePrint}>🖨 Print</button>
         <button className="btn btn-secondary btn-sm"

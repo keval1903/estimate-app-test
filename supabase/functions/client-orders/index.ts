@@ -79,7 +79,7 @@ serve(async (req: Request) => {
     const { data: enquiries, error: eqErr } = await supabaseAdmin
       .from('code_finder_enquiries')
       .select(`
-        id, enquiry_number, status, checked_at, created_at, updated_at, confirmed_at,
+        id, enquiry_number, status, checked_at, created_at, updated_at, confirmed_at, order_placed_at,
         code_finder_enquiry_items (
           id, alternative_code_snapshot, requested_quantity
         ),
@@ -107,6 +107,7 @@ serve(async (req: Request) => {
         checked_at: eq.checked_at,
         created_at: eq.created_at,
         confirmed_at: eq.confirmed_at,
+        order_placed_at: eq.order_placed_at,
         code_finder_enquiry_items: (eq.code_finder_enquiry_items || []).map((item: any) => {
           let qty = item.requested_quantity;
           if (acceptedProposal) {
@@ -116,8 +117,9 @@ serve(async (req: Request) => {
             }
           }
           return {
-            alternative_code: item.alternative_code_snapshot,
-            quantity: qty
+            id: item.id,
+            alternative_code_snapshot: item.alternative_code_snapshot,
+            requested_quantity: qty
           };
         })
       }
