@@ -35,7 +35,7 @@ function calcItem(item) {
     const lVal = isNaN(L) || L <= 0 ? 1 : L
     const wVal = isNaN(W) || W <= 0 ? 1 : W
     const amount = Math.ceil(lVal * wVal * nos * rate)
-    const quantity = nos
+    const quantity = lVal * wVal * nos
     return { quantity: +quantity.toFixed(2), amount: amount }
   } else {
     const amount = Math.ceil(qty * rate)
@@ -1057,7 +1057,7 @@ export default function CreateEstimate() {
     const { quantity, amount } = calcItem(itemForm)
     const finalItem = {
       ...itemForm,
-      quantity: isPieceBased ? (itemForm.calculation_type_snapshot === 'SQFT' ? quantity : parseFloat(itemForm.nos)) : parseFloat(itemForm.quantity),
+      quantity: isPieceBased ? quantity : parseFloat(itemForm.quantity),
       amount
     }
 
@@ -1134,7 +1134,7 @@ export default function CreateEstimate() {
       const { quantity, amount } = calcItem(item)
       return {
         ...item,
-        quantity: isPieceBased ? (item.calculation_type_snapshot === 'SQFT' ? quantity : parseFloat(item.nos)) : parseFloat(item.quantity),
+        quantity: isPieceBased ? quantity : parseFloat(item.quantity),
         amount
       }
     })
