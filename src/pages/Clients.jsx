@@ -102,7 +102,7 @@ export default function Clients() {
   async function loadClients() {
     setLoading(true)
     try {
-      const { data: clientData } = await supabase.from('clients').select('*').eq('platform', activePlatform).order('name')
+      const { data: clientData } = await supabase.from('clients').select('*').eq('platform', activePlatform).eq('maintain_ledger', true).order('name')
       const { data: estData } = await supabase.from('estimates').select('client_id, client_name, grand_total, type, is_archived').eq('platform', activePlatform).in('type', ['ESTIMATE', 'DELETED_ESTIMATE', 'RETURN', 'DELETED_RETURN'])
       const { data: payData } = await supabase.from('payments').select('client_id, amount, is_archived').eq('platform', activePlatform)
       const { data: siteNamesData } = await supabase.from('client_sites').select('client_name').eq('platform', activePlatform).is('client_id', null)

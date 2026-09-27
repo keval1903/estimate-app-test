@@ -1763,22 +1763,24 @@ export default function CreateEstimate() {
               <span>Gr. Total</span>
               <span>₹{totals.grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
-            <div className="total-row" style={{ marginTop: 12, alignItems: 'center', background: 'var(--bg)', padding: '12px', borderRadius: '8px', border: '1px dashed var(--border)' }}>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>
-                Prev. Balance (Frozen)
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 4 }}>Locked at generation</div>
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                ₹ <input
-                  type="number"
-                  inputMode="decimal"
-                  value={previousBalance}
-                  onChange={e => setPreviousBalance(e.target.value)}
-                  placeholder="0.00"
-                  style={{ width: 90, padding: '6px 8px', fontSize: 14, textAlign: 'right' }}
-                />
+            {!(activePlatform === 'laminea' && Number(previousBalance) === 0) && (
+              <div className="total-row" style={{ marginTop: 12, alignItems: 'center', background: 'var(--bg)', padding: '12px', borderRadius: '8px', border: '1px dashed var(--border)' }}>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>
+                  Prev. Balance (Frozen)
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 4 }}>Locked at generation</div>
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  ₹ <input
+                    type="number"
+                    inputMode="decimal"
+                    value={previousBalance}
+                    onChange={e => setPreviousBalance(e.target.value)}
+                    placeholder="0.00"
+                    style={{ width: 90, padding: '6px 8px', fontSize: 14, textAlign: 'right' }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>

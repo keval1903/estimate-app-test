@@ -15,6 +15,8 @@ export function CustomerAccountManager({ customer, onUpdate }) {
   const [newClientName, setNewClientName] = useState('');
   const [newClientMobile, setNewClientMobile] = useState('');
   const [newClientContact, setNewClientContact] = useState('');
+  const [maintainLedger, setMaintainLedger] = useState(true);
+  const [openingBalance, setOpeningBalance] = useState('');
 
   useEffect(() => {
     fetchClients();
@@ -137,7 +139,9 @@ export function CustomerAccountManager({ customer, onUpdate }) {
         p_cf_user_id: customer.id,
         p_client_name: newClientName,
         p_mobile: newClientMobile,
-        p_contact_person: newClientContact
+        p_contact_person: newClientContact,
+        p_opening_balance: maintainLedger ? (parseFloat(openingBalance) || 0) : 0,
+        p_maintain_ledger: maintainLedger
       });
       if (rpcErr) throw rpcErr;
       
@@ -248,6 +252,15 @@ export function CustomerAccountManager({ customer, onUpdate }) {
                 <input type="text" placeholder="Client Name *" value={newClientName} onChange={e => setNewClientName(e.target.value)} className="input" />
                 <input type="text" placeholder="Mobile" value={newClientMobile} onChange={e => setNewClientMobile(e.target.value)} className="input" />
                 <input type="text" placeholder="Contact Person" value={newClientContact} onChange={e => setNewClientContact(e.target.value)} className="input" />
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                  <input type="checkbox" id="maintainLedger" checked={maintainLedger} onChange={e => setMaintainLedger(e.target.checked)} />
+                  <label htmlFor="maintainLedger" style={{ fontSize: '13px', cursor: 'pointer' }}>Maintain Ledger for this client?</label>
+                </div>
+                
+                {maintainLedger && (
+                  <input type="number" placeholder="Opening Balance (optional)" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} className="input" />
+                )}
               </div>
               <button 
                 onClick={handleCreateAndLink} 
