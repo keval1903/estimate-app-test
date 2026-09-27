@@ -103,9 +103,11 @@ export function CustomerAccountManager({ customer, onUpdate }) {
     setError(null);
     setSuccess(null);
     try {
-      const { error: rpcErr } = await supabase.rpc('link_code_finder_client', {
+      const { error: rpcErr } = await supabase.rpc('link_code_finder_client_with_ledger', {
         p_cf_user_id: customer.id,
-        p_client_id: selectedClientId
+        p_client_id: selectedClientId,
+        p_opening_balance: maintainLedger ? (parseFloat(openingBalance) || 0) : 0,
+        p_maintain_ledger: maintainLedger
       });
       if (rpcErr) throw rpcErr;
       
@@ -135,7 +137,7 @@ export function CustomerAccountManager({ customer, onUpdate }) {
     setError(null);
     setSuccess(null);
     try {
-      const { error: rpcErr } = await supabase.rpc('create_and_link_laminea_client', {
+      const { error: rpcErr } = await supabase.rpc('create_and_link_laminea_client_with_ledger', {
         p_cf_user_id: customer.id,
         p_client_name: newClientName,
         p_mobile: newClientMobile,
@@ -235,6 +237,17 @@ export function CustomerAccountManager({ customer, onUpdate }) {
                   {customer.laminea_client_id ? 'Change Link' : 'Link Client'}
                 </button>
               </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
+                <input type="checkbox" id="maintainLedgerExisting" checked={maintainLedger} onChange={e => setMaintainLedger(e.target.checked)} />
+                <label htmlFor="maintainLedgerExisting" style={{ fontSize: '13px', cursor: 'pointer' }}>Maintain Ledger for this client?</label>
+              </div>
+              
+              {maintainLedger && (
+                <div style={{ marginTop: '8px' }}>
+                  <input type="number" placeholder="Opening Balance (optional)" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} className="input" />
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ background: '#fff', border: '1px solid var(--border-light)', padding: '12px', borderRadius: '6px' }}>
