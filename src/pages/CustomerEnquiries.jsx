@@ -140,6 +140,11 @@ export default function CustomerEnquiries() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState(null);
   
+  // Edit logic
+  const [editUser, setEditUser] = useState(null);
+  const [editForm, setEditForm] = useState({ client_name: '', contact_person: '', mobile: '' });
+  const [editLoading, setEditLoading] = useState(false);
+  
   // New linking fields
   const [lamineaClients, setLamineaClients] = useState([]);
   const [linkMode, setLinkMode] = useState('CREATE_NEW'); // CREATE_NEW, LINK_EXISTING
@@ -154,6 +159,57 @@ export default function CustomerEnquiries() {
         .catch(console.error);
     }
   }, [showCreateModal]);
+
+  const handleToggleStatus = async (e, customer) => {
+    e.stopPropagation();
+    const actionStr = customer.is_active ? 'disable' : 'enable';
+    if (!window.confirm(`Are you sure you want to ${actionStr} this customer account?`)) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-manage-account`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'UPDATE', user_id: customer.id, is_active: !customer.is_active })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update status');
+      if (activeTab === 'CUSTOMERS') fetchCustomers();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleRemoveCustomer = async (e, customerId) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you absolutely sure you want to permanently remove this customer and all their data? This cannot be undone!')) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-manage-account`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'DELETE', user_id: customerId })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete customer');
+      if (activeTab === 'CUSTOMERS') fetchCustomers();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-manage-account`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'UPDATE', user_id: editUser.id, ...editForm })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update user');
+      setEditUser(null);
+      if (activeTab === 'CUSTOMERS') fetchCustomers();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
@@ -200,6 +256,33 @@ export default function CustomerEnquiries() {
 
   return (
     <div className="app-container">
+      {/* Edit Modal */}
+      {editUser && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '400px', margin: '20px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Edit Customer</h3>
+            <form onSubmit={handleEditSubmit}>
+              <div className="field">
+                <label>Company/Client Name *</label>
+                <input required type="text" value={editForm.client_name} onChange={e => setEditForm({...editForm, client_name: e.target.value})} />
+              </div>
+              <div className="field">
+                <label>Contact Person</label>
+                <input type="text" value={editForm.contact_person} onChange={e => setEditForm({...editForm, contact_person: e.target.value})} />
+              </div>
+              <div className="field">
+                <label>Mobile Number</label>
+                <input type="text" value={editForm.mobile} onChange={e => setEditForm({...editForm, mobile: e.target.value})} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
+                <button type="button" onClick={() => setEditUser(null)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" disabled={editLoading} className="btn btn-primary" style={{ flex: 1 }}>{editLoading ? 'Saving...' : 'Save Changes'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Create Modal */}
       {showCreateModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -440,6 +523,19 @@ export default function CustomerEnquiries() {
                     <span style={{ fontSize: '12px', padding: '2px 8px', background: '#fee2e2', color: '#b91c1c', borderRadius: '4px' }}>
                       Inactive Account
                     </span>
+                  )}
+                  {role === 'ADMIN' && (
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditUser(customer);
+                          setEditForm({ client_name: customer.client_name || '', contact_person: customer.contact_person || '', mobile: customer.mobile || '' });
+                        }} 
+                        className="btn btn-sm btn-secondary" style={{ fontSize: '11px', padding: '2px 6px' }}>Edit</button>
+                      <button onClick={(e) => handleToggleStatus(e, customer)} className="btn btn-sm btn-secondary" style={{ fontSize: '11px', padding: '2px 6px' }}>{customer.is_active ? 'Disable' : 'Enable'}</button>
+                      <button onClick={(e) => handleRemoveCustomer(e, customer.id)} className="btn btn-sm btn-danger" style={{ fontSize: '11px', padding: '2px 6px' }}>Remove</button>
+                    </div>
                   )}
                 </div>
               </div>

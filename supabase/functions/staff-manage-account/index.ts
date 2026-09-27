@@ -105,6 +105,56 @@ serve(async (req: Request) => {
       })
     }
 
+    if (action === 'UPDATE') {
+      const { user_id, client_name, contact_person, mobile, is_active } = payload
+      if (!user_id) throw new Error('Missing user_id')
+
+      const updates: any = {}
+      if (client_name !== undefined) updates.client_name = client_name.trim()
+      if (contact_person !== undefined) updates.contact_person = contact_person ? contact_person.trim() : null
+      if (mobile !== undefined) updates.mobile = mobile ? mobile.trim() : null
+      if (is_active !== undefined) updates.is_active = is_active
+
+      const { error: updateErr } = await supabaseAdmin
+        .from('code_finder_users')
+        .update(updates)
+        .eq('id', user_id)
+        
+      if (updateErr) throw updateErr
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    if (action === 'DELETE') {
+      const { user_id } = payload
+      if (!user_id) throw new Error('Missing user_id')
+
+      const { data: cfUser, error: cfErr } = await supabaseAdmin
+        .from('code_finder_users')
+        .select('auth_user_id')
+        .eq('id', user_id)
+        .single()
+      
+      if (cfErr || !cfUser) throw new Error('User not found')
+
+      const { error: delCfErr } = await supabaseAdmin
+        .from('code_finder_users')
+        .delete()
+        .eq('id', user_id)
+        
+      if (delCfErr) throw delCfErr
+
+      const { error: delAuthErr } = await supabaseAdmin.auth.admin.deleteUser(cfUser.auth_user_id)
+      
+      if (delAuthErr) console.error('Failed to delete auth user:', delAuthErr)
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     if (action === 'RESET_PASSWORD') {
       const { user_id, new_password } = payload
       if (!user_id || !new_password) throw new Error('Missing user_id or new_password')
