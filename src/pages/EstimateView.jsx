@@ -103,7 +103,7 @@ export default function EstimateView() {
   function getSummaryText() {
     const isQuote = estimate?.type === 'QUOTATION'
     const client = estimate?.client_name || estimate?.transport || ''
-    let text = `${isQuote ? 'Quotation' : estimate?.type === 'RETURN' ? 'Sales Return' : 'Estimate'} No. ${estimate?.bill_number}\nDate: ${estimate?.bill_date}\nSite: ${estimate?.site_name}`
+    let text = `${isQuote ? 'Quotation' : estimate?.type === 'RETURN' ? 'Sales Return' : 'Estimate'} No. ${formatBillNumber(estimate?.bill_number)}\nDate: ${estimate?.bill_date}\nSite: ${estimate?.site_name}`
     if (client) text += `\nClient: ${client}`
     if (estimate?.prepared_by) text += `\nPrep. By: ${estimate.prepared_by}`
     text += `\nGrand Total: ₹${Number(estimate?.grand_total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
@@ -663,7 +663,7 @@ export default function EstimateView() {
                             <tbody>
                               {[
                                 ['Date', estimate.bill_date],
-                                ['No.', estimate.bill_number],
+                                ['No.', formatBillNumber(estimate.bill_number)],
                                 ['Prep. By', estimate.prepared_by || ''],
                               ].map(([label, val]) => (
                                 <tr key={label}>
