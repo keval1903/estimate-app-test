@@ -466,14 +466,15 @@ header p {
     padding: 0.6rem;
   }
   .item-row {
-    font-size: 0.85rem;
-    gap: 0.4rem;
+    font-size: 0.75rem;
+    gap: 0.3rem;
+    flex-wrap: nowrap;
   }
   .item-row > span:nth-child(1) {
-    min-width: 60px;
+    min-width: 50px;
   }
   .item-status {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
   }
   .date-text {
     font-size: 0.78rem;
