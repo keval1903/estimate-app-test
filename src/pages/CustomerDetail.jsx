@@ -6,6 +6,7 @@ import { format, isValid } from 'date-fns';
 import { useEnquirySubscription } from '../hooks/useEnquirySubscription';
 import { CustomerAccountManager } from '../components/CustomerAccountManager';
 import { usePlatform } from '../context/PlatformContext';
+import { formatBillNumber } from '../lib/formatters';
 
 const safeFormat = (dateStr, fmt) => {
   if (!dateStr) return 'N/A';
