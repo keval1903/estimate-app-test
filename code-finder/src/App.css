@@ -143,6 +143,14 @@ header p {
   transition: all 0.3s ease;
 }
 
+.input-table td:nth-child(1) input {
+  min-width: 160px;
+}
+
+.input-table td:nth-child(2) input {
+  min-width: 90px;
+}
+
 .input-table input::placeholder {
   color: rgba(255, 255, 255, 0.25);
 }
