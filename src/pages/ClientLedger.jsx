@@ -4,6 +4,7 @@ import { usePlatform } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { restoreStockForEstimates } from '../lib/stockUtils.js'
+import { formatBillNumber } from '../lib/formatters'
 
 function formatLedgerDate(dateStr) {
   if (!dateStr) return '';

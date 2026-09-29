@@ -5,6 +5,7 @@ import { usePlatform, PLATFORM_NAMES } from '../context/PlatformContext'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
+import { formatBillNumber } from '../lib/formatters'
 
 
 function getInternalItemName(item, docType) {

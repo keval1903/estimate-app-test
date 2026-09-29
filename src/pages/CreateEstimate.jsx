@@ -8,6 +8,7 @@ import { isFuzzyMatch } from '../lib/searchUtils'
 import { normalizeSearchQuery } from '../lib/synonyms.js'
 import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
 import { useAuth } from '../context/AuthContext'
+import { formatBillNumber } from '../lib/formatters'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function todayIST() {

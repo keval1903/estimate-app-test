@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../hooks/useToast.jsx'
 import { restoreStockForEstimates } from '../lib/stockUtils.js'
 import { isFuzzyMatch } from '../lib/searchUtils'
+import { formatBillNumber } from '../lib/formatters'
 
 export default function EstimateList() {
   const { role } = useAuth()
