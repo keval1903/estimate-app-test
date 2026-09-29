@@ -83,7 +83,7 @@ export default function EstimateList() {
       const { error } = await supabase.from('estimates').delete().eq('id', est.id).eq('platform', activePlatform)
       if (error) showToast('Delete failed: ' + error.message, 'error')
       else {
-        showToast(`${est.type === 'QUOTATION' ? 'Quotation' : 'Bill'} #${est.bill_number} deleted`)
+        showToast(`${est.type === 'QUOTATION' ? 'Quotation' : 'Bill'} #${formatBillNumber(est.bill_number)} deleted`)
         fetchEstimates()
       }
     } else {
@@ -94,7 +94,7 @@ export default function EstimateList() {
       const { error } = await supabase.from('estimates').update({ type: newType }).eq('id', est.id).eq('platform', activePlatform)
       if (error) showToast('Delete failed: ' + error.message, 'error')
       else {
-        showToast(`Bill #${est.bill_number} marked as deleted`)
+        showToast(`Bill #${formatBillNumber(est.bill_number)} marked as deleted`)
         fetchEstimates()
       }
     }
@@ -149,7 +149,7 @@ export default function EstimateList() {
   }
 
   async function handleQuickConvert(est) {
-    if (!window.confirm(`Convert Quotation #${est.bill_number} to an Estimate? Stock will be deducted.`)) return
+    if (!window.confirm(`Convert Quotation #${formatBillNumber(est.bill_number)} to an Estimate? Stock will be deducted.`)) return
     setConvertingId(est.id)
     try {
       const { data: items } = await supabase.from('estimate_items').select('*').eq('estimate_id', est.id).order('serial_number')
@@ -429,7 +429,7 @@ export default function EstimateList() {
                         <input type="checkbox" checked={selectedIds.has(est.id)} onChange={() => toggleSelect(est.id)} onClick={(e) => e.stopPropagation()} style={{ width: 18, height: 18, marginTop: 4, cursor: 'pointer' }} />
                         <div>
                           <div className="est-bill" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            Bill #{est.bill_number}
+                            Bill #{formatBillNumber(est.bill_number)}
                             <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 400 }}>
                               {est.bill_date.replace(/-/g, '/')}
                             </span>
@@ -510,7 +510,7 @@ export default function EstimateList() {
           <div className="modal-box">
             <div className="modal-title">Delete Estimate</div>
             <p style={{ marginBottom: 8 }}>
-              Delete <strong>Bill #{deleteConfirm.bill_number}</strong>?
+              Delete <strong>Bill #{formatBillNumber(deleteConfirm.bill_number)}</strong>?
             </p>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
               Site: {deleteConfirm.site_name} · ₹{formatTotal(deleteConfirm.grand_total)}<br />

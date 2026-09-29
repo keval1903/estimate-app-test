@@ -211,7 +211,7 @@ export default function EstimateView() {
     const text = getSummaryText()
     if (navigator.share) {
       try {
-        await navigator.share({ title: `Estimate #${estimate.bill_number}`, text })
+        await navigator.share({ title: `Estimate #${formatBillNumber(estimate.bill_number)}`, text })
       } catch { }
     } else {
       try {
@@ -263,7 +263,7 @@ export default function EstimateView() {
             throw new Error("File sharing not supported on this device.")
           }
 
-          await navigator.share({ files: [file], title: `Estimate #${estimate.bill_number}`, text })
+          await navigator.share({ files: [file], title: `Estimate #${formatBillNumber(estimate.bill_number)}`, text })
         } catch (error) {
           if (error.name !== 'AbortError') {
             showToast('Native share failed: ' + error.message, 'error')
@@ -543,7 +543,7 @@ export default function EstimateView() {
       <div className="top-nav no-print">
         <button className="nav-back" onClick={() => navigate(-1)} title="Back">←</button>
         <button className="nav-home" onClick={() => navigate(`/${activePlatform}`)} title="Home">🏠</button>
-        <span className="nav-title">{estimate.type === 'QUOTATION' ? 'Quotation' : estimate.type === 'RETURN' ? 'Sales Return' : 'Estimate'} #{estimate.bill_number} - {PLATFORM_NAMES[activePlatform]}</span>
+        <span className="nav-title">{estimate.type === 'QUOTATION' ? 'Quotation' : estimate.type === 'RETURN' ? 'Sales Return' : 'Estimate'} #{formatBillNumber(estimate.bill_number)} - {PLATFORM_NAMES[activePlatform]}</span>
       </div>
 
       {/* Action buttons */}
@@ -869,7 +869,7 @@ export default function EstimateView() {
                                 </td>
                               </tr>
                               <tr style={{ background: '#f1f5f9' }}>
-                                <td colSpan={3} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none', fontWeight: 600, fontSize: 13 }}>Estimate #{estimate.bill_number}</td>
+                                <td colSpan={3} style={{ border: '1px solid #000', padding: '6px 8px', borderRight: 'none', fontWeight: 600, fontSize: 13 }}>Estimate #{formatBillNumber(estimate.bill_number)}</td>
                                 <td colSpan={2} style={{ border: '1px solid #000', borderLeft: 'none', padding: '6px 4px', textAlign: 'right', fontSize: 14, fontWeight: 700 }}>Total Due</td>
                                 <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'right', fontSize: 15, fontWeight: 800, whiteSpace: 'nowrap' }}>
                                   {fmtMoney(clientBalance + grandTotal)}

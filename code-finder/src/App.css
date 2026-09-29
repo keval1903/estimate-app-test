@@ -280,6 +280,7 @@ header p {
   border-radius: 16px;
   padding: 2.5rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow-x: auto;
 }
 
 .results-card h2 {
@@ -312,7 +313,6 @@ header p {
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  white-space: nowrap;
 }
 
 .results-table td {
@@ -321,7 +321,8 @@ header p {
   border-bottom: 1px solid #f1f5f9;
   font-size: 0.95rem;
   font-weight: 500;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .results-table th:first-child,
@@ -337,7 +338,8 @@ header p {
   border-bottom: none;
 }
 
-.status-avail td:last-child {
+.status-avail td:last-child,
+.item-status.status-avail {
   color: #059669;
   font-weight: 700;
 }
@@ -347,7 +349,8 @@ header p {
   color: #10b981;
 }
 
-.status-confirm td:last-child {
+.status-confirm td:last-child,
+.item-status.status-confirm {
   color: #d97706;
   font-weight: 700;
 }
@@ -357,7 +360,8 @@ header p {
   color: #f59e0b;
 }
 
-.status-error td:last-child {
+.status-error td:last-child,
+.item-status.status-error {
   color: #dc2626;
   font-weight: 700;
 }
@@ -676,12 +680,17 @@ header p {
 .item-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 0.95rem;
+  flex-wrap: wrap;
 }
 .item-row:last-child { border-bottom: none; }
-.item-status { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+.item-row > span:nth-child(1) { flex: 1 1 auto; min-width: 80px; word-break: break-word; }
+.item-row > span:nth-child(2) { flex: 0 0 auto; white-space: nowrap; margin-right: auto; }
+.item-status { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; flex: 0 0 auto; text-align: right; }
 .note-box {
   margin-top: 1.25rem;
   padding: 1rem;

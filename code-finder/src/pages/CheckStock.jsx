@@ -137,7 +137,7 @@ function App() {
       )
 
       const text = [
-        `🏷️ *Laminate Stock Enquiry*`,
+        `🏷️ *Stock Enquiry*`,
         `📅 ${checkedAt}`,
         ``,
         ...lines,
@@ -161,10 +161,10 @@ function App() {
   const [submitting, setSubmitting] = useState(false)
   const [enquiryIdempotencyKey, setEnquiryIdempotencyKey] = useState(null)
   const [lastSubmittedPayload, setLastSubmittedPayload] = useState(null)
-  
+
   const handleSubmitEnquiry = async () => {
     if (results.length === 0) return
-    
+
     // Only submit codes that have valid quantities
     const requests = results.filter(r => r.requestedQuantity !== 'Invalid').map(r => ({
       code: r.code,
@@ -217,7 +217,7 @@ function App() {
   return (
     <div className="container">
       <header>
-        <h1>Laminate Stock Enquiry</h1>
+        <h1>Stock Enquiry</h1>
       </header>
 
       <main>
@@ -226,7 +226,7 @@ function App() {
             <table className="input-table">
               <thead>
                 <tr>
-                  <th>Sheet Name (Code)</th>
+                  <th>Product Code</th>
                   <th>Quantity</th>
                   <th className="action-col"></th>
                 </tr>

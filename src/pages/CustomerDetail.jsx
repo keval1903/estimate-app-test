@@ -60,7 +60,7 @@ function CustomerDetail() {
         .from('code_finder_enquiries')
         .select(`
           *,
-          code_finder_enquiry_items(*),
+          code_finder_enquiry_items(*, products:product_id_snapshot(product_name)),
           code_finder_proposals(
             *,
             code_finder_proposal_items(*)
@@ -587,7 +587,14 @@ function CustomerDetail() {
 
                         return (
                           <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-                            <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.alternative_code_snapshot}</td>
+                            <td style={{ padding: '8px', fontFamily: 'monospace' }}>
+                              <div style={{ fontWeight: '600' }}>{item.alternative_code_snapshot}</div>
+                              {resolved?.current_product_name && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--sans)', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                  ↳ {resolved.current_product_name}
+                                </div>
+                              )}
+                            </td>
                             <td style={{ padding: '8px', textAlign: 'center' }}>
                               {item.requested_quantity}
                               {requiredQuantity !== Number(item.requested_quantity) && (
@@ -640,7 +647,7 @@ function CustomerDetail() {
                       </span>
                       {ord.converted_estimate_id ? (
                         <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 'bold' }}>
-                          Linked: {ord.estimates?.type === 'QUOTATION' ? 'Quotation' : ord.estimates?.type === 'ESTIMATE' ? 'Estimate' : 'Document'} #{ord.estimates?.bill_number || ord.converted_estimate_id.toString().slice(0, 8)}
+                          Linked: {ord.estimates?.type === 'QUOTATION' ? 'Quotation' : ord.estimates?.type === 'ESTIMATE' ? 'Estimate' : 'Document'} #{formatBillNumber(ord.estimates?.bill_number)}
                         </span>
                       ) : customer?.laminea_client_id ? (
                         <button onClick={() => handleCreateEstimate(ord)} className="btn btn-primary btn-sm">
@@ -679,7 +686,14 @@ function CustomerDetail() {
                         }
                         return (
                           <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-                            <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.alternative_code_snapshot}</td>
+                            <td style={{ padding: '8px', fontFamily: 'monospace' }}>
+                              <div style={{ fontWeight: '600' }}>{item.alternative_code_snapshot}</div>
+                              {item.products?.product_name && (
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--sans)', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                  ↳ {item.products.product_name}
+                                </div>
+                              )}
+                            </td>
                             <td style={{ padding: '8px' }}>{displayQty}</td>
                           </tr>
                         );

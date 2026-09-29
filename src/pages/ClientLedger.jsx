@@ -131,7 +131,7 @@ export default function ClientLedger() {
         if (e.type === 'QUOTATION') {
           targetArray.push({
             date: e.bill_date,
-            description: `Quotation #${e.bill_number} (₹${Number(e.grand_total).toFixed(2)})`,
+            description: `Quotation #${formatBillNumber(e.bill_number)} (₹${Number(e.grand_total).toFixed(2)})`,
             debit: 0,
             credit: 0,
             type: 'QUOTE',
@@ -142,7 +142,7 @@ export default function ClientLedger() {
         } else if (e.type === 'RETURN') {
           targetArray.push({
             date: e.bill_date,
-            description: `Sales Return #${e.bill_number}`,
+            description: `Sales Return #${formatBillNumber(e.bill_number)}`,
             debit: 0,
             credit: e.grand_total,
             type: 'RETURN',
@@ -153,7 +153,7 @@ export default function ClientLedger() {
         } else if (e.type === 'DELETED_RETURN') {
           targetArray.push({
             date: e.bill_date,
-            description: `Sales Return #${e.bill_number}`,
+            description: `Sales Return #${formatBillNumber(e.bill_number)}`,
             debit: 0,
             credit: e.grand_total,
             type: 'RETURN',
@@ -165,7 +165,7 @@ export default function ClientLedger() {
         } else if (e.type === 'DELETED_ESTIMATE') {
           targetArray.push({
             date: e.bill_date,
-            description: `Bill #${e.bill_number}`,
+            description: `Bill #${formatBillNumber(e.bill_number)}`,
             debit: e.grand_total,
             credit: 0,
             type: 'BILL',
@@ -177,7 +177,7 @@ export default function ClientLedger() {
         } else {
           targetArray.push({
             date: e.bill_date,
-            description: `Bill #${e.bill_number}`,
+            description: `Bill #${formatBillNumber(e.bill_number)}`,
             debit: e.grand_total,
             credit: 0,
             type: 'BILL',

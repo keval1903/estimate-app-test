@@ -249,7 +249,7 @@ export default function CreateEstimate() {
         }
 
         setCopyPrefillApplied(true);
-        setTimeout(() => showToast('Copied from Bill #' + est.bill_number + ' — save to create new'), 500);
+        setTimeout(() => showToast(`Copied from Bill #${formatBillNumber(est.bill_number)} — save to create new`), 500);
       } catch (err) {
         console.error('Failed to load copy source:', err);
       }

@@ -1479,20 +1479,28 @@ ALTER TABLE selection_sheets ADD CONSTRAINT selection_sheets_platform_check CHEC
   SET search_path = public
   AS $$
   DECLARE
-      next_val INTEGER;
+      v_prefix INTEGER;
+      v_max_val INTEGER;
+      v_next_val INTEGER;
   BEGIN
-      CASE p_platform
-          WHEN 'ccai' THEN
-              RETURN nextval('public.bill_number_seq_ccai'::regclass);
-          WHEN 'dc' THEN
-              RETURN nextval('public.bill_number_seq_dc'::regclass);
-          WHEN 'laminea' THEN
-              RETURN nextval('public.bill_number_seq_laminea'::regclass);
-          WHEN 'phs' THEN
-              RETURN nextval('public.bill_number_seq_phs'::regclass);
-          ELSE
-              RAISE EXCEPTION 'Unknown platform %', p_platform;
-      END CASE;
+      -- prefix format: YYMM (e.g. 2610 for Oct 2026)
+      v_prefix := TO_CHAR(CURRENT_DATE, 'YYMM')::INTEGER;
+      
+      -- Find max for the given platform that starts with this prefix
+      SELECT MAX(bill_number) INTO v_max_val
+      FROM estimates
+      WHERE platform = p_platform
+        AND bill_number >= (v_prefix * 1000)
+        AND bill_number < ((v_prefix + 1) * 1000);
+        
+      IF v_max_val IS NULL THEN
+          -- First bill of the month: 2610001
+          v_next_val := (v_prefix * 1000) + 1;
+      ELSE
+          v_next_val := v_max_val + 1;
+      END IF;
+      
+      RETURN v_next_val;
   END;
   $$;
   
@@ -1622,7 +1630,7 @@ CREATE TABLE IF NOT EXISTS laminea_product_codes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL
         REFERENCES products(id)
-        ON DELETE RESTRICT,
+        ON DELETE CASCADE,
     alternative_code TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1659,6 +1667,22 @@ CREATE TABLE IF NOT EXISTS laminea_code_audit (
 CREATE OR REPLACE FUNCTION check_laminea_code_audit_immutable()
 RETURNS TRIGGER AS $$
 BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        -- Allow updates if they are only setting foreign keys to NULL (due to ON DELETE SET NULL)
+        IF NEW.id = OLD.id 
+           AND NEW.action = OLD.action 
+           AND NEW.alternative_code = OLD.alternative_code
+           AND NEW.reason IS NOT DISTINCT FROM OLD.reason
+           AND NEW.import_batch_id IS NOT DISTINCT FROM OLD.import_batch_id
+           AND NEW.created_at = OLD.created_at
+           AND (NEW.previous_product_id IS NOT DISTINCT FROM OLD.previous_product_id OR NEW.previous_product_id IS NULL)
+           AND (NEW.new_product_id IS NOT DISTINCT FROM OLD.new_product_id OR NEW.new_product_id IS NULL)
+           AND (NEW.actor IS NOT DISTINCT FROM OLD.actor OR NEW.actor IS NULL)
+        THEN
+            RETURN NEW;
+        END IF;
+    END IF;
+
     RAISE EXCEPTION 'Audit records are immutable and cannot be updated or deleted.';
 END;
 $$ LANGUAGE plpgsql;
@@ -4222,7 +4246,7 @@ CREATE TABLE public.code_finder_enquiries (
 
     code_finder_user_id UUID NOT NULL
         REFERENCES public.code_finder_users(id)
-        ON DELETE RESTRICT,
+        ON DELETE CASCADE,
 
     status TEXT NOT NULL DEFAULT 'NEW'
         CHECK (status IN (
@@ -4330,7 +4354,7 @@ CREATE TABLE public.code_finder_messages (
 
     FOREIGN KEY (enquiry_id, code_finder_user_id)
         REFERENCES public.code_finder_enquiries(id, code_finder_user_id)
-        ON DELETE RESTRICT
+        ON DELETE CASCADE
 );
 
 CREATE INDEX code_finder_messages_user_created_idx
@@ -4917,9 +4941,12 @@ BEGIN
   RAISE EXCEPTION 'Alternative-code normalization function missing.';
  END IF;
 END $$;
-CREATE FUNCTION public.cf8_require_staff() RETURNS void
+CREATE OR REPLACE FUNCTION public.cf8_require_staff() RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
+ IF current_setting('request.jwt.claims', true)::jsonb ->> 'role' = 'service_role' THEN
+  RETURN;
+ END IF;
  IF NOT EXISTS (SELECT 1 FROM public.user_roles
  WHERE id=auth.uid() AND is_active IS TRUE AND role IN ('ADMIN','STAFF'))
  OR public.is_active_staff() IS DISTINCT FROM TRUE THEN
