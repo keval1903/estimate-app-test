@@ -440,6 +440,45 @@ header p {
   }
   .app-content {
     padding: 1rem;
+    overflow-x: hidden;
+  }
+  /* Card mobile fixes */
+  .page-container {
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .item-card {
+    padding: 1rem;
+  }
+  .card-header {
+    gap: 0.5rem;
+  }
+  .card-header h3 {
+    font-size: 1.1rem;
+  }
+  .status-badge {
+    font-size: 0.65rem;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .items-list {
+    padding: 0.6rem;
+  }
+  .item-row {
+    font-size: 0.85rem;
+    gap: 0.4rem;
+  }
+  .item-row > span:nth-child(1) {
+    min-width: 60px;
+  }
+  .item-status {
+    font-size: 0.7rem;
+  }
+  .date-text {
+    font-size: 0.78rem;
+    margin-bottom: 0.75rem;
   }
 }
 
