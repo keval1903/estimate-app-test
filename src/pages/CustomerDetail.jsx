@@ -522,7 +522,10 @@ function CustomerDetail() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>Enquiry #{enq.enquiry_number}</div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{safeFormat(enq.created_at, 'MMM d, yyyy h:mm a')}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {safeFormat(enq.created_at, 'MMM d, yyyy h:mm a')}
+                        {enq.ordered_by && <span style={{ marginLeft: '8px' }}>&bull; By: {enq.ordered_by}</span>}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#fef3c7', color: '#92400e', borderRadius: '12px', whiteSpace: 'nowrap' }}>
@@ -640,7 +643,10 @@ function CustomerDetail() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>Order #{ord.enquiry_number}</div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Confirmed on {safeFormat(ord.confirmed_at || ord.updated_at || ord.created_at, 'MMM d, yyyy h:mm a')}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                        Confirmed on {safeFormat(ord.confirmed_at || ord.updated_at || ord.created_at, 'MMM d, yyyy h:mm a')}
+                        {ord.ordered_by && <span style={{ marginLeft: '8px' }}>&bull; By: {ord.ordered_by}</span>}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <span style={{ padding: '2px 8px', fontSize: '12px', fontWeight: 'bold', background: '#dcfce7', color: '#166534', borderRadius: '12px' }}>

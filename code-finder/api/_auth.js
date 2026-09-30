@@ -39,7 +39,7 @@ export async function getAuthenticatedUser(req, headers, options = {}) {
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_ANON_KEY) {
-    throw new Error('Server misconfiguration');
+    throw new Error(`Server misconfig: URL=${!!SUPABASE_URL}, SRK=${!!SUPABASE_SERVICE_ROLE_KEY}, ANON=${!!SUPABASE_ANON_KEY}`);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

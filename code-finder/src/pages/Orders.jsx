@@ -45,6 +45,7 @@ export default function Orders() {
                   ? `Order Date: ${new Date(order.order_placed_at).toLocaleString()}`
                   : `Enquiry Date: ${new Date(order.checked_at || order.created_at).toLocaleString()}`}
               </p>
+              {order.ordered_by && <p className="date-text" style={{ marginTop: '-8px' }}>By: {order.ordered_by}</p>}
               
               <div className="items-list">
                 {order.code_finder_enquiry_items?.map(item => (

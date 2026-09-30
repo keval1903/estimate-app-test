@@ -189,7 +189,11 @@ function App() {
       const res = await fetch('/api/enquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests, idempotency_key: key })
+        body: JSON.stringify({ 
+          requests, 
+          idempotency_key: key,
+          ordered_by: localStorage.getItem('cf_team_member') || ''
+        })
       })
       const data = await res.json()
 
@@ -198,8 +202,8 @@ function App() {
       }
 
       const msg = data.duplicate
-        ? `Enquiry #${data.enquiry_number} was already submitted.`
-        : `Enquiry #${data.enquiry_number} submitted successfully! You can view it in the Enquiries tab.`
+        ? `This enquiry was already submitted.`
+        : `Enquiry submitted successfully! You can view it in the Enquiries tab.`
       alert(msg)
       // Clear form and reset idempotency key
       setResults([])

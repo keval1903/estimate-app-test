@@ -36,6 +36,7 @@ export default function LamineaCodes() {
 
   const [search, setSearch] = useState('')
   const [searchBy, setSearchBy] = useState('alternative_code') // 'alternative_code' | 'product_code' | 'product_name'
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   useEffect(() => {
     if (activePlatform !== 'laminea') {
@@ -110,6 +111,43 @@ export default function LamineaCodes() {
       loadData()
     } catch (e) {
       showToast('Failed to update status: ' + e.message, 'error')
+    }
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredCodes.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredCodes.map(c => c.id)))
+    }
+  }
+
+  async function handleBulkDelete() {
+    const count = selectedIds.size
+    if (!count) return
+    if (!window.confirm(`Delete ${count} selected code${count > 1 ? 's' : ''}? This cannot be undone.`)) return
+    const typed = window.prompt(`Type DELETE to confirm permanent deletion of ${count} code${count > 1 ? 's' : ''}:`)
+    if (typed !== 'DELETE') { showToast('Deletion cancelled', 'error'); return }
+    try {
+      const { error } = await supabase
+        .from('laminea_product_codes')
+        .delete()
+        .in('id', [...selectedIds])
+      
+      if (error) throw error
+      showToast(`${count} code${count > 1 ? 's' : ''} deleted ✓`)
+      setSelectedIds(new Set())
+      loadData()
+    } catch (e) {
+      showToast('Failed to delete: ' + e.message, 'error')
     }
   }
 
@@ -402,10 +440,25 @@ export default function LamineaCodes() {
           </select>
         </div>
 
+        {role === 'ADMIN' && selectedIds.size > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', marginBottom: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#991b1b' }}>{selectedIds.size} selected</span>
+            <button className="btn btn-sm" onClick={handleBulkDelete} style={{ background: '#dc2626', color: '#fff', border: 'none', fontWeight: 600 }}>
+              🗑 Delete Selected
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())} style={{ color: '#6b7280' }}>Clear</button>
+          </div>
+        )}
+
         <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid #e5e7eb' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                {role === 'ADMIN' && (
+                  <th style={{ padding: '10px 8px', width: 36, textAlign: 'center' }}>
+                    <input type="checkbox" checked={filteredCodes.length > 0 && selectedIds.size === filteredCodes.length} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
+                  </th>
+                )}
                 <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>Alternative Code</th>
                 <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>Product Code</th>
                 <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151' }}>Product Name</th>
@@ -415,12 +468,17 @@ export default function LamineaCodes() {
             </thead>
             <tbody>
               {filteredCodes.length === 0 ? (
-                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#9ca3af' }}>
+                <tr><td colSpan={role === 'ADMIN' ? 6 : 5} style={{ textAlign: 'center', padding: '24px', color: '#9ca3af' }}>
                   {codes.length === 0 ? 'No codes mapped yet. Use "+ Add Code" to create one.' : `No results for "${search}"`}
                 </td></tr>
               ) : (
                 filteredCodes.map((c, i) => (
-                  <tr key={c.id} style={{ opacity: c.is_active ? 1 : 0.5, borderBottom: '1px solid #f3f4f6', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                  <tr key={c.id} style={{ opacity: c.is_active ? 1 : 0.5, borderBottom: '1px solid #f3f4f6', background: selectedIds.has(c.id) ? '#fef2f2' : i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                    {role === 'ADMIN' && (
+                      <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                        <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleSelect(c.id)} style={{ cursor: 'pointer' }} />
+                      </td>
+                    )}
                     <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--accent, #7c5c2e)', fontFamily: 'monospace', fontSize: 15 }}>{c.alternative_code}</td>
                     <td style={{ padding: '10px 14px', color: '#374151', fontFamily: 'monospace' }}>{c.products?.product_code || <span style={{ color: '#d1d5db' }}>—</span>}</td>
                     <td style={{ padding: '10px 14px', color: '#374151' }}>
@@ -451,6 +509,7 @@ export default function LamineaCodes() {
                             {c.is_active ? '🚫 Disable' : '🔄 Enable'}
                           </button>
                         )}
+
                     </td>
                   </tr>
                 ))

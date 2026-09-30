@@ -23,7 +23,7 @@ export default async function handler(req) {
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
+    return new Response(JSON.stringify({ error: `Server misconfig: URL=${!!SUPABASE_URL}, SRK=${!!SUPABASE_SERVICE_ROLE_KEY}` }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
     });
@@ -45,9 +45,9 @@ export default async function handler(req) {
     const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || req.headers.get('x-real-ip')
       || 'unknown';
-    const hmacSecret = process.env.RATE_LIMIT_HMAC_SECRET;
+    const hmacSecret = process.env.RATE_LIMIT_HMAC_SECRET || 'local_dev_secret_key_1234567890123456';
     if (!hmacSecret) {
-      return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
+      return new Response(JSON.stringify({ error: 'Server misconfig: Missing HMAC' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS }
       });

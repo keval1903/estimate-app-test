@@ -86,6 +86,7 @@ export default function Enquiries() {
                 <span className={`status-badge ${eq.status.toLowerCase()}`}>{eq.status.replace(/_/g, ' ')}</span>
               </div>
               <p className="date-text">Submitted: {new Date(eq.created_at).toLocaleString()}</p>
+              {eq.ordered_by && <p className="date-text" style={{ marginTop: '-8px' }}>By: {eq.ordered_by}</p>}
 
               <div className="items-list">
                 {eq.code_finder_enquiry_items?.map(item => (

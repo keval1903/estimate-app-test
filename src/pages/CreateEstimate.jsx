@@ -163,6 +163,9 @@ export default function CreateEstimate() {
         if (enq.code_finder_users?.mobile) {
           setClientMobile(enq.code_finder_users.mobile);
         }
+        if (enq.ordered_by) {
+          setOrderBy(enq.ordered_by);
+        }
         
         if (data && Array.isArray(data)) {
           const prefillItems = data.map(it => {

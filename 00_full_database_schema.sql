@@ -4269,6 +4269,11 @@ CREATE TABLE public.code_finder_enquiries (
             internal_note IS NULL
             OR LENGTH(internal_note) <= 5000
         ),
+    ordered_by TEXT
+        CONSTRAINT code_finder_enquiries_ordered_by_check CHECK (
+            ordered_by IS NULL
+            OR LENGTH(TRIM(ordered_by)) BETWEEN 1 AND 100
+        ),
 
     converted_estimate_id UUID
         REFERENCES public.estimates(id)
@@ -4442,12 +4447,17 @@ WHERE idempotency_key IS NOT NULL;
 -- not auth.users.id.
 -- =============================================================================
 
+DROP FUNCTION IF EXISTS public.create_code_finder_enquiry(
+    UUID, JSONB, TEXT, TIMESTAMPTZ, TEXT
+);
+
 CREATE OR REPLACE FUNCTION public.create_code_finder_enquiry(
     p_user_id UUID,
     p_items JSONB,
     p_client_note TEXT DEFAULT NULL,
     p_checked_at TIMESTAMPTZ DEFAULT NOW(),
-    p_idempotency_key TEXT DEFAULT NULL
+    p_idempotency_key TEXT DEFAULT NULL,
+    p_ordered_by TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -4507,6 +4517,11 @@ BEGIN
     IF p_client_note IS NOT NULL
        AND LENGTH(p_client_note) > 2000 THEN
         RAISE EXCEPTION 'Client note cannot exceed 2000 characters.';
+    END IF;
+
+    IF p_ordered_by IS NOT NULL
+       AND LENGTH(TRIM(p_ordered_by)) > 100 THEN
+        RAISE EXCEPTION 'Ordered by cannot exceed 100 characters.';
     END IF;
 
     IF p_items IS NULL
@@ -4615,14 +4630,16 @@ BEGIN
         status,
         client_note,
         checked_at,
-        idempotency_key
+        idempotency_key,
+        ordered_by
     )
     VALUES (
         p_user_id,
         'NEW',
         NULLIF(TRIM(p_client_note), ''),
         v_checked_at,
-        v_idempotency_key
+        v_idempotency_key,
+        NULLIF(TRIM(p_ordered_by), '')
     )
     ON CONFLICT (
         code_finder_user_id,
@@ -4696,6 +4713,7 @@ REVOKE ALL ON FUNCTION public.create_code_finder_enquiry(
     JSONB,
     TEXT,
     TIMESTAMPTZ,
+    TEXT,
     TEXT
 ) FROM PUBLIC, anon, authenticated;
 
@@ -4704,6 +4722,7 @@ GRANT EXECUTE ON FUNCTION public.create_code_finder_enquiry(
     JSONB,
     TEXT,
     TIMESTAMPTZ,
+    TEXT,
     TEXT
 ) TO service_role;
 

@@ -40,6 +40,7 @@ function AuthProvider({ children }) {
   const login = (userData) => setUser(userData);
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
+    localStorage.removeItem('cf_team_member');
     setUser(null);
   };
 
@@ -72,6 +73,23 @@ function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isSupported, isSubscribed, subscribe, unsubscribe, loading } = usePushNotifications();
+  const [teamMember, setTeamMember] = useState(localStorage.getItem('cf_team_member') || '');
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+
+  useEffect(() => {
+    if (!teamMember) {
+      setShowNameModal(true);
+    }
+  }, [teamMember]);
+
+  const handleSaveName = (e) => {
+    e.preventDefault();
+    if (!nameInput.trim()) return;
+    localStorage.setItem('cf_team_member', nameInput.trim());
+    setTeamMember(nameInput.trim());
+    setShowNameModal(false);
+  };
 
   return (
     <div className="app-layout">
@@ -91,7 +109,14 @@ function Layout({ children }) {
                 {isSubscribed ? <Bell size={18} /> : <BellOff size={18} />}
               </button>
             )}
-            <span className="client-name"><User size={16} /> {user?.client_name}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', marginRight: '10px' }}>
+              <span className="client-name" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><User size={16} /> {user?.client_name}</span>
+              {teamMember && (
+                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  By: {teamMember}
+                </span>
+              )}
+            </div>
             <button onClick={() => { logout(); navigate('/login'); }} className="btn-logout" title="Logout">
               <LogOut size={18} />
             </button>
@@ -132,6 +157,34 @@ function Layout({ children }) {
       <main className="app-content">
         {children}
       </main>
+
+      {showNameModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '8px', width: '90%', maxWidth: '400px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ margin: '0 0 16px 0' }}>Who is placing orders?</h3>
+            <p style={{ margin: '0 0 16px 0', fontSize: '0.9rem', color: '#64748b' }}>
+              Please enter your first name. This helps us know who from your team is placing enquiries or orders.
+            </p>
+            <form onSubmit={handleSaveName}>
+              <input
+                type="text"
+                autoFocus
+                required
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                placeholder="Enter your name..."
+                style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', marginBottom: '16px', boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                {teamMember && (
+                  <button type="button" onClick={() => setShowNameModal(false)} style={{ padding: '8px 16px', borderRadius: '4px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}>Cancel</button>
+                )}
+                <button type="submit" style={{ padding: '8px 16px', borderRadius: '4px', border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>Save Name</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

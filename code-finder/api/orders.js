@@ -62,7 +62,7 @@ export default async function handler(req) {
 
     const fetchOptions = {
       method: req.method,
-      cache: 'no-store, no-cache, must-revalidate',
+      cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
         'x-code-finder-secret': PROXY_SECRET,
@@ -79,6 +79,6 @@ export default async function handler(req) {
     });
   } catch (err) {
     console.error('Proxy Error:', err);
-    return createErrorResponse('Failed to communicate with orders service', 502);
+    return createErrorResponse(`Failed to communicate with orders service: ${err.message}`, 502);
   }
 }

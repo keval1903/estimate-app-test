@@ -93,7 +93,7 @@ serve(async (req: Request) => {
       const { data: enquiries, error: eqErr } = await supabaseAdmin
         .from('code_finder_enquiries')
         .select(`
-          id, enquiry_number, status, client_note, checked_at, created_at,
+          id, enquiry_number, status, client_note, checked_at, created_at, ordered_by,
           code_finder_enquiry_items (
             id, alternative_code_snapshot, requested_quantity, availability_status
           ),
@@ -148,6 +148,7 @@ serve(async (req: Request) => {
       const requests = payload.requests || []
       const clientNote = payload.client_note || null
       const idempotencyKey = payload.idempotency_key || null
+      const orderedBy = payload.ordered_by || null
 
       if (!Array.isArray(requests) || requests.length === 0) {
         return new Response(JSON.stringify({ error: 'No items provided' }), { status: 400, headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } })
@@ -235,7 +236,8 @@ serve(async (req: Request) => {
         p_items: itemsForRpc,
         p_client_note: clientNote,
         p_checked_at: checkedAt,
-        p_idempotency_key: idempotencyKey
+        p_idempotency_key: idempotencyKey,
+        p_ordered_by: orderedBy
       })
 
       if (rpcErr) throw rpcErr
