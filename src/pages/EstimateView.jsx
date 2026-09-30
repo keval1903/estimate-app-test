@@ -112,7 +112,7 @@ export default function EstimateView() {
 
   async function generateCanvas(el, scale = 2, targetWidth = '680px', addPadding = false) {
     const { default: html2canvas } = await import('html2canvas')
-    const targetEl = el
+    const targetEl = (addPadding && el.querySelector('.estimate-page')) || el
 
     // Force exact width so canvas aspect ratio perfectly matches physical paper sizes
     const originalWidth = targetEl.style.width
