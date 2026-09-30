@@ -112,7 +112,7 @@ export default function EstimateView() {
 
   async function generateCanvas(el, scale = 2, targetWidth = '680px', addPadding = false) {
     const { default: html2canvas } = await import('html2canvas')
-    const targetEl = (addPadding && el.querySelector('table')) || el
+    const targetEl = el
 
     // Force exact width so canvas aspect ratio perfectly matches physical paper sizes
     const originalWidth = targetEl.style.width
@@ -621,12 +621,12 @@ export default function EstimateView() {
                         </>
                       ) : (
                         <>
-                          <col style={{ width: 42 }} />
+                          <col style={{ width: 38 }} />
                           <col style={{ width: 'auto' }} />
-                          <col style={{ width: isChallanMode ? 55 : 52 }} />
-                          <col style={{ width: isChallanMode ? 100 : 74 }} />
-                          {!isChallanMode && <col style={{ width: 78 }} />}
-                          {!isChallanMode && <col style={{ width: 110 }} />}
+                          <col style={{ width: isChallanMode ? 55 : 42 }} />
+                          <col style={{ width: isChallanMode ? 100 : 68 }} />
+                          {!isChallanMode && <col style={{ width: 70 }} />}
+                          {!isChallanMode && <col style={{ width: 100 }} />}
                         </>
                       )}
                     </colgroup>
