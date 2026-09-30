@@ -471,7 +471,7 @@ export default function EstimateView() {
 
       let extraRows = (estimate?.type === 'ESTIMATE' && estimate?.client_id) ? 4 : 2;
       if (Number(estimate?.gst_percent) > 0) {
-        extraRows += 2;
+        extraRows += 3;
       }
 
       // If remaining items + extra totals rows fits within the squeeze limit
@@ -623,8 +623,8 @@ export default function EstimateView() {
                         <>
                           <col style={{ width: 42 }} />
                           <col style={{ width: 'auto' }} />
-                          <col style={{ width: isChallanMode ? 55 : 42 }} />
-                          <col style={{ width: isChallanMode ? 100 : 68 }} />
+                          <col style={{ width: isChallanMode ? 55 : 52 }} />
+                          <col style={{ width: isChallanMode ? 100 : 74 }} />
                           {!isChallanMode && <col style={{ width: 78 }} />}
                           {!isChallanMode && <col style={{ width: 110 }} />}
                         </>
@@ -800,10 +800,10 @@ export default function EstimateView() {
                             <>
                               <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
                                 <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
-                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13, whiteSpace: 'nowrap' }}>
                                   {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
                                 </td>
-                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                                <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13, whiteSpace: 'nowrap' }}>
                                   {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
                                 </td>
                                 {!isChallanMode && (
@@ -840,10 +840,10 @@ export default function EstimateView() {
                           ) : (
                             <tr style={{ background: '#f9f9f9', fontWeight: 700 }}>
                               <td colSpan={2} style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'center', fontSize: 13 }}>Total</td>
-                              <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                              <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13, whiteSpace: 'nowrap' }}>
                                 {totalNos % 1 === 0 ? totalNos : totalNos.toFixed(2)}
                               </td>
-                              <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13 }}>
+                              <td style={{ border: '1px solid #000', padding: '6px 6px', textAlign: 'center', fontSize: 13, whiteSpace: 'nowrap' }}>
                                 {totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2)}
                               </td>
                               {!isChallanMode && (
@@ -896,6 +896,11 @@ export default function EstimateView() {
                       )}
                     </tbody>
                   </table>
+                  {page.isLast && !isChallanMode && !isPackingMode && !(estimate?.gst_percent > 0) && (
+                    <div style={{ textAlign: 'left', fontSize: 10, fontStyle: 'italic', color: '#555', marginTop: 4, paddingLeft: 4 }}>
+                      * GST 18<span style={{ fontSize: '0.85em' }}>%</span> extra applicable
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
