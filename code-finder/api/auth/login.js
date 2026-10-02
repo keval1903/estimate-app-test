@@ -45,7 +45,7 @@ export default async function handler(req) {
     const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || req.headers.get('x-real-ip')
       || 'unknown';
-    const hmacSecret = process.env.RATE_LIMIT_HMAC_SECRET || 'local_dev_secret_key_1234567890123456';
+    const hmacSecret = process.env.RATE_LIMIT_HMAC_SECRET;
     if (!hmacSecret) {
       return new Response(JSON.stringify({ error: 'Server misconfig: Missing HMAC' }), {
         status: 500,

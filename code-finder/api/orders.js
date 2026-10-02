@@ -22,10 +22,7 @@ export default async function handler(req) {
     if (authError) return authError;
 
     const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const SUPABASE_FUNCTION_URL = process.env.SUPABASE_CLIENT_ORDERS_URL || `${SUPABASE_URL}/functions/v1/client-orders`;
-    const PROXY_SECRET = process.env.CODE_FINDER_PROXY_SECRET;
-
-    if (!SUPABASE_URL || !SUPABASE_FUNCTION_URL || !PROXY_SECRET) {
+    if (!SUPABASE_URL) {
       return createErrorResponse('Server misconfiguration', 500);
     }
 
@@ -51,7 +48,8 @@ export default async function handler(req) {
       });
 
       if (error) {
-        return createErrorResponse(error.message, 400);
+        console.error('Order Error:', error);
+        return createErrorResponse('Failed to place order', 400);
       }
 
       return new Response(JSON.stringify({ success: true, order: orderData }), {
@@ -89,6 +87,7 @@ export default async function handler(req) {
           checked_at,
           created_at,
           ordered_by,
+          order_placed_at,
           code_finder_enquiry_items (
             id,
             alternative_code_snapshot,
@@ -121,9 +120,29 @@ export default async function handler(req) {
         return createErrorResponse('Failed to fetch orders from database', 500);
       }
       
+      // Apply accepted proposal quantities
+      const processedOrders = data.map(order => {
+        const acceptedProposal = order.code_finder_proposals?.find(p => p.response === 'ACCEPTED' && p.superseded_at === null);
+        
+        if (acceptedProposal && acceptedProposal.code_finder_proposal_items) {
+          const proposedQtys = {};
+          for (const pi of acceptedProposal.code_finder_proposal_items) {
+            proposedQtys[pi.enquiry_item_id] = pi.proposed_quantity;
+          }
+          
+          order.code_finder_enquiry_items = order.code_finder_enquiry_items.map(item => {
+            if (proposedQtys[item.id] !== undefined) {
+              return { ...item, requested_quantity: proposedQtys[item.id] };
+            }
+            return item;
+          });
+        }
+        return order;
+      });
+      
       const hasMore = count > to + 1;
 
-      return new Response(JSON.stringify({ orders: data, hasMore, page }), {
+      return new Response(JSON.stringify({ orders: processedOrders, hasMore, page }), {
         status: 200,
         headers: headers
       });

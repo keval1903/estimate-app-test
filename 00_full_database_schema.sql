@@ -7706,13 +7706,23 @@ BEGIN
             NOW()
         );
     ELSIF NEW.sender_type = 'STAFF' THEN
-        INSERT INTO public.notification_outbox (event_type, event_payload, notification_tag, next_retry_at)
-        VALUES (
-            'NEW_STAFF_MESSAGE', 
-            jsonb_build_object('code_finder_user_id', NEW.code_finder_user_id),
-            'staff_message:' || NEW.code_finder_user_id,
-            NOW()
-        );
+        DECLARE
+            v_target_user_id UUID;
+        BEGIN
+            SELECT auth_user_id INTO v_target_user_id FROM public.code_finder_users WHERE id = NEW.code_finder_user_id;
+            
+            IF v_target_user_id IS NOT NULL THEN
+                INSERT INTO public.notification_outbox (event_type, event_payload, notification_tag, target_audience, target_user_id, next_retry_at)
+                VALUES (
+                    'NEW_STAFF_MESSAGE', 
+                    jsonb_build_object('code_finder_user_id', NEW.code_finder_user_id),
+                    'staff_message:' || NEW.code_finder_user_id,
+                    'USER',
+                    v_target_user_id,
+                    NOW()
+                );
+            END IF;
+        END;
     END IF;
     RETURN NEW;
 END;

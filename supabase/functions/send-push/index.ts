@@ -86,6 +86,9 @@ serve(async (req: Request) => {
     } else if (claim.event_type === 'NEW_MESSAGE') {
       body = claim.target_audience === 'USER' ? 'You have a new message from Support' : 'A customer sent a new message'
       url = claim.target_audience === 'USER' ? '/app/chat' : '/laminea/customer-enquiries'
+    } else if (claim.event_type === 'NEW_STAFF_MESSAGE') {
+      body = 'You have a new message from Support'
+      url = '/app/chat'
     } else if (claim.event_type === 'PROPOSAL_RESPONSE') {
       body = `Customer responded to a proposal: ${claim.event_payload.response}`
     }

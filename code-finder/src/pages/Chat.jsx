@@ -118,7 +118,6 @@ export default function Chat() {
       
       const sentMsg = data.message;
       setMessages(prev => [...prev, sentMsg]);
-      lastTimestampRef.current = `${sentMsg.created_at},${sentMsg.id}`;
       setNewMessage('');
       setReplyingTo(null);
     } catch (err) {

@@ -81,7 +81,7 @@ export default async function handler(req) {
 
     if (rpcErr) {
       console.error('Proposal Response Error:', rpcErr);
-      return createErrorResponse(rpcErr.message, 400);
+      return createErrorResponse('Failed to save response', 400);
     }
 
     return new Response(JSON.stringify({ success: true }), {

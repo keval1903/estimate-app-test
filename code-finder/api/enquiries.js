@@ -114,7 +114,7 @@ export default async function handler(req) {
 
     if (req.method === 'POST') {
       const body = await req.json();
-      const { requests = [], client_note, checked_at, idempotency_key, ordered_by } = body;
+      const { requests = [], client_note, idempotency_key, ordered_by } = body;
       
       if (!Array.isArray(requests) || requests.length === 0) {
         return createErrorResponse('No items provided', 400);
@@ -153,7 +153,7 @@ export default async function handler(req) {
 
       // Format items for create_code_finder_enquiry
       // Note: The cf8_capture_mapping trigger automatically fills in product_id_snapshot
-      const checkedAt = checked_at || new Date().toISOString();
+      const checkedAt = new Date().toISOString();
       const statusMap = {
         'AVAILABLE': 'AVAILABLE',
         'PLEASE CONFIRM WITH US': 'PLEASE_CONFIRM',
@@ -180,7 +180,7 @@ export default async function handler(req) {
 
       if (createErr) {
         console.error('Enquiry Create Error:', createErr);
-        return createErrorResponse(createErr.message, 400);
+        return createErrorResponse('Failed to create enquiry', 400);
       }
 
       return new Response(JSON.stringify({ 

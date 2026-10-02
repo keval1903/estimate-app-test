@@ -67,9 +67,16 @@ export default async function handler(req) {
         const afterTs = parts[0];
         const afterId = parts[1];
         
+        if (afterId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(afterId)) {
+          return createErrorResponse('Invalid cursor ID format', 400);
+        }
+        if (afterTs && isNaN(Date.parse(afterTs))) {
+          return createErrorResponse('Invalid cursor timestamp format', 400);
+        }
+        
         if (afterId) {
           query = query.or(`created_at.gt.${afterTs},and(created_at.eq.${afterTs},id.gt.${afterId})`);
-        } else {
+        } else if (afterTs) {
           query = query.gt('created_at', afterTs);
         }
         query = query.order('created_at', { ascending: true }).order('id', { ascending: true }).limit(100);
@@ -133,7 +140,7 @@ export default async function handler(req) {
 
       if (insertErr) {
         console.error('Messages POST error:', insertErr);
-        return createErrorResponse(insertErr.message, 400);
+        return createErrorResponse('Failed to send message', 400);
       }
 
       return new Response(JSON.stringify({ message: newMessage }), {
