@@ -37,6 +37,23 @@ export default function LamineaCodes() {
   const [search, setSearch] = useState('')
   const [searchBy, setSearchBy] = useState('alternative_code') // 'alternative_code' | 'product_code' | 'product_name'
   const [selectedIds, setSelectedIds] = useState(new Set())
+  
+  const [sortConfig, setSortConfig] = useState({ key: 'alternative_code', direction: 'asc' })
+
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIndicator = (key) => {
+    if (sortConfig?.key === key) {
+      return sortConfig.direction === 'asc' ? ' ↑' : ' ↓';
+    }
+    return '';
+  };
 
   useEffect(() => {
     if (activePlatform !== 'laminea') {
@@ -387,6 +404,31 @@ export default function LamineaCodes() {
       })
     : codes
 
+  let sortedCodes = [...filteredCodes];
+  if (sortConfig !== null) {
+    sortedCodes.sort((a, b) => {
+      let aVal = ''
+      let bVal = ''
+      if (sortConfig.key === 'alternative_code') {
+        aVal = (a.alternative_code || '').toLowerCase()
+        bVal = (b.alternative_code || '').toLowerCase()
+      } else if (sortConfig.key === 'product_code') {
+        aVal = (a.products?.product_code || '').toLowerCase()
+        bVal = (b.products?.product_code || '').toLowerCase()
+      } else if (sortConfig.key === 'product_name') {
+        aVal = (a.products?.product_name || '').toLowerCase()
+        bVal = (b.products?.product_name || '').toLowerCase()
+      } else if (sortConfig.key === 'status' || sortConfig.key === 'actions') {
+        aVal = a.is_active ? 1 : 0
+        bVal = b.is_active ? 1 : 0
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
   return (
     <div className="app-container">
       {ToastEl}
@@ -459,11 +501,11 @@ export default function LamineaCodes() {
                     <input type="checkbox" checked={filteredCodes.length > 0 && selectedIds.size === filteredCodes.length} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
                   </th>
                 )}
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>Alternative Code</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap' }}>Product Code</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151' }}>Product Name</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151' }}>Status</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', width: 120 }}>Actions</th>
+                <th onClick={() => requestSort('alternative_code')} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>Alternative Code{getSortIndicator('alternative_code')}</th>
+                <th onClick={() => requestSort('product_code')} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>Product Code{getSortIndicator('product_code')}</th>
+                <th onClick={() => requestSort('product_name')} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', cursor: 'pointer', userSelect: 'none' }}>Product Name{getSortIndicator('product_name')}</th>
+                <th onClick={() => requestSort('status')} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', cursor: 'pointer', userSelect: 'none' }}>Status{getSortIndicator('status')}</th>
+                <th onClick={() => requestSort('actions')} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: '#374151', width: 120, cursor: 'pointer', userSelect: 'none' }}>Actions{getSortIndicator('actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -472,7 +514,7 @@ export default function LamineaCodes() {
                   {codes.length === 0 ? 'No codes mapped yet. Use "+ Add Code" to create one.' : `No results for "${search}"`}
                 </td></tr>
               ) : (
-                filteredCodes.map((c, i) => (
+                sortedCodes.map((c, i) => (
                   <tr key={c.id} style={{ opacity: c.is_active ? 1 : 0.5, borderBottom: '1px solid #f3f4f6', background: selectedIds.has(c.id) ? '#fef2f2' : i % 2 === 0 ? '#fff' : '#fafafa' }}>
                     {role === 'ADMIN' && (
                       <td style={{ padding: '10px 8px', textAlign: 'center' }}>
