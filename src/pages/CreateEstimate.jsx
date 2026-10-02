@@ -9,6 +9,7 @@ import { normalizeSearchQuery } from '../lib/synonyms.js'
 import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
 import { useAuth } from '../context/AuthContext'
 import { formatBillNumber } from '../lib/formatters'
+import { useHistory } from '../hooks/useHistory.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function todayIST() {
@@ -114,7 +115,7 @@ export default function CreateEstimate() {
   const [orderBy, setOrderBy] = useState('')
   const [preparedBy, setPreparedBy] = useState(alias || '')
   const [siteName, setSiteName] = useState('')
-  const [items, setItems] = useState([])
+  const [items, setItems, undoItems, redoItems, resetItems, canUndo, canRedo] = useHistory([])
   const [originalItems, setOriginalItems] = useState([])
   const [gstPercent, setGstPercent] = useState('')
   const [totals, setTotals] = useState({ total_nos: 0, total_quantity: 0, sub_total: 0, gst_percent: 0, gst_amount: 0, grand_total: 0 })
@@ -198,7 +199,7 @@ export default function CreateEstimate() {
              return mappedItem;
           });
           
-          setItems(prefillItems);
+          resetItems(prefillItems);
           setOriginalItems(prefillItems);
         }
         
@@ -249,7 +250,7 @@ export default function CreateEstimate() {
             amount: it.amount,
             remark: it.remark || ''
           }));
-          setItems(copiedItems);
+          resetItems(copiedItems);
         }
 
         setCopyPrefillApplied(true);
@@ -327,7 +328,7 @@ export default function CreateEstimate() {
         return mappedItem;
       });
       
-      setItems(prefillItems);
+      resetItems(prefillItems);
       setOriginalItems(prefillItems);
       setPrefillSelectionSheetApplied(true);
     } catch (err) {
@@ -453,7 +454,7 @@ export default function CreateEstimate() {
           setOrderBy(parsedDraft.orderBy || '')
           setPreparedBy(parsedDraft.preparedBy || '')
           setSiteName(parsedDraft.siteName || '')
-          setItems(parsedDraft.items || [])
+          resetItems(parsedDraft.items || [])
           setGstPercent(parsedDraft.gstPercent || '')
           setIsDraftRestored(true)
           setTimeout(() => showToast('Unsaved draft restored'), 500)
@@ -487,7 +488,7 @@ export default function CreateEstimate() {
             amount: it.amount,
             remark: it.remark || ''
           }))
-          setItems(loadedItems)
+          resetItems(loadedItems)
           setOriginalItems(loadedItems)
         }
         setExistingBillNumber(est.bill_number)
@@ -500,7 +501,7 @@ export default function CreateEstimate() {
           setOrderBy(parsedDraft.orderBy || '')
           setPreparedBy(parsedDraft.preparedBy || '')
           setSiteName(parsedDraft.siteName || '')
-          setItems(parsedDraft.items || [])
+          resetItems(parsedDraft.items || [])
           setGstPercent(parsedDraft.gstPercent || '')
           setIsDraftRestored(true)
           setTimeout(() => showToast('Unsaved draft restored'), 500)
@@ -601,7 +602,7 @@ export default function CreateEstimate() {
           amount: it.amount,
           remark: it.remark || ''
         }))
-        setItems(loadedItems)
+        resetItems(loadedItems)
         setOriginalItems(loadedItems)
       }
       setLoading(false)
@@ -612,7 +613,7 @@ export default function CreateEstimate() {
       setOrderBy('')
       setPreparedBy(alias || '')
       setSiteName('')
-      setItems([])
+      resetItems([])
       setGstPercent('')
     }
     localStorage.removeItem(draftKey)
@@ -1697,7 +1698,11 @@ export default function CreateEstimate() {
         {/* Items */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 24 }}>
           <span className="section-label" style={{ margin: 0 }}>{items.length} Item{items.length !== 1 ? 's' : ''}</span>
-          <button className="btn btn-primary btn-sm" onClick={openAddItem}>+ ADD ITEM</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={undoItems} disabled={!canUndo} style={{ padding: '0 8px', opacity: canUndo ? 1 : 0.5 }}>↩ Undo</button>
+            <button className="btn btn-secondary btn-sm" onClick={redoItems} disabled={!canRedo} style={{ padding: '0 8px', opacity: canRedo ? 1 : 0.5 }}>↪ Redo</button>
+            <button className="btn btn-primary btn-sm" onClick={openAddItem}>+ ADD ITEM</button>
+          </div>
         </div>
 
         {items.length === 0 ? (
