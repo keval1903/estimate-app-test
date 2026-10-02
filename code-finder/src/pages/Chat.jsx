@@ -103,7 +103,11 @@ export default function Chat() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          message: newMessage.trim(),
+          message: (() => {
+            const tm = localStorage.getItem('cf_team_member');
+            const txt = newMessage.trim();
+            return tm ? `[${tm}] ${txt}` : txt;
+          })(),
           enquiry_id: enquiryId || null,
           reply_to_message_id: replyingTo ? replyingTo.id : null
         })
