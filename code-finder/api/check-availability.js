@@ -35,7 +35,7 @@ export default async function handler(req) {
       ...NO_CACHE_HEADERS
     });
 
-    const authData = await getAuthenticatedUser(req, headers, { skipDbCheck: true });
+    const authData = await getAuthenticatedUser(req, headers);
     const authError = handleAuthResult(authData, headers);
     if (authError) return authError;
 

@@ -23,7 +23,7 @@ const NO_CACHE_HEADERS = {
  *   {user, cfUser, accessToken} → fully authenticated
  */
 export async function getAuthenticatedUser(req, headers, options = {}) {
-  const { allowPendingPassword = false, skipDbCheck = false } = options;
+  const { allowPendingPassword = false } = options;
 
   const cookieHeader = req.headers.get('cookie');
   if (!cookieHeader) return null;
@@ -46,29 +46,15 @@ export async function getAuthenticatedUser(req, headers, options = {}) {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 
-  let tokenNeedsRefresh = false;
-  if (accessToken) {
-    try {
-      const payloadBase64 = accessToken.split('.')[1];
-      const payloadStr = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
-      const payload = JSON.parse(payloadStr);
-      if (payload.exp * 1000 < Date.now() + 60000) {
-        tokenNeedsRefresh = true;
-      }
-    } catch (e) {
-      tokenNeedsRefresh = true;
-    }
-  }
-
   let user = null;
 
-  if (accessToken && !tokenNeedsRefresh && !skipDbCheck) {
+  if (accessToken) {
     const { data: { user: authUser }, error } = await supabase.auth.getUser(accessToken);
     if (!error && authUser) user = authUser;
   }
 
   // If access token is expired or invalid, but we have a refresh token, try refreshing
-  if ((!accessToken || tokenNeedsRefresh || (!user && !skipDbCheck)) && refreshToken) {
+  if (!user && refreshToken) {
     const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
     if (!error && data.session) {
       user = data.session.user;
@@ -85,13 +71,6 @@ export async function getAuthenticatedUser(req, headers, options = {}) {
       headers.append('Set-Cookie', serialize('cf_access_token', data.session.access_token, cookieOptions));
       headers.append('Set-Cookie', serialize('cf_refresh_token', data.session.refresh_token, cookieOptions));
     }
-  }
-
-  if (!accessToken) return null;
-
-  // If skipDbCheck is true, we just return the token and let downstream verify it
-  if (skipDbCheck) {
-    return { accessToken };
   }
 
   if (!user) return null;

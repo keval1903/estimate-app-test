@@ -16,7 +16,7 @@ export default async function handler(req) {
   });
 
   try {
-    const authData = await getAuthenticatedUser(req, headers, { skipDbCheck: true });
+    const authData = await getAuthenticatedUser(req, headers);
     const authError = handleAuthResult(authData, headers);
     if (authError) return authError;
 
