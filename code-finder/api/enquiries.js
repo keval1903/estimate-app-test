@@ -154,10 +154,17 @@ export default async function handler(req) {
       // Format items for create_code_finder_enquiry
       // Note: The cf8_capture_mapping trigger automatically fills in product_id_snapshot
       const checkedAt = checked_at || new Date().toISOString();
+      const statusMap = {
+        'AVAILABLE': 'AVAILABLE',
+        'PLEASE CONFIRM WITH US': 'PLEASE_CONFIRM',
+        'CODE NOT FOUND': 'CODE_NOT_FOUND',
+        'INVALID QUANTITY': 'PLEASE_CONFIRM'
+      };
+
       const itemsForRpc = stockResults.map(r => ({
         alternative_code_snapshot: r.code,
         requested_quantity: r.requestedQuantity === 'Invalid' ? 0 : Number(r.requestedQuantity),
-        availability_status: r.status,
+        availability_status: statusMap[r.status] || r.status,
         checked_at: checkedAt
       }));
 
