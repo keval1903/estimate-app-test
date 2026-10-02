@@ -1,8 +1,30 @@
+import { createClient } from '@supabase/supabase-js';
 import { getAuthenticatedUser, handleAuthResult, createErrorResponse } from './_auth.js';
 
 export const config = {
   runtime: 'edge',
 };
+
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
+async function hmacIpHash(rawIp, userId) {
+  const secret = process.env.RATE_LIMIT_HMAC_SECRET;
+  if (!secret) throw new Error('Server misconfiguration: RATE_LIMIT_HMAC_SECRET missing');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const data = new TextEncoder().encode(`${userId}:${rawIp}`);
+  const signature = await crypto.subtle.sign('HMAC', key, data);
+  return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 export default async function handler(req) {
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -11,9 +33,7 @@ export default async function handler(req) {
 
   const headers = new Headers({
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
+    ...NO_CACHE_HEADERS
   });
 
   try {
@@ -22,47 +42,107 @@ export default async function handler(req) {
     if (authError) return authError;
 
     const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const SUPABASE_FUNCTION_URL = process.env.SUPABASE_CLIENT_MESSAGES_URL || `${SUPABASE_URL}/functions/v1/client-messages`;
-    const PROXY_SECRET = process.env.CODE_FINDER_PROXY_SECRET;
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!SUPABASE_URL || !SUPABASE_FUNCTION_URL || !PROXY_SECRET) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       return createErrorResponse('Server misconfiguration', 500);
     }
 
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
 
-    const fetchOptions = {
-      method: req.method,
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-code-finder-secret': PROXY_SECRET,
-        'x-forwarded-for': ip,
-        'Authorization': `Bearer ${authData.accessToken}`
+    if (req.method === 'GET') {
+      const incomingUrl = new URL(req.url);
+      const afterParam = incomingUrl.searchParams.get('after');
+
+      let query = supabaseAdmin
+        .from('code_finder_messages')
+        .select('id, enquiry_id, sender_type, message, created_at, reply_to_message_id')
+        .eq('code_finder_user_id', authData.cfUser.id);
+
+      if (afterParam) {
+        // Incremental poll: ?after=timestamp,id
+        const parts = afterParam.split(',');
+        const afterTs = parts[0];
+        const afterId = parts[1];
+        
+        if (afterId) {
+          query = query.or(`created_at.gt.${afterTs},and(created_at.eq.${afterTs},id.gt.${afterId})`);
+        } else {
+          query = query.gt('created_at', afterTs);
+        }
+        query = query.order('created_at', { ascending: true }).order('id', { ascending: true }).limit(100);
+      } else {
+        // Initial load: get latest 100
+        query = query.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100);
       }
-    };
+
+      const { data: rawMessages, error: msgErr } = await query;
+
+      if (msgErr) {
+        console.error('Messages GET error:', msgErr);
+        return createErrorResponse('Failed to fetch messages', 500);
+      }
+
+      const messages = afterParam ? rawMessages : rawMessages.reverse();
+
+      return new Response(JSON.stringify({ messages }), {
+        status: 200,
+        headers: headers
+      });
+    }
 
     if (req.method === 'POST') {
-      const body = await req.json();
-      fetchOptions.body = JSON.stringify(body);
+      const rawIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown';
+      const keyHash = await hmacIpHash(rawIp, authData.cfUser.id);
+
+      const { data: limitData, error: limitErr } = await supabaseAdmin.rpc('check_rate_limit_v2', {
+        p_namespace: 'message',
+        p_key_hash: keyHash,
+        p_max_requests: 20,
+        p_window_seconds: 60 // 20 messages per minute
+      });
+
+      if (limitErr || !limitData?.allowed) {
+        return createErrorResponse('Too many messages. Please wait.', 429);
+      }
+
+      const payload = await req.json();
+      const messageText = payload.message?.trim() || '';
+      const enquiryId = payload.enquiry_id || null;
+      const replyToMessageId = payload.reply_to_message_id || null;
+
+      if (!messageText || messageText.length === 0 || messageText.length > 2000) {
+        return createErrorResponse('Invalid message length', 400);
+      }
+
+      // Use the authenticated client so the RPC can access auth.uid()
+      const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      if (!SUPABASE_ANON_KEY) return createErrorResponse('Server misconfiguration', 500);
+
+      const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: `Bearer ${authData.accessToken}` } }
+      });
+
+      const { data: newMessage, error: insertErr } = await authClient.rpc('send_code_finder_message', {
+        p_message: messageText,
+        p_enquiry_id: enquiryId,
+        p_reply_to_message_id: replyToMessageId
+      });
+
+      if (insertErr) {
+        console.error('Messages POST error:', insertErr);
+        return createErrorResponse(insertErr.message, 400);
+      }
+
+      return new Response(JSON.stringify({ message: newMessage }), {
+        status: 200,
+        headers: headers
+      });
     }
-
-    const incomingUrl = new URL(req.url);
-    const targetUrl = new URL(SUPABASE_FUNCTION_URL);
-    const after = incomingUrl.searchParams.get('after');
-    if (after) {
-      targetUrl.searchParams.set('after', after);
-    }
-
-    const response = await fetch(targetUrl.toString(), fetchOptions);
-    const data = await response.text();
-
-    return new Response(data, {
-      status: response.status,
-      headers: headers
-    });
   } catch (err) {
     console.error('Proxy Error:', err);
-    return createErrorResponse('Failed to communicate with messages service', 502);
+    return createErrorResponse('Internal Server Error', 502);
   }
 }

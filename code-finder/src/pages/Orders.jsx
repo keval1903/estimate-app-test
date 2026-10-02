@@ -4,21 +4,35 @@ export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(1);
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (pageNum, append = false) => {
     try {
-      const res = await fetch('/api/orders', { cache: 'no-store' });
+      if (append) setLoadingMore(true);
+      const res = await fetch(`/api/orders?page=${pageNum}`, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
-      setOrders(data.orders || []);
+      
+      setOrders(prev => append ? [...prev, ...(data.orders || [])] : (data.orders || []));
+      setHasMore(data.hasMore || false);
+      setPage(pageNum);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchOrders(page + 1, true);
     }
   };
 
@@ -57,6 +71,17 @@ export default function Orders() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginTop: '20px', marginBottom: '20px' }}>
+          <button 
+            className="btn btn-secondary" 
+            onClick={loadMore} 
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Loading...' : 'Load More'}
+          </button>
         </div>
       )}
     </div>

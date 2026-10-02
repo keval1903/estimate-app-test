@@ -60,23 +60,74 @@ export default async function handler(req) {
       });
     }
 
-    const fetchOptions = {
-      method: req.method,
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-code-finder-secret': PROXY_SECRET,
-        'Authorization': `Bearer ${authData.accessToken}`
+    if (req.method === 'GET') {
+      const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!SUPABASE_SERVICE_ROLE_KEY) {
+        return createErrorResponse('Server misconfiguration: missing service key', 500);
       }
-    };
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
 
-    const response = await fetch(SUPABASE_FUNCTION_URL, fetchOptions);
-    const data = await response.text();
+      const incomingUrl = new URL(req.url);
+      const pageStr = incomingUrl.searchParams.get('page');
+      let page = parseInt(pageStr, 10);
+      if (isNaN(page) || page < 1) page = 1;
+      
+      const limit = 20;
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
 
-    return new Response(data, {
-      status: response.status,
-      headers: headers
-    });
+      const { data, error, count } = await supabaseAdmin
+        .from('code_finder_enquiries')
+        .select(`
+          id,
+          enquiry_number,
+          status,
+          client_note,
+          checked_at,
+          created_at,
+          ordered_by,
+          code_finder_enquiry_items (
+            id,
+            alternative_code_snapshot,
+            requested_quantity,
+            availability_status
+          ),
+          code_finder_proposals (
+            id,
+            revision,
+            proposal_type,
+            staff_note,
+            submitted_at,
+            superseded_at,
+            response,
+            responded_at,
+            code_finder_proposal_items (
+              enquiry_item_id,
+              proposed_quantity,
+              item_note
+            )
+          )
+        `, { count: 'exact' })
+        .eq('code_finder_user_id', authData.cfUser.id)
+        .eq('status', 'ORDER_PLACED')
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) {
+        console.error('Orders GET DB error:', error);
+        return createErrorResponse('Failed to fetch orders from database', 500);
+      }
+      
+      const hasMore = count > to + 1;
+
+      return new Response(JSON.stringify({ orders: data, hasMore, page }), {
+        status: 200,
+        headers: headers
+      });
+    }
   } catch (err) {
     console.error('Proxy Error:', err);
     return createErrorResponse(`Failed to communicate with orders service: ${err.message}`, 502);

@@ -90,10 +90,9 @@ export default async function handler(req) {
     // Normalize username: remove spaces, uppercase
     const normalizedUsername = username.trim().replace(/\s+/g, '').toUpperCase();
 
-    // 1. Find user in code_finder_users using normalized username (exact match, no ILIKE)
     const { data: cfUser, error: cfErr } = await supabaseAdmin
       .from('code_finder_users')
-      .select('auth_user_id, is_active')
+      .select('id, auth_user_id, client_name, username, is_active, must_change_password')
       .eq('normalized_username', normalizedUsername)
       .single();
 
@@ -159,7 +158,15 @@ export default async function handler(req) {
     headers.append('Set-Cookie', accessTokenCookie);
     headers.append('Set-Cookie', refreshTokenCookie);
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ 
+      success: true,
+      user: {
+        id: cfUser.id,
+        client_name: cfUser.client_name,
+        username: cfUser.username,
+        must_change_password: cfUser.must_change_password
+      }
+    }), {
       status: 200,
       headers: headers
     });

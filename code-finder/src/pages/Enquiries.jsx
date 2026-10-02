@@ -5,22 +5,36 @@ export default function Enquiries() {
   const [enquiries, setEnquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchEnquiries();
+    fetchEnquiries(1);
   }, []);
 
-  const fetchEnquiries = async () => {
+  const fetchEnquiries = async (pageNum = 1, append = false) => {
     try {
-      const res = await fetch('/api/enquiries', { cache: 'no-store' });
+      if (append) setLoadingMore(true);
+      const res = await fetch(`/api/enquiries?page=${pageNum}`, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
-      setEnquiries(data.enquiries || []);
+      
+      setEnquiries(prev => append ? [...prev, ...(data.enquiries || [])] : (data.enquiries || []));
+      setHasMore(data.hasMore || false);
+      setPage(pageNum);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      fetchEnquiries(page + 1, true);
     }
   };
 
@@ -34,7 +48,7 @@ export default function Enquiries() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to submit response');
-      await fetchEnquiries();
+      await fetchEnquiries(1);
     } catch (err) {
       alert(err.message);
       setLoading(false);
@@ -172,6 +186,17 @@ export default function Enquiries() {
               )}
             </div>
           ))}
+        </div>
+      )}
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginTop: '20px', marginBottom: '20px' }}>
+          <button 
+            className="btn btn-secondary" 
+            onClick={loadMore} 
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Loading...' : 'Load More'}
+          </button>
         </div>
       )}
     </div>

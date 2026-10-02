@@ -28,13 +28,9 @@ export default function Login() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Login failed');
 
-      // fetch /me to get user details
-      const meRes = await fetch('/api/auth/me');
-      if (!meRes.ok) throw new Error('Failed to load profile');
-      const meData = await meRes.json();
+      login(data.user);
       
-      login(meData.user);
-      
+
       const from = location.state?.from?.pathname || '/app/check-stock';
       navigate(from, { replace: true });
     } catch (err) {
