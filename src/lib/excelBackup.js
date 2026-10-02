@@ -69,7 +69,9 @@ export async function generateExcelWorkbook(supabase, activePlatform) {
       })
 
       // Build Sheet 2: Estimates, Quotations & Returns
-      const estimateRows = (estimates || []).map(e => ({
+      const estimateRows = (estimates || [])
+        .filter(e => e.type !== 'DELETED_ESTIMATE' && e.type !== 'DELETED_RETURN')
+        .map(e => ({
         'Bill No': e.bill_number,
         'Type': e.type || 'ESTIMATE',
         'Date': e.bill_date || '-',

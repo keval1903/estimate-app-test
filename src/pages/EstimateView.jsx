@@ -621,9 +621,9 @@ export default function EstimateView() {
                         </>
                       ) : (
                         <>
-                          <col style={{ width: 38 }} />
+                          <col style={{ width: 44 }} />
                           <col style={{ width: 'auto' }} />
-                          <col style={{ width: isChallanMode ? 55 : 42 }} />
+                          <col style={{ width: isChallanMode ? 55 : 56 }} />
                           <col style={{ width: isChallanMode ? 100 : 68 }} />
                           {!isChallanMode && <col style={{ width: 70 }} />}
                           {!isChallanMode && <col style={{ width: 100 }} />}
@@ -687,8 +687,7 @@ export default function EstimateView() {
                             <td key={h} style={{
                               border: '1px solid #000', padding: '6px 4px', fontWeight: 700,
                               textAlign: (h === 'Description of Goods' || h === 'Actual Code' || h === 'Sticker Code') ? 'left' : 'center',
-                              fontSize: 12,
-                              whiteSpace: 'nowrap',
+                              fontSize: 11,
                             }}>{h}</td>
                           ))}
                       </tr>
