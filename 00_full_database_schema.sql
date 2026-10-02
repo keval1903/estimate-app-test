@@ -5547,7 +5547,7 @@ BEGIN
     END IF;
     v_est_id := (v_est_result->>'estimate_id')::uuid;
     IF NOT EXISTS (SELECT 1 FROM public.estimates WHERE id=v_est_id AND platform='laminea'
-       AND client_id=p_client_id AND type='ESTIMATE') THEN
+       AND client_id=p_client_id AND type IN ('ESTIMATE', 'QUOTATION')) THEN
       RAISE EXCEPTION 'Unexpected estimate returned by existing RPC';
     END IF;
     IF EXISTS (SELECT 1 FROM public.code_finder_enquiries WHERE converted_estimate_id=v_est_id AND id<>p_enquiry_id) THEN
@@ -6937,8 +6937,8 @@ BEGIN
         RAISE EXCEPTION 'The customer must place the order before an estimate can be created';
     END IF;
 
-    IF p_platform IS DISTINCT FROM 'laminea' OR p_doc_type IS DISTINCT FROM 'ESTIMATE' THEN
-        RAISE EXCEPTION 'This operation creates Laminea estimates only';
+    IF p_platform IS DISTINCT FROM 'laminea' OR (p_doc_type IS DISTINCT FROM 'ESTIMATE' AND p_doc_type IS DISTINCT FROM 'QUOTATION') THEN
+        RAISE EXCEPTION 'This operation creates Laminea estimates or quotations only';
     END IF;
 
     IF p_idempotency_key IS NULL THEN
@@ -7113,7 +7113,7 @@ BEGIN
         WHERE id = v_est_id
           AND platform = 'laminea'
           AND client_id = p_client_id
-          AND type = 'ESTIMATE'
+          AND type IN ('ESTIMATE', 'QUOTATION')
     ) THEN
         RAISE EXCEPTION 'Unexpected estimate returned by existing RPC';
     END IF;
@@ -7745,3 +7745,952 @@ ALTER TABLE public.notification_outbox
 
 COMMIT;
 
+
+-- ==========================================
+-- FILE: 06_code_finder_rpc.sql
+-- ==========================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.check_laminea_stock_availability(
+    p_requests JSONB
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_request_count INTEGER;
+    v_result JSONB;
+BEGIN
+    ---------------------------------------------------------------------------
+    -- Validate request structure
+    ---------------------------------------------------------------------------
+
+    IF p_requests IS NULL
+       OR jsonb_typeof(p_requests) IS DISTINCT FROM 'array' THEN
+        RAISE EXCEPTION 'Requests must be provided as a JSON array';
+    END IF;
+
+    v_request_count := jsonb_array_length(p_requests);
+
+    IF v_request_count = 0 THEN
+        RAISE EXCEPTION 'At least one request is required';
+    END IF;
+
+    IF v_request_count > 25 THEN
+        RAISE EXCEPTION 'Maximum 25 codes are allowed per request';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(p_requests) AS request(value)
+        WHERE jsonb_typeof(request.value) IS DISTINCT FROM 'object'
+    ) THEN
+        RAISE EXCEPTION 'Every request must be a JSON object';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(p_requests) AS request(value)
+        WHERE LENGTH(COALESCE(request.value ->> 'code', '')) > 100
+    ) THEN
+        RAISE EXCEPTION 'Alternative code cannot exceed 100 characters';
+    END IF;
+
+    ---------------------------------------------------------------------------
+    -- Normalize, aggregate, resolve mapping and calculate availability
+    ---------------------------------------------------------------------------
+
+    WITH input_rows AS (
+        SELECT
+            request.ordinality::INTEGER AS input_order,
+            NULLIF(TRIM(request.value ->> 'code'), '') AS display_code,
+
+            public.normalize_alternative_code(
+                request.value ->> 'code'
+            ) AS normalized_code,
+
+            CASE
+                WHEN request.value ->> 'quantity'
+                     ~ '^[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$'
+                THEN (request.value ->> 'quantity')::NUMERIC
+                ELSE NULL
+            END AS requested_quantity
+        FROM jsonb_array_elements(p_requests)
+             WITH ORDINALITY AS request(value, ordinality)
+    ),
+
+    aggregated AS (
+        SELECT
+            normalized_code,
+
+            (
+                ARRAY_AGG(
+                    UPPER(display_code)
+                    ORDER BY input_order
+                )
+            )[1] AS display_code,
+
+            MIN(input_order) AS first_input_order,
+
+            BOOL_OR(
+                requested_quantity IS NULL
+                OR requested_quantity <= 0
+                OR requested_quantity = 'NaN'::NUMERIC
+            ) AS has_invalid_quantity,
+
+            SUM(
+                requested_quantity
+            ) FILTER (
+                WHERE requested_quantity IS NOT NULL
+                  AND requested_quantity > 0
+                  AND requested_quantity <> 'NaN'::NUMERIC
+            ) AS total_quantity
+
+        FROM input_rows
+        WHERE normalized_code IS NOT NULL
+          AND normalized_code <> ''
+        GROUP BY normalized_code
+    ),
+
+    resolved AS (
+        SELECT
+            aggregated.normalized_code,
+            aggregated.display_code,
+            aggregated.first_input_order,
+            aggregated.has_invalid_quantity,
+            aggregated.total_quantity,
+
+            mapping.product_id,
+            product.stock
+
+        FROM aggregated
+
+        LEFT JOIN public.laminea_product_codes AS mapping
+          ON mapping.is_active IS TRUE
+         AND public.normalize_alternative_code(
+                 mapping.alternative_code
+             ) = aggregated.normalized_code
+
+        LEFT JOIN public.products AS product
+          ON product.id = mapping.product_id
+    )
+
+    SELECT COALESCE(
+        JSONB_AGG(
+            CASE
+                WHEN has_invalid_quantity THEN
+                    JSONB_BUILD_OBJECT(
+                        'code',
+                        COALESCE(display_code, normalized_code),
+
+                        'requestedQuantity',
+                        'Invalid',
+
+                        'status',
+                        'INVALID QUANTITY'
+                    )
+
+                WHEN product_id IS NULL THEN
+                    JSONB_BUILD_OBJECT(
+                        'code',
+                        COALESCE(display_code, normalized_code),
+
+                        'requestedQuantity',
+                        total_quantity,
+
+                        'status',
+                        'CODE NOT FOUND'
+                    )
+
+                ELSE
+                    JSONB_BUILD_OBJECT(
+                        'code',
+                        COALESCE(display_code, normalized_code),
+
+                        'requestedQuantity',
+                        total_quantity,
+
+                        'status',
+                        CASE
+                            -- This preserves your current maximum-10 rule.
+                            WHEN total_quantity BETWEEN 1 AND 10
+                             AND COALESCE(stock, 0) >= total_quantity
+                                THEN 'AVAILABLE'
+                            ELSE 'PLEASE CONFIRM WITH US'
+                        END
+                    )
+            END
+            ORDER BY first_input_order
+        ),
+        '[]'::JSONB
+    )
+    INTO v_result
+    FROM resolved;
+
+    IF v_result = '[]'::JSONB THEN
+        RAISE EXCEPTION 'No valid alternative codes were provided';
+    END IF;
+
+    RETURN v_result;
+END;
+$$;
+
+REVOKE ALL
+ON FUNCTION public.check_laminea_stock_availability(JSONB)
+FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE
+ON FUNCTION public.check_laminea_stock_availability(JSONB)
+TO service_role;
+
+COMMIT;
+
+-- ==========================================
+-- FILE: 07_send_message_rpc.sql
+-- ==========================================
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.send_code_finder_message(
+    p_message TEXT,
+    p_enquiry_id UUID DEFAULT NULL,
+    p_reply_to_message_id UUID DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_auth_user_id UUID;
+    v_cf_user_id UUID;
+    v_effective_enquiry_id UUID;
+    v_reply_enquiry_id UUID;
+    v_message TEXT;
+    v_message_id UUID;
+    v_result JSONB;
+    v_rate_result JSONB;
+BEGIN
+    ---------------------------------------------------------------------------
+    -- 1. Authenticate caller
+    ---------------------------------------------------------------------------
+
+    v_auth_user_id := auth.uid();
+
+    IF v_auth_user_id IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    ---------------------------------------------------------------------------
+    -- 2. Resolve active Code Finder account
+    ---------------------------------------------------------------------------
+
+    SELECT id
+    INTO v_cf_user_id
+    FROM public.code_finder_users
+    WHERE auth_user_id = v_auth_user_id
+      AND is_active IS TRUE
+      AND must_change_password IS FALSE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Invalid or inactive Code Finder account';
+    END IF;
+
+    ---------------------------------------------------------------------------
+    -- 3. Validate message
+    ---------------------------------------------------------------------------
+
+    v_message := BTRIM(p_message);
+
+    IF v_message IS NULL
+       OR REGEXP_REPLACE(
+              v_message,
+              '[[:space:]]',
+              '',
+              'g'
+          ) = ''
+       OR CHAR_LENGTH(v_message) > 2000 THEN
+        RAISE EXCEPTION 'Message must be between 1 and 2000 characters';
+    END IF;
+
+    ---------------------------------------------------------------------------
+    -- 4. Database-side safety rate limit
+    --
+    -- Keep the Vercel user+IP rate limit as well. A separate namespace avoids
+    -- counting the same request twice in the existing "message" namespace.
+    ---------------------------------------------------------------------------
+
+    SELECT public.check_rate_limit_v2(
+        'message_rpc',
+        v_auth_user_id::TEXT,
+        20,
+        60
+    )
+    INTO v_rate_result;
+
+    IF COALESCE(
+        (v_rate_result ->> 'allowed')::BOOLEAN,
+        FALSE
+    ) IS NOT TRUE THEN
+        RAISE EXCEPTION 'Too many messages. Please wait.';
+    END IF;
+
+    v_effective_enquiry_id := p_enquiry_id;
+
+    ---------------------------------------------------------------------------
+    -- 5. Validate reply ownership
+    ---------------------------------------------------------------------------
+
+    IF p_reply_to_message_id IS NOT NULL THEN
+        SELECT enquiry_id
+        INTO v_reply_enquiry_id
+        FROM public.code_finder_messages
+        WHERE id = p_reply_to_message_id
+          AND code_finder_user_id = v_cf_user_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Reply message not found or access denied';
+        END IF;
+
+        -- When replying to an enquiry-linked message, inherit its enquiry.
+        IF v_effective_enquiry_id IS NULL
+           AND v_reply_enquiry_id IS NOT NULL THEN
+            v_effective_enquiry_id := v_reply_enquiry_id;
+        END IF;
+
+        -- Prevent linking a reply to a different enquiry.
+        IF v_effective_enquiry_id IS NOT NULL
+           AND v_reply_enquiry_id IS NOT NULL
+           AND v_effective_enquiry_id <> v_reply_enquiry_id THEN
+            RAISE EXCEPTION 'Reply message belongs to a different enquiry';
+        END IF;
+    END IF;
+
+    ---------------------------------------------------------------------------
+    -- 6. Validate enquiry ownership
+    ---------------------------------------------------------------------------
+
+    IF v_effective_enquiry_id IS NOT NULL THEN
+        PERFORM 1
+        FROM public.code_finder_enquiries
+        WHERE id = v_effective_enquiry_id
+          AND code_finder_user_id = v_cf_user_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Enquiry not found or access denied';
+        END IF;
+    END IF;
+
+    ---------------------------------------------------------------------------
+    -- 7. Insert message
+    --
+    -- Existing triggers will:
+    -- - create the staff push-notification outbox record;
+    -- - process clarification replies when enquiry_id is present.
+    ---------------------------------------------------------------------------
+
+    INSERT INTO public.code_finder_messages (
+        code_finder_user_id,
+        enquiry_id,
+        sender_type,
+        sender_auth_user_id,
+        message,
+        reply_to_message_id
+    )
+    VALUES (
+        v_cf_user_id,
+        v_effective_enquiry_id,
+        'CLIENT',
+        v_auth_user_id,
+        v_message,
+        p_reply_to_message_id
+    )
+    RETURNING id
+    INTO v_message_id;
+
+    ---------------------------------------------------------------------------
+    -- 8. Return safe message fields
+    ---------------------------------------------------------------------------
+
+    SELECT JSONB_BUILD_OBJECT(
+        'id', message.id,
+        'enquiry_id', message.enquiry_id,
+        'sender_type', message.sender_type,
+        'message', message.message,
+        'created_at', message.created_at,
+        'reply_to_message_id', message.reply_to_message_id
+    )
+    INTO v_result
+    FROM public.code_finder_messages AS message
+    WHERE message.id = v_message_id;
+
+    RETURN v_result;
+END;
+$$;
+
+REVOKE ALL
+ON FUNCTION public.send_code_finder_message(TEXT, UUID, UUID)
+FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE
+ON FUNCTION public.send_code_finder_message(TEXT, UUID, UUID)
+TO authenticated;
+
+COMMIT;
+
+-- ==========================================
+-- FILE: 18_client_maintain_ledger.sql
+-- ==========================================
+
+BEGIN;
+
+ALTER TABLE public.clients
+ADD COLUMN maintain_ledger BOOLEAN NOT NULL DEFAULT true;
+
+-- Update the RPC to accept opening_balance and maintain_ledger
+CREATE OR REPLACE FUNCTION public.create_and_link_laminea_client(
+    p_cf_user_id UUID,
+    p_client_name TEXT,
+    p_mobile TEXT DEFAULT NULL,
+    p_contact_person TEXT DEFAULT NULL,
+    p_opening_balance NUMERIC DEFAULT 0,
+    p_maintain_ledger BOOLEAN DEFAULT true
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_client_id UUID;
+    v_normalized_name TEXT;
+    v_normalized_mobile TEXT;
+    v_client JSONB;
+BEGIN
+    PERFORM public.cf8_require_staff();
+
+    IF p_client_name IS NULL OR TRIM(p_client_name) = '' THEN
+        RAISE EXCEPTION 'Client name is required';
+    END IF;
+
+    -- Lock the Code Finder user
+    PERFORM 1
+    FROM public.code_finder_users
+    WHERE id = p_cf_user_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Code Finder user not found';
+    END IF;
+
+    v_normalized_name :=
+        UPPER(REGEXP_REPLACE(TRIM(p_client_name), '\s+', ' ', 'g'));
+
+    v_normalized_mobile :=
+        NULLIF(REGEXP_REPLACE(COALESCE(p_mobile, ''), '\s+', '', 'g'), '');
+
+    -- Prevent two simultaneous requests from creating duplicates
+    PERFORM pg_advisory_xact_lock(
+        hashtext(
+            'code-finder-client:' ||
+            v_normalized_name || ':' ||
+            COALESCE(v_normalized_mobile, '')
+        )
+    );
+
+    IF EXISTS (
+        SELECT 1
+        FROM public.clients c
+        WHERE c.platform = 'laminea'
+          AND UPPER(REGEXP_REPLACE(TRIM(c.name), '\s+', ' ', 'g'))
+              = v_normalized_name
+          AND COALESCE(
+                REGEXP_REPLACE(COALESCE(c.mobile, ''), '\s+', '', 'g'),
+                ''
+              ) = COALESCE(v_normalized_mobile, '')
+    ) THEN
+        RAISE EXCEPTION
+            'A matching Laminea client already exists. Link the existing client instead.';
+    END IF;
+
+    INSERT INTO public.clients (
+        name,
+        company_name,
+        owner_name,
+        mobile,
+        platform,
+        opening_balance,
+        maintain_ledger
+    )
+    VALUES (
+        v_normalized_name,
+        v_normalized_name,
+        NULLIF(UPPER(TRIM(p_contact_person)), ''),
+        v_normalized_mobile,
+        'laminea',
+        p_opening_balance,
+        p_maintain_ledger
+    )
+    RETURNING id INTO v_client_id;
+
+    UPDATE public.code_finder_users
+    SET laminea_client_id = v_client_id,
+        updated_at = NOW()
+    WHERE id = p_cf_user_id;
+
+    SELECT jsonb_build_object(
+        'id', c.id,
+        'name', c.name,
+        'mobile', c.mobile,
+        'company_name', c.company_name,
+        'owner_name', c.owner_name,
+        'platform', c.platform,
+        'maintain_ledger', c.maintain_ledger
+    )
+    INTO v_client
+    FROM public.clients c
+    WHERE c.id = v_client_id;
+
+    RETURN v_client;
+END;
+$$;
+
+COMMIT;
+
+-- ==========================================
+-- FILE: 19_add_ordered_by_to_enquiries.sql
+-- ==========================================
+
+BEGIN;
+
+ALTER TABLE public.code_finder_enquiries
+ADD COLUMN IF NOT EXISTS ordered_by TEXT;
+
+ALTER TABLE public.code_finder_enquiries
+DROP CONSTRAINT IF EXISTS code_finder_enquiries_ordered_by_check;
+
+ALTER TABLE public.code_finder_enquiries
+ADD CONSTRAINT code_finder_enquiries_ordered_by_check
+CHECK (
+    ordered_by IS NULL
+    OR LENGTH(TRIM(ordered_by)) BETWEEN 1 AND 100
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS code_finder_enquiries_idempotency_idx
+ON public.code_finder_enquiries (
+    code_finder_user_id,
+    idempotency_key
+)
+WHERE idempotency_key IS NOT NULL;
+
+--
+-- p_user_id must be public.code_finder_users.id,
+-- not auth.users.id.
+-- =============================================================================
+
+DROP FUNCTION IF EXISTS public.create_code_finder_enquiry(
+    UUID, JSONB, TEXT, TIMESTAMPTZ, TEXT
+);
+
+CREATE OR REPLACE FUNCTION public.create_code_finder_enquiry(
+    p_user_id UUID,
+    p_items JSONB,
+    p_client_note TEXT DEFAULT NULL,
+    p_checked_at TIMESTAMPTZ DEFAULT NOW(),
+    p_idempotency_key TEXT DEFAULT NULL,
+    p_ordered_by TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_enquiry_id UUID;
+    v_enquiry_number BIGINT;
+    v_existing RECORD;
+    v_item JSONB;
+
+    v_code TEXT;
+    v_status TEXT;
+    v_quantity NUMERIC(12,2);
+
+    v_checked_at TIMESTAMPTZ;
+    v_idempotency_key TEXT;
+BEGIN
+    ---------------------------------------------------------------------------
+    -- Validate Code Finder user
+    ---------------------------------------------------------------------------
+
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'Code Finder user ID is required.';
+    END IF;
+
+    PERFORM 1
+    FROM public.code_finder_users
+    WHERE id = p_user_id
+      AND is_active = TRUE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Code Finder user is inactive or does not exist.';
+    END IF;
+
+
+    ---------------------------------------------------------------------------
+    -- Validate idempotency key
+    ---------------------------------------------------------------------------
+
+    v_idempotency_key := NULLIF(TRIM(p_idempotency_key), '');
+
+    IF v_idempotency_key IS NULL THEN
+        RAISE EXCEPTION 'Idempotency key is required.';
+    END IF;
+
+    IF LENGTH(v_idempotency_key) NOT BETWEEN 8 AND 100 THEN
+        RAISE EXCEPTION 'Idempotency key must contain between 8 and 100 characters.';
+    END IF;
+
+
+    ---------------------------------------------------------------------------
+    -- Validate enquiry
+    ---------------------------------------------------------------------------
+
+    IF p_client_note IS NOT NULL
+       AND LENGTH(p_client_note) > 2000 THEN
+        RAISE EXCEPTION 'Client note cannot exceed 2000 characters.';
+    END IF;
+
+    IF p_ordered_by IS NOT NULL
+       AND LENGTH(TRIM(p_ordered_by)) > 100 THEN
+        RAISE EXCEPTION 'Ordered by cannot exceed 100 characters.';
+    END IF;
+
+    IF p_items IS NULL
+       OR jsonb_typeof(p_items) IS DISTINCT FROM 'array' THEN
+        RAISE EXCEPTION 'Items must be provided as a JSON array.';
+    END IF;
+
+    IF jsonb_array_length(p_items) = 0 THEN
+        RAISE EXCEPTION 'At least one enquiry item is required.';
+    END IF;
+
+    IF jsonb_array_length(p_items) > 25 THEN
+        RAISE EXCEPTION 'Maximum 25 items are allowed per enquiry.';
+    END IF;
+
+    v_checked_at := COALESCE(p_checked_at, NOW());
+
+
+    ---------------------------------------------------------------------------
+    -- Validate every item before creating the enquiry
+    ---------------------------------------------------------------------------
+
+    FOR v_item IN
+        SELECT value
+        FROM jsonb_array_elements(p_items)
+    LOOP
+        IF jsonb_typeof(v_item) IS DISTINCT FROM 'object' THEN
+            RAISE EXCEPTION 'Every enquiry item must be a JSON object.';
+        END IF;
+
+        v_code := NULLIF(
+            TRIM(v_item ->> 'alternative_code_snapshot'),
+            ''
+        );
+
+        IF v_code IS NULL THEN
+            RAISE EXCEPTION 'Alternative code is required for every item.';
+        END IF;
+
+        IF LENGTH(v_code) > 100 THEN
+            RAISE EXCEPTION 'Alternative code cannot exceed 100 characters.';
+        END IF;
+
+        BEGIN
+            v_quantity :=
+                (v_item ->> 'requested_quantity')::NUMERIC(12,2);
+        EXCEPTION
+            WHEN invalid_text_representation
+              OR numeric_value_out_of_range THEN
+                RAISE EXCEPTION
+                    'Invalid requested quantity for alternative code %.',
+                    v_code;
+        END;
+
+        IF v_quantity IS NULL OR v_quantity <= 0 THEN
+            RAISE EXCEPTION
+                'Requested quantity must be greater than zero for alternative code %.',
+                v_code;
+        END IF;
+
+        v_status := v_item ->> 'availability_status';
+
+        IF v_status IS NULL
+           OR v_status NOT IN (
+               'AVAILABLE',
+               'PLEASE_CONFIRM',
+               'CODE_NOT_FOUND'
+           ) THEN
+            RAISE EXCEPTION
+                'Invalid availability status for alternative code %.',
+                v_code;
+        END IF;
+    END LOOP;
+
+
+    ---------------------------------------------------------------------------
+    -- Prevent duplicate normalized codes inside the same enquiry payload
+    ---------------------------------------------------------------------------
+
+    IF EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(p_items) AS item(value)
+        GROUP BY UPPER(
+            REGEXP_REPLACE(
+                TRIM(item.value ->> 'alternative_code_snapshot'),
+                '\s+',
+                '',
+                'g'
+            )
+        )
+        HAVING COUNT(*) > 1
+    ) THEN
+        RAISE EXCEPTION
+            'Duplicate alternative codes were found in the enquiry.';
+    END IF;
+
+
+    ---------------------------------------------------------------------------
+    -- Insert enquiry atomically.
+    --
+    -- ON CONFLICT makes concurrent retries safe. Only one enquiry is created.
+    ---------------------------------------------------------------------------
+
+    INSERT INTO public.code_finder_enquiries (
+        code_finder_user_id,
+        status,
+        client_note,
+        checked_at,
+        idempotency_key,
+        ordered_by
+    )
+    VALUES (
+        p_user_id,
+        'NEW',
+        NULLIF(TRIM(p_client_note), ''),
+        v_checked_at,
+        v_idempotency_key,
+        NULLIF(TRIM(p_ordered_by), '')
+    )
+    ON CONFLICT (
+        code_finder_user_id,
+        idempotency_key
+    )
+    WHERE idempotency_key IS NOT NULL
+    DO NOTHING
+    RETURNING id, enquiry_number
+    INTO v_enquiry_id, v_enquiry_number;
+
+
+    ---------------------------------------------------------------------------
+    -- Existing request with the same idempotency key
+    ---------------------------------------------------------------------------
+
+    IF v_enquiry_id IS NULL THEN
+        SELECT id, enquiry_number
+        INTO v_existing
+        FROM public.code_finder_enquiries
+        WHERE code_finder_user_id = p_user_id
+          AND idempotency_key = v_idempotency_key;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION
+                'Unable to resolve the existing idempotent enquiry.';
+        END IF;
+
+        RETURN jsonb_build_object(
+            'success', TRUE,
+            'enquiry_id', v_existing.id,
+            'enquiry_number', v_existing.enquiry_number,
+            'duplicate', TRUE
+        );
+    END IF;
+
+
+    ---------------------------------------------------------------------------
+    -- Insert all enquiry items
+    ---------------------------------------------------------------------------
+
+    INSERT INTO public.code_finder_enquiry_items (
+        enquiry_id,
+        alternative_code_snapshot,
+        requested_quantity,
+        availability_status,
+        checked_at
+    )
+    SELECT
+        v_enquiry_id,
+        TRIM(item.value ->> 'alternative_code_snapshot'),
+        (item.value ->> 'requested_quantity')::NUMERIC(12,2),
+        item.value ->> 'availability_status',
+        v_checked_at
+    FROM jsonb_array_elements(p_items) AS item(value);
+
+
+    RETURN jsonb_build_object(
+        'success', TRUE,
+        'enquiry_id', v_enquiry_id,
+        'enquiry_number', v_enquiry_number,
+        'duplicate', FALSE
+    );
+END;
+$$;
+
+
+-- The RPC can only be called using the service-role key.
+
+REVOKE ALL ON FUNCTION public.create_code_finder_enquiry(
+    UUID,
+    JSONB,
+    TEXT,
+    TIMESTAMPTZ,
+    TEXT,
+    TEXT
+) FROM PUBLIC, anon, authenticated;
+
+GRANT EXECUTE ON FUNCTION public.create_code_finder_enquiry(
+    UUID,
+    JSONB,
+    TEXT,
+    TIMESTAMPTZ,
+    TEXT,
+    TEXT
+) TO service_role;
+
+COMMIT;
+
+-- ==========================================
+-- FILE: fix_bill_sequence.sql
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION get_next_bill_number(p_platform TEXT)
+RETURNS BIGINT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_prefix INTEGER;
+    v_max_val INTEGER;
+    v_next_val INTEGER;
+BEGIN
+    -- prefix format: YYMM (e.g. 2610 for Oct 2026)
+    v_prefix := TO_CHAR(CURRENT_DATE, 'YYMM')::INTEGER;
+    
+    -- Find max for the given platform that starts with this prefix
+    SELECT MAX(bill_number) INTO v_max_val
+    FROM estimates
+    WHERE platform = p_platform
+      AND bill_number >= (v_prefix * 1000)
+      AND bill_number < ((v_prefix + 1) * 1000);
+      
+    IF v_max_val IS NULL THEN
+        -- First bill of the month: 2610001
+        v_next_val := (v_prefix * 1000) + 1;
+    ELSE
+        v_next_val := v_max_val + 1;
+    END IF;
+    
+    RETURN v_next_val;
+END;
+$$;
+
+-- ==========================================
+-- FILE: fix_cf8_staff_access.sql
+-- ==========================================
+
+-- Fix cf8_require_staff to allow Supabase Edge Functions (which use the service_role key)
+-- to execute RPC calls that require staff permissions.
+
+CREATE OR REPLACE FUNCTION public.cf8_require_staff() RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+ -- Allow execution if called with the service_role key (e.g. from Edge Functions)
+ IF current_setting('request.jwt.claims', true)::jsonb ->> 'role' = 'service_role' THEN
+  RETURN;
+ END IF;
+
+ IF NOT EXISTS (SELECT 1 FROM public.user_roles
+ WHERE id=auth.uid() AND is_active IS TRUE AND role IN ('ADMIN','STAFF'))
+ OR public.is_active_staff() IS DISTINCT FROM TRUE THEN
+ RAISE EXCEPTION 'Active internal staff access required'; END IF;
+END $$;
+
+-- ==========================================
+-- FILE: fix_product_delete.sql
+-- ==========================================
+
+-- Fix product deletion being blocked by laminea_product_codes
+
+ALTER TABLE laminea_product_codes 
+DROP CONSTRAINT IF EXISTS laminea_product_codes_product_id_fkey;
+
+ALTER TABLE laminea_product_codes 
+ADD CONSTRAINT laminea_product_codes_product_id_fkey 
+FOREIGN KEY (product_id) 
+REFERENCES products(id) 
+ON DELETE CASCADE;
+
+-- Update the immutable trigger to allow ON DELETE SET NULL cascades to modify the foreign keys
+CREATE OR REPLACE FUNCTION check_laminea_code_audit_immutable()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        -- Allow updates if they are only setting foreign keys to NULL (due to ON DELETE SET NULL)
+        IF NEW.id = OLD.id 
+           AND NEW.action = OLD.action 
+           AND NEW.alternative_code = OLD.alternative_code
+           AND NEW.reason IS NOT DISTINCT FROM OLD.reason
+           AND NEW.import_batch_id IS NOT DISTINCT FROM OLD.import_batch_id
+           AND NEW.created_at = OLD.created_at
+           AND (NEW.previous_product_id IS NOT DISTINCT FROM OLD.previous_product_id OR NEW.previous_product_id IS NULL)
+           AND (NEW.new_product_id IS NOT DISTINCT FROM OLD.new_product_id OR NEW.new_product_id IS NULL)
+           AND (NEW.actor IS NOT DISTINCT FROM OLD.actor OR NEW.actor IS NULL)
+        THEN
+            RETURN NEW;
+        END IF;
+    END IF;
+
+    RAISE EXCEPTION 'Audit records are immutable and cannot be updated or deleted.';
+END;
+$$ LANGUAGE plpgsql;
+
+-- ==========================================
+-- FILE: fix_user_deletion.sql
+-- ==========================================
+
+-- Fix code_finder_user deletion being blocked by enquiries and messages
+
+-- 1. Fix code_finder_enquiries -> code_finder_users
+ALTER TABLE public.code_finder_enquiries 
+DROP CONSTRAINT IF EXISTS code_finder_enquiries_code_finder_user_id_fkey;
+
+ALTER TABLE public.code_finder_enquiries 
+ADD CONSTRAINT code_finder_enquiries_code_finder_user_id_fkey 
+FOREIGN KEY (code_finder_user_id) 
+REFERENCES public.code_finder_users(id) 
+ON DELETE CASCADE;
+
+-- 2. Fix code_finder_messages -> code_finder_enquiries
+ALTER TABLE public.code_finder_messages 
+DROP CONSTRAINT IF EXISTS code_finder_messages_enquiry_id_code_finder_user_id_fkey,
+DROP CONSTRAINT IF EXISTS code_finder_messages_enquiry_id_fkey; -- Just in case it was named this
+
+ALTER TABLE public.code_finder_messages 
+ADD CONSTRAINT code_finder_messages_enquiry_id_code_finder_user_id_fkey 
+FOREIGN KEY (enquiry_id, code_finder_user_id) 
+REFERENCES public.code_finder_enquiries(id, code_finder_user_id) 
+ON DELETE CASCADE;
