@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     console.log(`[Backup Engine] Sending email for ${dateStr}...`);
     const info = await transporter.sendMail({
       from: `"CCAI Backup" <${process.env.GMAIL_USER}>`,
-      to: ['darshanloyapune@gmail.com', 'kevaltaank53@gmail.com'],
+      to: ['kevaltaank53@gmail.com'],
       subject: `All Platforms Daily Ledger Backup - ${dateStr}`,
       text: 'Please find the daily ledger and estimate backup attached for all platforms.',
       attachments: [
