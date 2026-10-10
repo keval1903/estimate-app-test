@@ -1715,7 +1715,7 @@ export default function CreateEstimate() {
             <div className="item-name">
               {idx + 1}. {getInternalItemName(it, docType)}{it.remark ? ` - ${it.remark}` : ''}
             </div>
-            <div className="item-grid">
+            <div className="item-grid" style={{ display: 'flex', gap: '40px', flexWrap: 'wrap' }}>
               {it.calculation_type_snapshot === 'SQFT' ? (
                 <>
                   <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>NOS</span><br />{it.nos}</div>
@@ -1725,6 +1725,9 @@ export default function CreateEstimate() {
                 <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>QTY</span><br />{it.quantity} {it.unit_snapshot}</div>
               )}
               <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>RATE</span><br />₹{Number(it.rate).toFixed(2)}</div>
+              {Number(it.discount_percent) > 0 && (
+                <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>DISC</span><br />{Number(it.discount_percent)}%</div>
+              )}
             </div>
             <div className="item-amount">₹{Number(calcItem(it).amount || it.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
             <div className="item-actions">
