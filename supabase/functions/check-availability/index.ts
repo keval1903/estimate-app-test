@@ -144,88 +144,25 @@ serve(async (req: Request) => {
       })
     }
 
-    // Phase 2: Normalize codes BEFORE aggregation to combine space variants
-    const aggregatedReqs: Record<string, number> = {}
-    const displayCodeMap: Record<string, string> = {} // normalized → first raw input
+    const sanitizedRequests = requests.map(r => ({
+      code: typeof r?.code === 'string' ? r.code : String(r?.code ?? ''),
+      quantity: r?.quantity
+    }))
 
-    for (const r of requests) {
-      if (!r.code || typeof r.code !== 'string') continue
-      const normalized = r.code.trim().replace(/\s+/g, '').toUpperCase()
-      if (!normalized) continue
-      
-      const qty = Number(r.quantity)
-      
-      // Keep the first raw code as the display code
-      if (!(normalized in displayCodeMap)) {
-        displayCodeMap[normalized] = r.code.trim().toUpperCase()
-      }
-      
-      if (isNaN(qty) || qty <= 0) {
-        aggregatedReqs[normalized] = (aggregatedReqs[normalized] || 0) - 1000 // Flag as invalid
-      } else {
-        aggregatedReqs[normalized] = (aggregatedReqs[normalized] || 0) + qty
-      }
-    }
-
-    const uniqueNormalized = Object.keys(aggregatedReqs)
-    
-    // Fetch codes — pass normalized codes (spaces already stripped)
-    const { data: mappings, error: mappingErr } = await supabaseAdmin
-      .rpc('search_laminea_availability_codes', { search_codes: uniqueNormalized })
-
-    if (mappingErr) throw mappingErr
-
-    const productIds = mappings.map((m: any) => m.product_id)
-    let stockMap: Record<string, number> = {}
-    
-    if (productIds.length > 0) {
-      const { data: products, error: productErr } = await supabaseAdmin
-        .from('products')
-        .select('id, stock')
-        .in('id', productIds)
-      
-      if (productErr) throw productErr
-      products.forEach((p: any) => {
-        stockMap[p.id] = Number(p.stock) || 0
-      })
-    }
-
-    // Map alternative_code to actual stock using normalized keys
-    const codeToStock: Record<string, number> = {}
-    mappings.forEach((m: any) => {
-       const norm = m.alternative_code.replace(/\s+/g, '').toUpperCase()
-       codeToStock[norm] = stockMap[m.product_id] || 0
+    const { data: rpcResults, error: rpcErr } = await supabaseAdmin.rpc('check_laminea_stock_availability', {
+      p_requests: sanitizedRequests,
+      p_cf_user_id: cfUser.id
     })
 
-    const results = []
+    if (rpcErr) throw rpcErr
 
-    for (const normCode of uniqueNormalized) {
-      const reqQty = aggregatedReqs[normCode]
-      const displayCode = displayCodeMap[normCode] || normCode
-      
-      if (reqQty < 0) {
-        results.push({ code: displayCode, requestedQuantity: 'Invalid', status: 'INVALID QUANTITY' })
-        continue
-      }
-      
-      if (codeToStock[normCode] === undefined) {
-         results.push({ code: displayCode, requestedQuantity: reqQty, status: 'CODE NOT FOUND' })
-         continue
-      }
-      
-      const actualStock = codeToStock[normCode]
-      
-      let status = 'PLEASE CONFIRM WITH US'
-      if (reqQty >= 1 && reqQty <= 10 && actualStock >= reqQty) {
-        status = 'AVAILABLE'
-      }
-      
-      results.push({
-        code: displayCode,
-        requestedQuantity: reqQty,
-        status
-      })
-    }
+    const results = Array.isArray(rpcResults)
+      ? rpcResults.map((r: any) => ({
+          code: r.code,
+          requestedQuantity: r.requestedQuantity,
+          status: r.status
+        }))
+      : []
 
     return new Response(JSON.stringify({
       results,

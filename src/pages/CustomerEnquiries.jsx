@@ -60,13 +60,35 @@ export default function CustomerEnquiries() {
     }
   };
 
+  const [codeGroups, setCodeGroups] = useState([]);
+
+  const fetchCodeGroups = useCallback(async () => {
+    try {
+      const { data, error: grpErr } = await supabase
+        .from('laminea_code_groups')
+        .select('id, name, is_active')
+        .order('name', { ascending: true });
+      if (!grpErr && data) {
+        setCodeGroups(data);
+      }
+    } catch (err) {
+      console.error('Error loading code groups:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCodeGroups();
+  }, [fetchCodeGroups]);
+
   const fetchCustomers = async () => {
     try {
       setLoading(true);
       const { data, error: err } = await supabase
         .from('code_finder_users')
         .select(`
-          id, client_name, username, mobile, is_active, last_login_at,
+          id, client_name, contact_person, username, mobile, is_active, last_login_at,
+          code_group_id, customer_prefix,
+          laminea_code_groups ( id, name, is_active ),
           code_finder_enquiries ( id, status, created_at ),
           code_finder_messages ( id, created_at, sender_type ),
           code_finder_message_reads ( staff_user_id, last_read_message_created_at )
@@ -131,18 +153,34 @@ export default function CustomerEnquiries() {
 
   const filteredCustomers = customers.filter(c => 
     c.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.username?.toLowerCase().includes(searchTerm.toLowerCase())
+    c.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.customer_prefix?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.laminea_code_groups?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
   const paginatedCustomers = filteredCustomers.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createForm, setCreateForm] = useState({ username: '', password: '', client_name: '', contact_person: '', mobile: '' });
+  const [createForm, setCreateForm] = useState({
+    username: '',
+    password: '',
+    client_name: '',
+    contact_person: '',
+    mobile: '',
+    code_group_id: '',
+    customer_prefix: ''
+  });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState(null);
   
   // Edit logic
   const [editUser, setEditUser] = useState(null);
-  const [editForm, setEditForm] = useState({ client_name: '', contact_person: '', mobile: '' });
+  const [editForm, setEditForm] = useState({
+    client_name: '',
+    contact_person: '',
+    mobile: '',
+    code_group_id: '',
+    customer_prefix: ''
+  });
   const [editLoading, setEditLoading] = useState(false);
   
   // New linking fields
@@ -153,6 +191,12 @@ export default function CustomerEnquiries() {
 
   useEffect(() => {
     if (showCreateModal) {
+      fetchCodeGroups();
+      // Default to first active group if not selected yet
+      const defaultGrp = codeGroups.find(g => g.is_active) || codeGroups[0];
+      if (defaultGrp && !createForm.code_group_id) {
+        setCreateForm(prev => ({ ...prev, code_group_id: defaultGrp.id }));
+      }
       // Fetch clients for dropdown
       supabase.from('clients').select('id, name, mobile').eq('platform', 'laminea').order('name')
         .then(({ data }) => setLamineaClients(data || []))
@@ -165,13 +209,28 @@ export default function CustomerEnquiries() {
     const actionStr = customer.is_active ? 'disable' : 'enable';
     if (!window.confirm(`Are you sure you want to ${actionStr} this customer account?`)) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-manage-account`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ action: 'UPDATE', user_id: customer.id, is_active: !customer.is_active })
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update status');
+      if (customer.code_group_id && customer.customer_prefix) {
+        const { error: rpcErr } = await supabase.rpc('update_code_finder_customer_settings', {
+          p_cf_user_id: customer.id,
+          p_code_group_id: customer.code_group_id,
+          p_customer_prefix: customer.customer_prefix,
+          p_is_active: !customer.is_active
+        });
+        if (rpcErr) throw rpcErr;
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-manage-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ action: 'UPDATE', user_id: customer.id, is_active: !customer.is_active })
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          let errMsg = 'Failed to update status';
+          try { errMsg = JSON.parse(errText).error || errMsg; } catch { if (errText) errMsg = errText; }
+          throw new Error(errMsg);
+        }
+      }
       if (activeTab === 'CUSTOMERS') fetchCustomers();
     } catch (err) { alert(err.message); }
   };
@@ -186,22 +245,40 @@ export default function CustomerEnquiries() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ action: 'DELETE', user_id: customerId })
       });
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete customer');
+      if (!res.ok) {
+        const errText = await res.text();
+        let errMsg = 'Failed to delete customer';
+        try { errMsg = JSON.parse(errText).error || errMsg; } catch { if (errText) errMsg = errText; }
+        throw new Error(errMsg);
+      }
       if (activeTab === 'CUSTOMERS') fetchCustomers();
     } catch (err) { alert(err.message); }
   };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
+    const normPrefix = (editForm.customer_prefix || '').trim().replace(/\s+/g, '').toUpperCase();
+    if (!editForm.code_group_id) {
+      alert('Please select an Alternative-Code Group.');
+      return;
+    }
+    if (!normPrefix || !/^[A-Z0-9]{1,10}$/.test(normPrefix)) {
+      alert('Customer Prefix / Initials is required (1–10 letters or numbers, e.g. NJ).');
+      return;
+    }
+
     setEditLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-manage-account`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ action: 'UPDATE', user_id: editUser.id, ...editForm })
+      const { error: rpcErr } = await supabase.rpc('update_code_finder_customer_settings', {
+        p_cf_user_id: editUser.id,
+        p_code_group_id: editForm.code_group_id,
+        p_customer_prefix: normPrefix,
+        p_client_name: editForm.client_name.trim(),
+        p_contact_person: editForm.contact_person ? editForm.contact_person.trim() : '',
+        p_mobile: editForm.mobile ? editForm.mobile.trim() : ''
       });
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update user');
+      if (rpcErr) throw rpcErr;
+
       setEditUser(null);
       if (activeTab === 'CUSTOMERS') fetchCustomers();
     } catch (err) {
@@ -213,6 +290,16 @@ export default function CustomerEnquiries() {
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
+    const normPrefix = (createForm.customer_prefix || '').trim().replace(/\s+/g, '').toUpperCase();
+    const normUsername = (createForm.username || '').trim().replace(/\s+/g, '').toUpperCase();
+    if (!createForm.code_group_id) {
+      setCreateError('Please select an Alternative-Code Group.');
+      return;
+    }
+    if (!normPrefix || !/^[A-Z0-9]{1,10}$/.test(normPrefix)) {
+      setCreateError('Customer Prefix / Initials is required (1–10 letters or numbers, e.g. NJ).');
+      return;
+    }
     if (linkMode === 'LINK_EXISTING' && !selectedExistingClientId) {
       setCreateError('Please select an existing client to link.');
       return;
@@ -221,6 +308,42 @@ export default function CustomerEnquiries() {
     setCreateLoading(true);
     setCreateError(null);
     try {
+      // Pre-validate username and prefix uniqueness before invoking the Edge Function
+      const [{ data: existingUsernameUser }, { data: existingPrefixUser }] = await Promise.all([
+        supabase
+          .from('code_finder_users')
+          .select('id, client_name')
+          .eq('normalized_username', normUsername)
+          .maybeSingle(),
+        supabase
+          .from('code_finder_users')
+          .select('id, client_name')
+          .eq('normalized_prefix', normPrefix)
+          .maybeSingle()
+      ]);
+
+      if (existingUsernameUser) {
+        throw new Error(`Username "${createForm.username.trim()}" is already used by ${existingUsernameUser.client_name}.`);
+      }
+      if (existingPrefixUser) {
+        throw new Error(`Customer prefix "${normPrefix}" is already assigned to ${existingPrefixUser.client_name}.`);
+      }
+
+      if (linkMode === 'CREATE_NEW') {
+        const normClientName = (createForm.client_name || '').trim().replace(/\s+/g, ' ').toUpperCase();
+        const normMobile = (createForm.mobile || '').replace(/\s+/g, '');
+        const matchingClient = lamineaClients.find(
+          c =>
+            (c.name || '').trim().replace(/\s+/g, ' ').toUpperCase() === normClientName &&
+            (c.mobile || '').replace(/\s+/g, '') === normMobile
+        );
+        if (matchingClient) {
+          throw new Error(
+            `A Laminea client named "${matchingClient.name}" already exists. Select "Link an existing Laminea client" instead.`
+          );
+        }
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/staff-manage-account`, {
         method: 'POST',
@@ -231,22 +354,55 @@ export default function CustomerEnquiries() {
         body: JSON.stringify({
           action: 'CREATE',
           ...createForm,
+          customer_prefix: normPrefix,
           create_new_client: linkMode === 'CREATE_NEW',
           link_existing_client_id: linkMode === 'LINK_EXISTING' ? selectedExistingClientId : null
         })
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to create user');
+
+      const resText = await res.text();
+      let resData = {};
+      try {
+        resData = resText ? JSON.parse(resText) : {};
+      } catch {
+        if (!res.ok) throw new Error(resText || 'Failed to create user');
       }
+
+      if (!res.ok) {
+        throw new Error(resData.error || resData.message || resText || 'Failed to create user');
+      }
+
+      // Ensure code_group_id and customer_prefix are persisted via RPC even if the remote
+      // Edge Function is running an older deployment that did not set them on INSERT.
+      const targetUserId = resData.cf_user_id || resData.user_id;
+      if (targetUserId) {
+        const { error: settingsErr } = await supabase.rpc('update_code_finder_customer_settings', {
+          p_cf_user_id: targetUserId,
+          p_code_group_id: createForm.code_group_id,
+          p_customer_prefix: normPrefix,
+          p_client_name: createForm.client_name.trim(),
+          p_contact_person: createForm.contact_person ? createForm.contact_person.trim() : '',
+          p_mobile: createForm.mobile ? createForm.mobile.trim() : ''
+        });
+        if (settingsErr) throw settingsErr;
+      }
+
       setShowCreateModal(false);
-      setCreateForm({ username: '', password: '', client_name: '', contact_person: '', mobile: '' });
+      setCreateForm({
+        username: '',
+        password: '',
+        client_name: '',
+        contact_person: '',
+        mobile: '',
+        code_group_id: '',
+        customer_prefix: ''
+      });
       setLinkMode('CREATE_NEW');
       setSelectedExistingClientId('');
       setClientSearch('');
       if (activeTab === 'CUSTOMERS') fetchCustomers();
     } catch (err) {
-      setCreateError(err.message);
+      setCreateError(err.message || 'Failed to create user');
     } finally {
       setCreateLoading(false);
     }
@@ -259,12 +415,50 @@ export default function CustomerEnquiries() {
       {/* Edit Modal */}
       {editUser && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '400px', margin: '20px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Edit Customer</h3>
+          <div className="card" style={{ width: '100%', maxWidth: '440px', margin: '20px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Edit Customer Account</h3>
             <form onSubmit={handleEditSubmit}>
               <div className="field">
                 <label>Company/Client Name *</label>
                 <input required type="text" value={editForm.client_name} onChange={e => setEditForm({...editForm, client_name: e.target.value})} />
+              </div>
+              <div className="field">
+                <label>Alternative-Code Group *</label>
+                <select
+                  required
+                  value={editForm.code_group_id}
+                  onChange={e => setEditForm({ ...editForm, code_group_id: e.target.value })}
+                  className="input"
+                  style={{ width: '100%', padding: '8px' }}
+                >
+                  <option value="">-- Select Group --</option>
+                  {codeGroups
+                    .filter(g => g.is_active || g.id === editForm.code_group_id)
+                    .map(g => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} {!g.is_active ? '(Inactive)' : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Customer Prefix / Initials * (Unique, e.g. NJ)</label>
+                <input
+                  required
+                  type="text"
+                  maxLength={10}
+                  placeholder="e.g. NJ"
+                  value={editForm.customer_prefix}
+                  onChange={e =>
+                    setEditForm({
+                      ...editForm,
+                      customer_prefix: e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+                    })
+                  }
+                />
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Staff sees prefixed codes like <strong>{(editForm.customer_prefix || 'NJ')}01SMT</strong> while customer sees <strong>01 SMT</strong>.
+                </span>
               </div>
               <div className="field">
                 <label>Contact Person</label>
@@ -286,7 +480,7 @@ export default function CustomerEnquiries() {
       {/* Create Modal */}
       {showCreateModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '400px', margin: '20px' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '440px', margin: '20px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Create Code Finder User</h3>
             {createError && <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '8px', borderRadius: '4px', marginBottom: '12px', fontSize: '14px' }}>{createError}</div>}
             <form onSubmit={handleCreateSubmit}>
@@ -301,6 +495,44 @@ export default function CustomerEnquiries() {
               <div className="field">
                 <label>Temporary Password *</label>
                 <input required type="text" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} />
+              </div>
+              <div className="field">
+                <label>Alternative-Code Group *</label>
+                <select
+                  required
+                  value={createForm.code_group_id}
+                  onChange={e => setCreateForm({ ...createForm, code_group_id: e.target.value })}
+                  className="input"
+                  style={{ width: '100%', padding: '8px' }}
+                >
+                  <option value="">-- Select Group --</option>
+                  {codeGroups
+                    .filter(g => g.is_active)
+                    .map(g => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Customer Prefix / Initials * (Unique, e.g. NJ)</label>
+                <input
+                  required
+                  type="text"
+                  maxLength={10}
+                  placeholder="e.g. NJ"
+                  value={createForm.customer_prefix}
+                  onChange={e =>
+                    setCreateForm({
+                      ...createForm,
+                      customer_prefix: e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+                    })
+                  }
+                />
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  1–10 uppercase letters/numbers. Staff sees <strong>{(createForm.customer_prefix || 'NJ')}01SMT</strong> when customer searches <strong>01 SMT</strong>.
+                </span>
               </div>
               <div className="field">
                 <label>Contact Person</label>
@@ -359,6 +591,12 @@ export default function CustomerEnquiries() {
                   </div>
                 )}
               </div>
+
+              {createError && (
+                <div style={{ background: '#fee2e2', color: '#b91c1c', padding: '10px', borderRadius: '6px', marginTop: '12px', fontSize: '13px', fontWeight: 500 }}>
+                  {createError}
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                 <button type="submit" disabled={createLoading} className="btn btn-primary" style={{ flex: 1 }}>{createLoading ? 'Creating...' : 'Create User'}</button>
@@ -421,7 +659,7 @@ export default function CustomerEnquiries() {
               Customers
             </button>
           </div>
-          {role === 'ADMIN' && (
+          {isStaff && (
             <button 
               onClick={() => setShowCreateModal(true)}
               className="btn btn-sm btn-primary"
@@ -437,7 +675,7 @@ export default function CustomerEnquiries() {
             type="text"
             className="input"
             style={{ flex: 1, padding: '8px' }}
-            placeholder="Search..."
+            placeholder="Search by customer, username, prefix, or group..."
             value={searchTerm}
             onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
           />
@@ -513,7 +751,13 @@ export default function CustomerEnquiries() {
                 <div style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '8px' }}>
                   @{customer.username} {customer.mobile && `• ${customer.mobile}`}
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', padding: '2px 8px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '4px', fontWeight: 600 }}>
+                    Group: {customer.laminea_code_groups?.name || 'Unassigned'}
+                  </span>
+                  <span style={{ fontSize: '12px', padding: '2px 8px', background: '#f0fdf4', color: '#166534', borderRadius: '4px', fontWeight: 700, fontFamily: 'monospace' }}>
+                    Prefix: {customer.customer_prefix || 'Not Set'}
+                  </span>
                   {customer.pendingCount > 0 && (
                     <span style={{ fontSize: '12px', padding: '2px 8px', background: '#fef3c7', color: '#92400e', borderRadius: '4px' }}>
                       {customer.pendingCount} Pending Enquiries
@@ -524,17 +768,26 @@ export default function CustomerEnquiries() {
                       Inactive Account
                     </span>
                   )}
-                  {role === 'ADMIN' && (
+                  {isStaff && (
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
+                          fetchCodeGroups();
                           setEditUser(customer);
-                          setEditForm({ client_name: customer.client_name || '', contact_person: customer.contact_person || '', mobile: customer.mobile || '' });
+                          setEditForm({
+                            client_name: customer.client_name || '',
+                            contact_person: customer.contact_person || '',
+                            mobile: customer.mobile || '',
+                            code_group_id: customer.code_group_id || (codeGroups.find(g => g.is_active)?.id || ''),
+                            customer_prefix: customer.customer_prefix || ''
+                          });
                         }} 
                         className="btn btn-sm btn-secondary" style={{ fontSize: '11px', padding: '2px 6px' }}>Edit</button>
                       <button onClick={(e) => handleToggleStatus(e, customer)} className="btn btn-sm btn-secondary" style={{ fontSize: '11px', padding: '2px 6px' }}>{customer.is_active ? 'Disable' : 'Enable'}</button>
-                      <button onClick={(e) => handleRemoveCustomer(e, customer.id)} className="btn btn-sm btn-danger" style={{ fontSize: '11px', padding: '2px 6px' }}>Remove</button>
+                      {role === 'ADMIN' && (
+                        <button onClick={(e) => handleRemoveCustomer(e, customer.id)} className="btn btn-sm btn-danger" style={{ fontSize: '11px', padding: '2px 6px' }}>Remove</button>
+                      )}
                     </div>
                   )}
                 </div>

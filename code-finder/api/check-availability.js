@@ -106,9 +106,15 @@ export default async function handler(req) {
       });
     }
 
-    // Call the single unified RPC directly
+    const sanitizedRequests = requests.map(r => ({
+      code: typeof r?.code === 'string' ? r.code : String(r?.code ?? ''),
+      quantity: r?.quantity
+    }));
+
+    // Call the single unified RPC directly using the server-resolved customer ID
     const { data: results, error: rpcErr } = await supabaseAdmin.rpc('check_laminea_stock_availability', {
-      p_requests: requests
+      p_requests: sanitizedRequests,
+      p_cf_user_id: authData.cfUser.id
     });
 
     if (rpcErr) {
@@ -119,8 +125,16 @@ export default async function handler(req) {
       });
     }
 
+    const safeResults = Array.isArray(results)
+      ? results.map(r => ({
+          code: r.code,
+          requestedQuantity: r.requestedQuantity,
+          status: r.status
+        }))
+      : [];
+
     return new Response(JSON.stringify({
-      results,
+      results: safeResults,
       checkedAt: new Date().toISOString()
     }), {
       status: 200,

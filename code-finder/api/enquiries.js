@@ -105,8 +105,38 @@ export default async function handler(req) {
       }
       
       const hasMore = count > to + 1;
+      const safeEnquiries = (data || []).map(enq => ({
+        id: enq.id,
+        enquiry_number: enq.enquiry_number,
+        status: enq.status,
+        client_note: enq.client_note,
+        checked_at: enq.checked_at,
+        created_at: enq.created_at,
+        ordered_by: enq.ordered_by,
+        code_finder_enquiry_items: (enq.code_finder_enquiry_items || []).map(item => ({
+          id: item.id,
+          alternative_code_snapshot: item.alternative_code_snapshot,
+          requested_quantity: item.requested_quantity,
+          availability_status: item.availability_status
+        })),
+        code_finder_proposals: (enq.code_finder_proposals || []).map(prop => ({
+          id: prop.id,
+          revision: prop.revision,
+          proposal_type: prop.proposal_type,
+          staff_note: prop.staff_note,
+          submitted_at: prop.submitted_at,
+          superseded_at: prop.superseded_at,
+          response: prop.response,
+          responded_at: prop.responded_at,
+          code_finder_proposal_items: (prop.code_finder_proposal_items || []).map(pi => ({
+            enquiry_item_id: pi.enquiry_item_id,
+            proposed_quantity: pi.proposed_quantity,
+            item_note: pi.item_note
+          }))
+        }))
+      }));
 
-      return new Response(JSON.stringify({ enquiries: data || [], hasMore, page }), {
+      return new Response(JSON.stringify({ enquiries: safeEnquiries, hasMore, page }), {
         status: 200,
         headers: headers
       });
@@ -141,9 +171,15 @@ export default async function handler(req) {
         return createErrorResponse('Too many submissions. Please wait.', 429);
       }
 
-      // Check stock using the unified RPC
+      const sanitizedRequests = requests.map(r => ({
+        code: typeof r?.code === 'string' ? r.code : String(r?.code ?? ''),
+        quantity: r?.quantity
+      }));
+
+      // Check stock using the unified RPC scoped strictly to the authenticated customer's group
       const { data: stockResults, error: stockErr } = await supabaseAdmin.rpc('check_laminea_stock_availability', {
-        p_requests: requests
+        p_requests: sanitizedRequests,
+        p_cf_user_id: authData.cfUser.id
       });
 
       if (stockErr) {
@@ -152,7 +188,7 @@ export default async function handler(req) {
       }
 
       // Format items for create_code_finder_enquiry
-      // Note: The cf8_capture_mapping trigger automatically fills in product_id_snapshot
+      // Note: The cf8_capture_mapping trigger automatically fills in group/prefix/mapping/product snapshots
       const checkedAt = new Date().toISOString();
       const statusMap = {
         'AVAILABLE': 'AVAILABLE',
@@ -188,7 +224,11 @@ export default async function handler(req) {
         enquiry_number: enquiryData.enquiry_number,
         duplicate: enquiryData.duplicate || false,
         checked_at: checkedAt,
-        items: itemsForRpc
+        items: itemsForRpc.map(item => ({
+          alternative_code_snapshot: item.alternative_code_snapshot,
+          requested_quantity: item.requested_quantity,
+          availability_status: item.availability_status
+        }))
       }), {
         status: 200,
         headers: headers

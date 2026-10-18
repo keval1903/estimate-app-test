@@ -19,6 +19,17 @@ const safeReplace = (str, regex, replacement) => {
   return str.replace(regex, replacement);
 };
 
+const getStaffDisplayCode = (item, enq) => {
+  if (!item) return '';
+  if (item.prefixed_code_snapshot) return item.prefixed_code_snapshot;
+  const snapPrefix = (item.customer_prefix_snapshot || enq?.customer_prefix_snapshot || '').trim().toUpperCase();
+  const normBase = String(item.alternative_code_snapshot || '').replace(/\s+/g, '').toUpperCase();
+  if (snapPrefix && normBase) {
+    return `${snapPrefix}${normBase}`;
+  }
+  return item.alternative_code_snapshot || '';
+};
+
 function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -51,7 +62,7 @@ function CustomerDetail() {
       
       const { data: userData, error: userErr } = await supabase
         .from('code_finder_users')
-        .select('*')
+        .select('*, laminea_code_groups ( id, name, is_active )')
         .eq('id', id)
         .single();
       if (userErr) throw userErr;
@@ -329,7 +340,7 @@ function CustomerDetail() {
 
           return {
             enquiry_item_id: item.id,
-            original_code: item.alternative_code_snapshot,
+            original_code: resolved?.prefixed_code_snapshot || getStaffDisplayCode(item, workingEnquiry),
             original_qty: item.requested_quantity,
             proposed_quantity:
               resolved?.agreed_quantity ??
@@ -488,12 +499,20 @@ function CustomerDetail() {
         </div>
       )}
 
-      <div className="top-nav" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="top-nav" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <span className="nav-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => navigate(`/${activePlatform}/customer-enquiries`)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>←</button>
           {customer.client_name}
         </span>
-        <span style={{ fontSize: '14px', opacity: 0.8 }}>@{customer.username}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', padding: '2px 8px', background: 'rgba(255,255,255,0.2)', borderRadius: '4px', fontWeight: 600 }}>
+            Group: {customer.laminea_code_groups?.name || 'Unassigned'}
+          </span>
+          <span style={{ fontSize: '12px', padding: '2px 8px', background: 'rgba(255,255,255,0.2)', borderRadius: '4px', fontWeight: 700, fontFamily: 'monospace' }}>
+            Prefix: {customer.customer_prefix || 'Not Set'}
+          </span>
+          <span style={{ fontSize: '14px', opacity: 0.85 }}>@{customer.username}</span>
+        </div>
       </div>
 
       <div className="page">
@@ -507,7 +526,7 @@ function CustomerDetail() {
           <button style={{ flex: 1, padding: '12px', border: 'none', cursor: 'pointer', borderRadius: '8px 8px 0 0', background: activeTab === 'CHAT' ? 'var(--accent)' : 'transparent', fontWeight: activeTab === 'CHAT' ? 'bold' : 'normal', color: activeTab === 'CHAT' ? '#fff' : 'var(--text-muted)' }} onClick={() => setActiveTab('CHAT')}>
             Chat {unreadChatCount > 0 && <span style={{ background: '#ef4444', color: '#fff', borderRadius: '12px', padding: '2px 6px', fontSize: '11px', marginLeft: '4px' }}>{unreadChatCount}</span>}
           </button>
-          {role === 'ADMIN' && (
+          {isStaff && (
             <button style={{ flex: 1, padding: '12px', border: 'none', cursor: 'pointer', borderRadius: '8px 8px 0 0', background: activeTab === 'ACCOUNT' ? 'var(--accent)' : 'transparent', fontWeight: activeTab === 'ACCOUNT' ? 'bold' : 'normal', color: activeTab === 'ACCOUNT' ? '#fff' : 'var(--text-muted)' }} onClick={() => setActiveTab('ACCOUNT')}>
               Account
             </button>
@@ -525,6 +544,11 @@ function CustomerDetail() {
                       <div style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                         {safeFormat(enq.created_at, 'MMM d, yyyy h:mm a')}
                         {enq.ordered_by && <span style={{ marginLeft: '8px' }}>&bull; By: {enq.ordered_by}</span>}
+                        {enq.code_group_name_snapshot && (
+                          <span style={{ marginLeft: '8px', fontSize: '11px', padding: '1px 6px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '4px', fontWeight: 600 }}>
+                            {enq.code_group_name_snapshot}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -589,10 +613,12 @@ function CustomerDetail() {
                           hasLiveStock &&
                           stockNumber < requiredQuantity;
 
+                        const staffDisplayCode = resolved?.prefixed_code_snapshot || getStaffDisplayCode(item, enq);
+
                         return (
                           <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
                             <td style={{ padding: '8px', fontFamily: 'monospace' }}>
-                              <div style={{ fontWeight: '600' }}>{item.alternative_code_snapshot}</div>
+                              <div style={{ fontWeight: '600' }}>{staffDisplayCode}</div>
                               {resolved?.current_product_name && (
                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--sans)', marginTop: '2px', whiteSpace: 'nowrap' }}>
                                   ↳ {resolved.current_product_name}
@@ -646,6 +672,11 @@ function CustomerDetail() {
                       <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                         Confirmed on {safeFormat(ord.confirmed_at || ord.updated_at || ord.created_at, 'MMM d, yyyy h:mm a')}
                         {ord.ordered_by && <span style={{ marginLeft: '8px' }}>&bull; By: {ord.ordered_by}</span>}
+                        {ord.code_group_name_snapshot && (
+                          <span style={{ marginLeft: '8px', fontSize: '11px', padding: '1px 6px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '4px', fontWeight: 600 }}>
+                            {ord.code_group_name_snapshot}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
@@ -691,10 +722,11 @@ function CustomerDetail() {
                           const pItem = acceptedProposal.code_finder_proposal_items?.find(pi => pi.enquiry_item_id === item.id);
                           if (pItem) displayQty = pItem.proposed_quantity;
                         }
+                        const staffDisplayCode = getStaffDisplayCode(item, ord);
                         return (
                           <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
                             <td style={{ padding: '8px', fontFamily: 'monospace' }}>
-                              <div style={{ fontWeight: '600' }}>{item.alternative_code_snapshot}</div>
+                              <div style={{ fontWeight: '600' }}>{staffDisplayCode}</div>
                               {item.products?.product_name && (
                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--sans)', marginTop: '2px', whiteSpace: 'nowrap' }}>
                                   ↳ {item.products.product_name}
@@ -794,7 +826,7 @@ function CustomerDetail() {
             </div>
           )}
 
-          {activeTab === 'ACCOUNT' && role === 'ADMIN' && (
+          {activeTab === 'ACCOUNT' && isStaff && (
             <div className="card">
               <CustomerAccountManager customer={customer} onUpdate={fetchData} />
             </div>

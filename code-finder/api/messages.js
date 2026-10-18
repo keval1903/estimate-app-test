@@ -92,7 +92,15 @@ export default async function handler(req) {
         return createErrorResponse('Failed to fetch messages', 500);
       }
 
-      const messages = afterParam ? rawMessages : rawMessages.reverse();
+      const rawList = afterParam ? (rawMessages || []) : (rawMessages || []).reverse();
+      const messages = rawList.map(m => ({
+        id: m.id,
+        enquiry_id: m.enquiry_id,
+        sender_type: m.sender_type,
+        message: m.message,
+        created_at: m.created_at,
+        reply_to_message_id: m.reply_to_message_id
+      }));
 
       return new Response(JSON.stringify({ messages }), {
         status: 200,
@@ -143,7 +151,18 @@ export default async function handler(req) {
         return createErrorResponse('Failed to send message', 400);
       }
 
-      return new Response(JSON.stringify({ message: newMessage }), {
+      const safeMessage = newMessage
+        ? {
+            id: newMessage.id,
+            enquiry_id: newMessage.enquiry_id,
+            sender_type: newMessage.sender_type,
+            message: newMessage.message,
+            created_at: newMessage.created_at,
+            reply_to_message_id: newMessage.reply_to_message_id
+          }
+        : null;
+
+      return new Response(JSON.stringify({ message: safeMessage }), {
         status: 200,
         headers: headers
       });

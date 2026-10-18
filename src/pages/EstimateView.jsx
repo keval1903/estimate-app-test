@@ -304,6 +304,7 @@ export default function EstimateView() {
           if (qty > 0) {
             const p = prodMap[it.product_id]
             const newStock = Number(p.stock) + qty
+            p.stock = newStock
             await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
             await supabase.from('stock_history').insert({
               platform: activePlatform,
@@ -312,14 +313,18 @@ export default function EstimateView() {
               quantity_changed: qty, // positive to add stock back
               estimate_id: id,
               bill_number: estimate?.bill_number?.toString(),
-              site_name: estimate?.site_name
+              site_name: estimate?.site_name,
+              alternative_code: it.alternative_code_snapshot ? it.alternative_code_snapshot.trim().toUpperCase().replace(/\s+/g, ' ') : null
             })
           }
         }
       }
 
-      // 2. Remove Partywise Stock History (Ledger entries)
-      await supabase.from('client_purchases').delete().eq('bill_number', estimate.bill_number).eq('platform', activePlatform);
+      // 2. Remove Partywise Stock History (Ledger entries scoped by estimate_id)
+      await supabase.from('client_purchases').delete().eq('estimate_id', id);
+      if (estimate?.bill_number) {
+        await supabase.from('client_purchases').delete().is('estimate_id', null).eq('bill_number', estimate.bill_number).eq('platform', activePlatform);
+      }
 
       // 3. Update the estimate record type
       const { error } = await supabase.from('estimates').update({
@@ -351,16 +356,20 @@ export default function EstimateView() {
       for (const p of (allProducts || [])) prodMap[p.id] = p
 
       // 1. Check stock sufficiency for all items first
+      const reqByProd = {}
       for (const it of items) {
         if (it.product_id && prodMap[it.product_id] && prodMap[it.product_id].has_stock) {
-          const p = prodMap[it.product_id]
           const reqQty = (it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET') ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
-          const avail = Number(p.stock || 0)
-          if (reqQty > avail) {
-            showToast(`Cannot convert! Insufficient stock for ${p.product_name}. Required: ${reqQty} ${p.unit}, Available: ${avail} ${p.unit}.`, 'error')
-            setConverting(false)
-            return
-          }
+          reqByProd[it.product_id] = (reqByProd[it.product_id] || 0) + reqQty
+        }
+      }
+      for (const [prodId, totalReqQty] of Object.entries(reqByProd)) {
+        const p = prodMap[prodId]
+        const avail = Number(p.stock || 0)
+        if (totalReqQty > avail) {
+          showToast(`Cannot convert! Insufficient stock for ${p.product_name}. Required: ${totalReqQty} ${p.unit}, Available: ${avail} ${p.unit}.`, 'error')
+          setConverting(false)
+          return
         }
       }
 
@@ -371,6 +380,7 @@ export default function EstimateView() {
           if (qty > 0) {
             const p = prodMap[it.product_id]
             const newStock = Number(p.stock) - qty
+            p.stock = newStock
             await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
             await supabase.from('stock_history').insert({
               platform: activePlatform,
@@ -379,7 +389,8 @@ export default function EstimateView() {
               quantity_changed: -qty,
               estimate_id: id,
               bill_number: estimate?.bill_number?.toString(),
-              site_name: estimate?.site_name
+              site_name: estimate?.site_name,
+              alternative_code: it.alternative_code_snapshot ? it.alternative_code_snapshot.trim().toUpperCase().replace(/\s+/g, ' ') : null
             })
           }
         }
@@ -405,12 +416,13 @@ export default function EstimateView() {
 
       if (error) throw error
 
-      // 4. Record Partywise Stock History
+      // 4. Record Partywise Stock History (scoped by estimate_id)
       if (finalClientId) {
         const purchaseRecords = items.map(it => {
           const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
           const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
           return {
+            estimate_id: id,
             platform: activePlatform,
             client_id: finalClientId,
             product_id: it.product_id || null,
@@ -424,8 +436,11 @@ export default function EstimateView() {
           };
         }).filter(r => r.quantity > 0 || r.amount > 0);
 
+        await supabase.from('client_purchases').delete().eq('estimate_id', id);
+        if (estimate?.bill_number) {
+          await supabase.from('client_purchases').delete().is('estimate_id', null).eq('bill_number', estimate.bill_number).eq('platform', activePlatform);
+        }
         if (purchaseRecords.length > 0) {
-          await supabase.from('client_purchases').delete().eq('bill_number', estimate.bill_number).eq('platform', activePlatform);
           await supabase.from('client_purchases').insert(purchaseRecords);
         }
       }

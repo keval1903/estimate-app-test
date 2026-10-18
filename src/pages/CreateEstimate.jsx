@@ -74,7 +74,9 @@ const EMPTY_ITEM = {
   nos: '', quantity: '', unit_snapshot: '',
   rate: '', base_rate: '', discount_percent: '', calculation_type_snapshot: 'QUANTITY', amount: 0,
   has_stock: false, stock: 0, has_remark: false, remark: '', has_discount: false, keyword_snapshot: '',
-  alternative_code_snapshot: null, actual_code_snapshot: null
+  alternative_code_snapshot: null, actual_code_snapshot: null,
+  mapping_id_snapshot: null, code_group_id_snapshot: null,
+  base_alternative_code_snapshot: null, customer_prefix_snapshot: null
 }
 
 const EMPTY_PRODUCT_FORM = {
@@ -179,8 +181,12 @@ export default function CreateEstimate() {
                enquiry_item_id: it.enquiry_item_id,
                product_id: it.current_product_id,
                product_name_snapshot: it.current_product_name || 'Manual Item',
-               alternative_code_snapshot: it.alternative_code_snapshot,
+               alternative_code_snapshot: it.prefixed_code_snapshot || it.alternative_code_snapshot || null,
                actual_code_snapshot: it.is_mapped ? (it.current_product_code || it.current_product_name) : null,
+               mapping_id_snapshot: it.current_mapping_id || it.mapping_id_snapshot || null,
+               code_group_id_snapshot: it.code_group_id_snapshot || null,
+               base_alternative_code_snapshot: it.base_alternative_code_snapshot || it.alternative_code_snapshot || null,
+               customer_prefix_snapshot: it.customer_prefix_snapshot || null,
                length_snapshot: it.current_length || '',
                width_snapshot: it.current_width || '',
                unit_snapshot: it.current_unit || '',
@@ -239,6 +245,10 @@ export default function CreateEstimate() {
             product_name_snapshot: it.product_name_snapshot,
             alternative_code_snapshot: it.alternative_code_snapshot || null,
             actual_code_snapshot: it.actual_code_snapshot || null,
+            mapping_id_snapshot: it.mapping_id_snapshot || null,
+            code_group_id_snapshot: it.code_group_id_snapshot || null,
+            base_alternative_code_snapshot: it.base_alternative_code_snapshot || null,
+            customer_prefix_snapshot: it.customer_prefix_snapshot || null,
             length_snapshot: it.length_snapshot,
             width_snapshot: it.width_snapshot,
             nos: it.nos ?? '',
@@ -291,8 +301,14 @@ export default function CreateEstimate() {
                    matchesAllTerms ||
                    isFuzzyMatch(qNoSpace, pName);
           });
-          if (results.length > 0) {
-            foundProduct = results[0]; // Take the best match
+          // Never auto-select an ambiguous alternative code that exists in multiple groups
+          const exactAltMatches = results.filter(
+            p => p.alternative_code_snapshot && p.alternative_code_snapshot.replace(/\s+/g, '').toLowerCase() === qNoSpace
+          );
+          if (exactAltMatches.length === 1) {
+            foundProduct = exactAltMatches[0];
+          } else if (exactAltMatches.length === 0 && results.length === 1) {
+            foundProduct = results[0];
           }
         }
         
@@ -301,8 +317,12 @@ export default function CreateEstimate() {
            id: crypto.randomUUID(),
            product_id: foundProduct ? foundProduct.id : null,
            product_name_snapshot: foundProduct ? foundProduct.product_name : (it.sheetCode || 'Manual Item'),
-           alternative_code_snapshot: foundProduct ? foundProduct.alternative_code_snapshot : null,
-           actual_code_snapshot: foundProduct ? foundProduct.actual_code_snapshot : null,
+           alternative_code_snapshot: foundProduct ? (foundProduct.alternative_code_snapshot || null) : null,
+           actual_code_snapshot: foundProduct ? (foundProduct.actual_code_snapshot || null) : null,
+           mapping_id_snapshot: foundProduct ? (foundProduct.mapping_id_snapshot || null) : null,
+           code_group_id_snapshot: foundProduct ? (foundProduct.code_group_id_snapshot || null) : null,
+           base_alternative_code_snapshot: foundProduct ? (foundProduct.base_alternative_code_snapshot || null) : null,
+           customer_prefix_snapshot: foundProduct ? (foundProduct.customer_prefix_snapshot || null) : null,
            calculation_type_snapshot: foundProduct ? foundProduct.calculation_type : 'QUANTITY',
            rate: foundProduct ? foundProduct.rate : 0,
            base_rate: foundProduct ? foundProduct.rate : 0,
@@ -384,7 +404,7 @@ export default function CreateEstimate() {
           while (true) {
             const { data, error } = await supabase
               .from('laminea_product_codes')
-              .select('*, products(product_code, product_name)')
+              .select('*, products(product_code, product_name), laminea_code_groups(id, name, is_active)')
               .eq('is_active', true)
               .order('id')
               .range(from, from + limit - 1)
@@ -407,14 +427,20 @@ export default function CreateEstimate() {
         let options = [...mapped]
         if (activePlatform === 'laminea' && altCodes.length > 0) {
           altCodes.forEach(alt => {
+            if (alt.laminea_code_groups && alt.laminea_code_groups.is_active === false) return
             const actualProduct = mapped.find(p => p.id === alt.product_id)
             if (actualProduct) {
+               const groupName = alt.laminea_code_groups?.name ? ` [${alt.laminea_code_groups.name}]` : ''
                options.push({
                  ...actualProduct,
                  option_key: `alias:${alt.id}`,
-                 display_label: `${alt.alternative_code} (${actualProduct.product_code || actualProduct.product_name})`,
+                 display_label: `${alt.alternative_code}${groupName} (${actualProduct.product_code || actualProduct.product_name})`,
                  alternative_code_snapshot: alt.alternative_code,
-                 actual_code_snapshot: actualProduct.product_code || ''
+                 actual_code_snapshot: actualProduct.product_code || '',
+                 mapping_id_snapshot: alt.id,
+                 code_group_id_snapshot: alt.group_id || null,
+                 base_alternative_code_snapshot: alt.alternative_code,
+                 customer_prefix_snapshot: null
                })
             }
           })
@@ -447,6 +473,32 @@ export default function CreateEstimate() {
           .from('estimates').select('*').eq('id', id).eq('platform', activePlatform).single()
         if (error || !est) { showToast('Estimate not found', 'error'); navigate(`/${activePlatform}/estimates`); return }
 
+        const { data: eitems } = await supabase
+          .from('estimate_items').select('*')
+          .eq('estimate_id', id).order('serial_number')
+        const loadedItems = (eitems || []).map(it => ({
+          id: it.id,
+          product_id: it.product_id,
+          product_name_snapshot: it.product_name_snapshot,
+          alternative_code_snapshot: it.alternative_code_snapshot || null,
+          actual_code_snapshot: it.actual_code_snapshot || null,
+          mapping_id_snapshot: it.mapping_id_snapshot || null,
+          code_group_id_snapshot: it.code_group_id_snapshot || null,
+          base_alternative_code_snapshot: it.base_alternative_code_snapshot || null,
+          customer_prefix_snapshot: it.customer_prefix_snapshot || null,
+          length_snapshot: it.length_snapshot,
+          width_snapshot: it.width_snapshot,
+          nos: it.nos ?? '',
+          quantity: it.quantity ?? '',
+          unit_snapshot: it.unit_snapshot,
+          rate: it.rate,
+          discount_percent: it.discount_percent ?? '',
+          calculation_type_snapshot: it.calculation_type_snapshot,
+          amount: it.amount,
+          remark: it.remark || ''
+        }))
+        setOriginalItems(loadedItems)
+
         if (parsedDraft) {
           setBillDate(parsedDraft.billDate)
           setClientName(parsedDraft.clientName || parsedDraft.transport || '')
@@ -454,6 +506,8 @@ export default function CreateEstimate() {
           setOrderBy(parsedDraft.orderBy || '')
           setPreparedBy(parsedDraft.preparedBy || '')
           setSiteName(parsedDraft.siteName || '')
+          setDocType(est.type || 'ESTIMATE')
+          setPreviousBalance(est.previous_balance != null ? est.previous_balance : '')
           resetItems(parsedDraft.items || [])
           setGstPercent(parsedDraft.gstPercent || '')
           setIsDraftRestored(true)
@@ -468,28 +522,7 @@ export default function CreateEstimate() {
           setDocType(est.type || 'ESTIMATE')
           setPreviousBalance(est.previous_balance != null ? est.previous_balance : '')
           setGstPercent(est.gst_percent ? String(est.gst_percent) : '')
-          const { data: eitems } = await supabase
-            .from('estimate_items').select('*')
-            .eq('estimate_id', id).order('serial_number')
-          const loadedItems = (eitems || []).map(it => ({
-            id: it.id,
-            product_id: it.product_id,
-            product_name_snapshot: it.product_name_snapshot,
-            alternative_code_snapshot: it.alternative_code_snapshot || null,
-            actual_code_snapshot: it.actual_code_snapshot || null,
-            length_snapshot: it.length_snapshot,
-            width_snapshot: it.width_snapshot,
-            nos: it.nos ?? '',
-            quantity: it.quantity ?? '',
-            unit_snapshot: it.unit_snapshot,
-            rate: it.rate,
-            discount_percent: it.discount_percent ?? '',
-            calculation_type_snapshot: it.calculation_type_snapshot,
-            amount: it.amount,
-            remark: it.remark || ''
-          }))
           resetItems(loadedItems)
-          setOriginalItems(loadedItems)
         }
         setExistingBillNumber(est.bill_number)
         setLoading(false)
@@ -592,6 +625,10 @@ export default function CreateEstimate() {
           product_name_snapshot: it.product_name_snapshot,
           alternative_code_snapshot: it.alternative_code_snapshot || null,
           actual_code_snapshot: it.actual_code_snapshot || null,
+          mapping_id_snapshot: it.mapping_id_snapshot || null,
+          code_group_id_snapshot: it.code_group_id_snapshot || null,
+          base_alternative_code_snapshot: it.base_alternative_code_snapshot || null,
+          customer_prefix_snapshot: it.customer_prefix_snapshot || null,
           length_snapshot: it.length_snapshot,
           width_snapshot: it.width_snapshot,
           nos: it.nos ?? '',
@@ -707,8 +744,8 @@ export default function CreateEstimate() {
     const baseRate = parseFloat(p.rate) || 0
 
     if (bulkAddMode) {
-      if (bulkSelectedItems.some(it => it.product_id === p.id)) {
-        setBulkSelectedItems(prev => prev.filter(it => it.product_id !== p.id))
+      if (bulkSelectedItems.some(it => it.product_id === p.id && (it.mapping_id_snapshot || null) === (p.mapping_id_snapshot || null))) {
+        setBulkSelectedItems(prev => prev.filter(it => !(it.product_id === p.id && (it.mapping_id_snapshot || null) === (p.mapping_id_snapshot || null))))
         return
       }
       const nextItem = {
@@ -716,6 +753,10 @@ export default function CreateEstimate() {
         product_name_snapshot: p.product_name,
         alternative_code_snapshot: p.alternative_code_snapshot || null,
         actual_code_snapshot: p.actual_code_snapshot || null,
+        mapping_id_snapshot: p.mapping_id_snapshot || null,
+        code_group_id_snapshot: p.code_group_id_snapshot || null,
+        base_alternative_code_snapshot: p.base_alternative_code_snapshot || null,
+        customer_prefix_snapshot: p.customer_prefix_snapshot || null,
         length_snapshot: p.length,
         width_snapshot: p.width,
         unit_snapshot: p.unit,
@@ -747,6 +788,10 @@ export default function CreateEstimate() {
         product_name_snapshot: p.product_name,
         alternative_code_snapshot: p.alternative_code_snapshot || null,
         actual_code_snapshot: p.actual_code_snapshot || null,
+        mapping_id_snapshot: p.mapping_id_snapshot || null,
+        code_group_id_snapshot: p.code_group_id_snapshot || null,
+        base_alternative_code_snapshot: p.base_alternative_code_snapshot || null,
+        customer_prefix_snapshot: p.customer_prefix_snapshot || null,
         length_snapshot: p.length,
         width_snapshot: p.width,
         unit_snapshot: p.unit,
@@ -1197,15 +1242,20 @@ export default function CreateEstimate() {
         }).eq('id', id).eq('platform', activePlatform)
         if (estErr) throw estErr
 
-        // delete old items, reinsert
+        // delete old items, reinsert preserving item id where available
         await supabase.from('estimate_items').delete().eq('estimate_id', id)
         const newItems = items.map((it, i) => ({
+          ...(it.id ? { id: it.id } : {}),
           estimate_id: id,
           serial_number: i + 1,
           product_id: it.product_id,
           product_name_snapshot: it.product_name_snapshot,
           alternative_code_snapshot: it.alternative_code_snapshot || null,
           actual_code_snapshot: it.actual_code_snapshot || null,
+          mapping_id_snapshot: it.mapping_id_snapshot || null,
+          code_group_id_snapshot: it.code_group_id_snapshot || null,
+          base_alternative_code_snapshot: it.base_alternative_code_snapshot || null,
+          customer_prefix_snapshot: it.customer_prefix_snapshot || null,
           length_snapshot: it.length_snapshot,
           width_snapshot: it.width_snapshot,
           nos: parseFloat(it.nos) || null,
@@ -1224,15 +1274,23 @@ export default function CreateEstimate() {
         if (docType === 'ESTIMATE' || docType === 'RETURN') {
           const isReturn = docType === 'RETURN';
           const netUsage = {}
+          const netCodeUsage = {}
           for (const it of items) {
             const qty = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET' ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
             netUsage[it.product_id] = (netUsage[it.product_id] || 0) + qty
+            const codeKey = it.alternative_code_snapshot ? it.alternative_code_snapshot.trim().toUpperCase().replace(/\s+/g, ' ') : ''
+            if (!netCodeUsage[it.product_id]) netCodeUsage[it.product_id] = {}
+            netCodeUsage[it.product_id][codeKey] = (netCodeUsage[it.product_id][codeKey] || 0) + qty
           }
           const origUsage = {}
+          const origCodeUsage = {}
           if (isEdit) {
             for (const oi of originalItems) {
               const qty = oi.calculation_type_snapshot === 'SQFT' || oi.calculation_type_snapshot === 'INCH' || oi.calculation_type_snapshot === 'FEET' ? (parseFloat(oi.nos) || 0) : (parseFloat(oi.quantity) || 0)
               origUsage[oi.product_id] = (origUsage[oi.product_id] || 0) + qty
+              const codeKey = oi.alternative_code_snapshot ? oi.alternative_code_snapshot.trim().toUpperCase().replace(/\s+/g, ' ') : ''
+              if (!origCodeUsage[oi.product_id]) origCodeUsage[oi.product_id] = {}
+              origCodeUsage[oi.product_id][codeKey] = (origCodeUsage[oi.product_id][codeKey] || 0) + qty
             }
           }
           for (const p of allProducts) {
@@ -1246,14 +1304,27 @@ export default function CreateEstimate() {
                   const stockDelta = isReturn ? diff : -diff;
                   const newStock = Number(pdata.stock) + stockDelta
                   await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
+                }
+              }
+              const allCodeKeys = new Set([
+                ...Object.keys(netCodeUsage[p.id] || {}),
+                ...Object.keys(origCodeUsage[p.id] || {})
+              ])
+              for (const codeKey of allCodeKeys) {
+                const codeCurr = (netCodeUsage[p.id] && netCodeUsage[p.id][codeKey]) || 0
+                const codeOrig = (origCodeUsage[p.id] && origCodeUsage[p.id][codeKey]) || 0
+                const codeDiff = codeCurr - codeOrig
+                if (codeDiff !== 0) {
+                  const codeStockDelta = isReturn ? codeDiff : -codeDiff
                   await supabase.from('stock_history').insert({
                     platform: activePlatform,
                     product_id: p.id,
                     change_type: isEdit ? (isReturn ? 'RETURN_UPDATE' : 'ESTIMATE_UPDATE') : (isReturn ? 'RETURN_ADD' : 'ESTIMATE_DEDUCT'),
-                    quantity_changed: stockDelta,
+                    quantity_changed: codeStockDelta,
                     estimate_id: id,
                     bill_number: existingBillNumber?.toString(),
-                    site_name: siteName
+                    site_name: siteName,
+                    alternative_code: codeKey || null
                   })
                 }
               }
@@ -1261,13 +1332,19 @@ export default function CreateEstimate() {
           }
         }
 
-        // --- NEW LOGIC: Record Partywise Stock History ---
+        // --- Record Partywise Stock History (scoped by estimate_id) ---
+        await supabase.from('client_purchases').delete().eq('estimate_id', id);
+        if (existingBillNumber) {
+          await supabase.from('client_purchases').delete().is('estimate_id', null).eq('bill_number', existingBillNumber).eq('platform', activePlatform);
+        }
         if ((docType === 'ESTIMATE' || docType === 'RETURN') && finalClientId && existingBillNumber) {
           const isReturn = docType === 'RETURN';
           const purchaseRecords = items.map(it => {
             const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
             const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
             return {
+              estimate_id: id,
+              platform: activePlatform,
               client_id: finalClientId,
               product_id: it.product_id || null,
               product_name: it.product_name_snapshot || 'Manual Item',
@@ -1281,7 +1358,6 @@ export default function CreateEstimate() {
           }).filter(r => r.quantity !== 0 || r.amount !== 0);
 
           if (purchaseRecords.length > 0) {
-            await supabase.from('client_purchases').delete().eq('bill_number', existingBillNumber).eq('platform', activePlatform);
             await supabase.from('client_purchases').insert(purchaseRecords);
           }
         }
@@ -1314,6 +1390,10 @@ export default function CreateEstimate() {
               product_name_snapshot: it.product_name_snapshot,
               alternative_code_snapshot: it.alternative_code_snapshot || null,
               actual_code_snapshot: it.actual_code_snapshot || null,
+              mapping_id_snapshot: it.mapping_id_snapshot || null,
+              code_group_id_snapshot: it.code_group_id_snapshot || null,
+              base_alternative_code_snapshot: it.base_alternative_code_snapshot || null,
+              customer_prefix_snapshot: it.customer_prefix_snapshot || null,
               length_snapshot: it.length_snapshot,
               width_snapshot: it.width_snapshot,
               nos: parseFloat(it.nos) || null,
@@ -1391,6 +1471,10 @@ export default function CreateEstimate() {
           product_name_snapshot: it.product_name_snapshot,
           alternative_code_snapshot: it.alternative_code_snapshot || null,
           actual_code_snapshot: it.actual_code_snapshot || null,
+          mapping_id_snapshot: it.mapping_id_snapshot || null,
+          code_group_id_snapshot: it.code_group_id_snapshot || null,
+          base_alternative_code_snapshot: it.base_alternative_code_snapshot || null,
+          customer_prefix_snapshot: it.customer_prefix_snapshot || null,
           length_snapshot: it.length_snapshot,
           width_snapshot: it.width_snapshot,
           nos: parseFloat(it.nos) || null,
@@ -1409,9 +1493,13 @@ export default function CreateEstimate() {
         if (docType === 'ESTIMATE' || docType === 'RETURN') {
           const isReturn = docType === 'RETURN';
           const netUsage = {}
+          const netCodeUsage = {}
           for (const it of items) {
             const qty = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET' ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0)
             netUsage[it.product_id] = (netUsage[it.product_id] || 0) + qty
+            const codeKey = it.alternative_code_snapshot ? it.alternative_code_snapshot.trim().toUpperCase().replace(/\s+/g, ' ') : ''
+            if (!netCodeUsage[it.product_id]) netCodeUsage[it.product_id] = {}
+            netCodeUsage[it.product_id][codeKey] = (netCodeUsage[it.product_id][codeKey] || 0) + qty
           }
           for (const p of allProducts) {
             if (p.has_stock) {
@@ -1422,28 +1510,35 @@ export default function CreateEstimate() {
                   const stockDelta = isReturn ? curr : -curr;
                   const newStock = Number(pdata.stock) + stockDelta
                   await supabase.from('products').update({ stock: newStock }).eq('id', p.id)
-                  await supabase.from('stock_history').insert({
-                    product_id: p.id,
-                    change_type: isReturn ? 'RETURN_ADD' : 'ESTIMATE_DEDUCT',
-                    quantity_changed: stockDelta,
-                    estimate_id: est.id,
-                    bill_number: billNumber?.toString(),
-                    site_name: siteName,
-                    platform: activePlatform
-                  })
+                  for (const [codeKey, codeQty] of Object.entries(netCodeUsage[p.id] || {})) {
+                    if (codeQty !== 0) {
+                      await supabase.from('stock_history').insert({
+                        product_id: p.id,
+                        change_type: isReturn ? 'RETURN_ADD' : 'ESTIMATE_DEDUCT',
+                        quantity_changed: isReturn ? codeQty : -codeQty,
+                        estimate_id: est.id,
+                        bill_number: billNumber?.toString(),
+                        site_name: siteName,
+                        platform: activePlatform,
+                        alternative_code: codeKey || null
+                      })
+                    }
+                  }
                 }
               }
             }
           }
         }
 
-        // --- NEW LOGIC: Record Partywise Stock History ---
+        // --- Record Partywise Stock History (scoped by estimate_id) ---
         if ((docType === 'ESTIMATE' || docType === 'RETURN') && finalClientId) {
           const isReturn = docType === 'RETURN';
           const purchaseRecords = items.map(it => {
             const isPieceBased = it.calculation_type_snapshot === 'SQFT' || it.calculation_type_snapshot === 'INCH' || it.calculation_type_snapshot === 'FEET';
             const qty = isPieceBased ? (parseFloat(it.nos) || 0) : (parseFloat(it.quantity) || 0);
             return {
+              estimate_id: est.id,
+              platform: activePlatform,
               client_id: finalClientId,
               product_id: it.product_id || null,
               product_name: it.product_name_snapshot || 'Manual Item',
@@ -1457,7 +1552,7 @@ export default function CreateEstimate() {
           }).filter(r => r.quantity !== 0 || r.amount !== 0);
 
           if (purchaseRecords.length > 0) {
-            await supabase.from('client_purchases').delete().eq('bill_number', billNumber).eq('platform', activePlatform);
+            await supabase.from('client_purchases').delete().eq('estimate_id', est.id);
             await supabase.from('client_purchases').insert(purchaseRecords);
           }
         }

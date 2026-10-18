@@ -18,12 +18,70 @@ export function CustomerAccountManager({ customer, onUpdate }) {
   const [maintainLedger, setMaintainLedger] = useState(true);
   const [openingBalance, setOpeningBalance] = useState('');
 
+  // Alternative-Code Group & Customer Prefix state
+  const [codeGroups, setCodeGroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(customer.code_group_id || '');
+  const [customerPrefix, setCustomerPrefix] = useState(customer.customer_prefix || '');
+
+  useEffect(() => {
+    setSelectedGroupId(customer.code_group_id || '');
+    setCustomerPrefix(customer.customer_prefix || '');
+  }, [customer.code_group_id, customer.customer_prefix]);
+
   useEffect(() => {
     fetchClients();
+    fetchCodeGroups();
     if (customer.laminea_client_id) {
       fetchLinkedClientName();
     }
   }, [customer.laminea_client_id]);
+
+  const fetchCodeGroups = async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from('laminea_code_groups')
+        .select('id, name, is_active')
+        .order('name', { ascending: true });
+      if (!err && data) {
+        setCodeGroups(data);
+      }
+    } catch (err) {
+      console.error("Error fetching code groups:", err);
+    }
+  };
+
+  const handleSaveGroupAndPrefix = async (e) => {
+    e.preventDefault();
+    const normPrefix = (customerPrefix || '').trim().replace(/\s+/g, '').toUpperCase();
+    if (!selectedGroupId) {
+      setError('Please select an Alternative-Code Group.');
+      return;
+    }
+    if (!normPrefix || !/^[A-Z0-9]{1,10}$/.test(normPrefix)) {
+      setError('Customer Prefix / Initials is required (1–10 letters or numbers, e.g. NJ).');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { error: rpcErr } = await supabase.rpc('update_code_finder_customer_settings', {
+        p_cf_user_id: customer.id,
+        p_code_group_id: selectedGroupId,
+        p_customer_prefix: normPrefix
+      });
+      if (rpcErr) throw rpcErr;
+
+      setCustomerPrefix(normPrefix);
+      setSuccess('Updated Alternative-Code Group and Customer Prefix. Existing enquiries and estimates remain unchanged.');
+      if (onUpdate) onUpdate();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchClients = async () => {
     try {
@@ -103,10 +161,15 @@ export function CustomerAccountManager({ customer, onUpdate }) {
     setError(null);
     setSuccess(null);
     try {
+      const hasExplicitOpeningBalance = openingBalance !== '' && openingBalance !== null && openingBalance !== undefined;
+      const parsedOpeningBalance = hasExplicitOpeningBalance ? Number(openingBalance) : null;
+      if (hasExplicitOpeningBalance && !Number.isFinite(parsedOpeningBalance)) {
+        throw new Error('Opening balance must be a valid finite number.');
+      }
       const { error: rpcErr } = await supabase.rpc('link_code_finder_client_with_ledger', {
         p_cf_user_id: customer.id,
         p_client_id: selectedClientId,
-        p_opening_balance: maintainLedger ? (parseFloat(openingBalance) || 0) : 0,
+        p_opening_balance: maintainLedger ? parsedOpeningBalance : 0,
         p_maintain_ledger: maintainLedger
       });
       if (rpcErr) throw rpcErr;
@@ -173,6 +236,60 @@ export function CustomerAccountManager({ customer, onUpdate }) {
       {success && <div style={{ background: '#dcfce7', color: '#166534', padding: '12px', borderRadius: '4px', marginBottom: '16px' }}>{success}</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+        {/* Code Finder Group & Hidden Customer Prefix Section */}
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+          <h4 style={{ fontWeight: 'bold', marginBottom: '6px' }}>Alternative-Code Group & Customer Prefix</h4>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px' }}>
+            Customer searches only within their assigned group using base codes (e.g. <code>01 SMT</code>). Staff sees the customer-prefixed code (e.g. <code>{(customerPrefix || 'NJ')}01SMT</code>) on enquiries and estimates.
+          </p>
+
+          <form onSubmit={handleSaveGroupAndPrefix} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '4px' }}>
+                Assigned Alternative-Code Group *
+              </label>
+              <select
+                required
+                value={selectedGroupId}
+                onChange={e => setSelectedGroupId(e.target.value)}
+                className="input"
+                style={{ width: '100%' }}
+              >
+                <option value="">-- Select Group --</option>
+                {codeGroups
+                  .filter(g => g.is_active || g.id === selectedGroupId)
+                  .map(g => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} {!g.is_active ? '(Inactive)' : ''}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', marginBottom: '4px' }}>
+                Customer Prefix / Initials * (Unique per customer, e.g. NJ)
+              </label>
+              <input
+                required
+                type="text"
+                maxLength={10}
+                placeholder="e.g. NJ"
+                value={customerPrefix}
+                onChange={e => setCustomerPrefix(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
+                className="input"
+                style={{ width: '100%', fontFamily: 'monospace', fontWeight: 'bold' }}
+              />
+            </div>
+
+            <div>
+              <button type="submit" disabled={loading} className="btn btn-primary">
+                {loading ? 'Saving...' : 'Save Group & Prefix'}
+              </button>
+            </div>
+          </form>
+        </div>
         
         {/* Linked Client Section */}
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>

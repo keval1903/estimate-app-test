@@ -52,7 +52,15 @@ export default async function handler(req) {
         return createErrorResponse('Failed to place order', 400);
       }
 
-      return new Response(JSON.stringify({ success: true, order: orderData }), {
+      const safeOrder = orderData
+        ? {
+            success: Boolean(orderData.success),
+            enquiry_id: orderData.enquiry_id,
+            status: orderData.status
+          }
+        : null;
+
+      return new Response(JSON.stringify({ success: true, order: safeOrder }), {
         status: 200,
         headers: headers
       });
@@ -120,24 +128,47 @@ export default async function handler(req) {
         return createErrorResponse('Failed to fetch orders from database', 500);
       }
       
-      // Apply accepted proposal quantities
-      const processedOrders = data.map(order => {
+      // Apply accepted proposal quantities and enforce explicit allowlist
+      const processedOrders = (data || []).map(order => {
         const acceptedProposal = order.code_finder_proposals?.find(p => p.response === 'ACCEPTED' && p.superseded_at === null);
-        
+        const proposedQtys = {};
         if (acceptedProposal && acceptedProposal.code_finder_proposal_items) {
-          const proposedQtys = {};
           for (const pi of acceptedProposal.code_finder_proposal_items) {
             proposedQtys[pi.enquiry_item_id] = pi.proposed_quantity;
           }
-          
-          order.code_finder_enquiry_items = order.code_finder_enquiry_items.map(item => {
-            if (proposedQtys[item.id] !== undefined) {
-              return { ...item, requested_quantity: proposedQtys[item.id] };
-            }
-            return item;
-          });
         }
-        return order;
+
+        return {
+          id: order.id,
+          enquiry_number: order.enquiry_number,
+          status: order.status,
+          client_note: order.client_note,
+          checked_at: order.checked_at,
+          created_at: order.created_at,
+          ordered_by: order.ordered_by,
+          order_placed_at: order.order_placed_at,
+          code_finder_enquiry_items: (order.code_finder_enquiry_items || []).map(item => ({
+            id: item.id,
+            alternative_code_snapshot: item.alternative_code_snapshot,
+            requested_quantity: proposedQtys[item.id] !== undefined ? proposedQtys[item.id] : item.requested_quantity,
+            availability_status: item.availability_status
+          })),
+          code_finder_proposals: (order.code_finder_proposals || []).map(prop => ({
+            id: prop.id,
+            revision: prop.revision,
+            proposal_type: prop.proposal_type,
+            staff_note: prop.staff_note,
+            submitted_at: prop.submitted_at,
+            superseded_at: prop.superseded_at,
+            response: prop.response,
+            responded_at: prop.responded_at,
+            code_finder_proposal_items: (prop.code_finder_proposal_items || []).map(pi => ({
+              enquiry_item_id: pi.enquiry_item_id,
+              proposed_quantity: pi.proposed_quantity,
+              item_note: pi.item_note
+            }))
+          }))
+        };
       });
       
       const hasMore = count > to + 1;

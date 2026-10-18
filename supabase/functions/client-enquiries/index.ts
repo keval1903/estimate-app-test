@@ -110,7 +110,37 @@ serve(async (req: Request) => {
 
       if (eqErr) throw eqErr
 
-      return new Response(JSON.stringify({ enquiries }), {
+      const safeEnquiries = (enquiries || []).map((enq: any) => ({
+        id: enq.id,
+        enquiry_number: enq.enquiry_number,
+        status: enq.status,
+        client_note: enq.client_note,
+        checked_at: enq.checked_at,
+        created_at: enq.created_at,
+        ordered_by: enq.ordered_by,
+        code_finder_enquiry_items: (enq.code_finder_enquiry_items || []).map((item: any) => ({
+          id: item.id,
+          alternative_code_snapshot: item.alternative_code_snapshot,
+          requested_quantity: item.requested_quantity,
+          availability_status: item.availability_status
+        })),
+        code_finder_proposals: (enq.code_finder_proposals || []).map((prop: any) => ({
+          id: prop.id,
+          revision: prop.revision,
+          proposal_type: prop.proposal_type,
+          staff_note: prop.staff_note,
+          submitted_at: prop.submitted_at,
+          response: prop.response,
+          responded_at: prop.responded_at,
+          code_finder_proposal_items: (prop.code_finder_proposal_items || []).map((pi: any) => ({
+            enquiry_item_id: pi.enquiry_item_id,
+            proposed_quantity: pi.proposed_quantity,
+            item_note: pi.item_note
+          }))
+        }))
+      }))
+
+      return new Response(JSON.stringify({ enquiries: safeEnquiries }), {
         headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' },
       })
     } 
@@ -158,79 +188,34 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: 'Maximum 25 items per enquiry' }), { status: 400, headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } })
       }
 
-      // Phase 2: Normalize codes BEFORE aggregation
-      const aggregatedReqs: Record<string, number> = {}
-      const displayCodeMap: Record<string, string> = {}
+      const sanitizedRequests = requests.map((r: any) => ({
+        code: typeof r?.code === 'string' ? r.code : String(r?.code ?? ''),
+        quantity: r?.quantity
+      }))
 
-      for (const r of requests) {
-        if (!r.code || typeof r.code !== 'string') continue
-        const normalized = r.code.trim().replace(/\s+/g, '').toUpperCase()
-        if (!normalized) continue
-        const qty = Number(r.quantity)
-        if (isNaN(qty) || qty <= 0) continue
-        
-        if (!(normalized in displayCodeMap)) {
-          displayCodeMap[normalized] = r.code.trim().toUpperCase()
-        }
-        aggregatedReqs[normalized] = (aggregatedReqs[normalized] || 0) + qty
-      }
-
-      const uniqueCodes = Object.keys(aggregatedReqs)
-      if (uniqueCodes.length === 0) {
-        return new Response(JSON.stringify({ error: 'Invalid items' }), { status: 400, headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' } })
-      }
-
-      // Fresh stock check
-      const { data: mappings, error: mappingErr } = await supabaseAdmin.rpc('search_laminea_availability_codes', { search_codes: uniqueCodes })
-      if (mappingErr) throw mappingErr
-
-      const productIds = mappings.map((m: any) => m.product_id)
-      let stockMap: Record<string, number> = {}
-      
-      if (productIds.length > 0) {
-        const { data: products, error: productErr } = await supabaseAdmin.from('products').select('id, stock').in('id', productIds)
-        if (productErr) throw productErr
-        products.forEach((p: any) => stockMap[p.id] = Number(p.stock) || 0)
-      }
-
-      const codeToStock: Record<string, number> = {}
-      const codeToProductId: Record<string, string> = {}
-      
-      mappings.forEach((m: any) => {
-         const norm = m.alternative_code.replace(/\s+/g, '').toUpperCase()
-         codeToStock[norm] = stockMap[m.product_id] || 0
-         codeToProductId[norm] = m.product_id
+      // Group-scoped stock check using verified customer ID
+      const { data: stockResults, error: stockErr } = await supabaseAdmin.rpc('check_laminea_stock_availability', {
+        p_requests: sanitizedRequests,
+        p_cf_user_id: cfUser.id
       })
+      if (stockErr) throw stockErr
 
       const checkedAt = new Date().toISOString()
-      const itemsForRpc = []
-
-      for (const normCode of uniqueCodes) {
-        const reqQty = aggregatedReqs[normCode]
-        const displayCode = displayCodeMap[normCode] || normCode
-        
-        let status = 'PLEASE_CONFIRM'
-        if (codeToStock[normCode] === undefined) {
-           status = 'CODE_NOT_FOUND'
-        } else {
-           const actualStock = codeToStock[normCode]
-           if (reqQty >= 1 && reqQty <= 10 && actualStock >= reqQty) {
-             status = 'AVAILABLE'
-           }
-        }
-        
-        itemsForRpc.push({
-          alternative_code_snapshot: displayCode,
-          requested_quantity: reqQty,
-          availability_status: status,
-          checked_at: checkedAt,
-          product_id_snapshot: codeToProductId[normCode] || null,
-          product_code_snapshot: displayCode,
-          mapping_revision_at: checkedAt
-        })
+      const statusMap: Record<string, string> = {
+        'AVAILABLE': 'AVAILABLE',
+        'PLEASE CONFIRM WITH US': 'PLEASE_CONFIRM',
+        'CODE NOT FOUND': 'CODE_NOT_FOUND',
+        'INVALID QUANTITY': 'PLEASE_CONFIRM'
       }
 
-      // Phase 3: Atomic creation via RPC with idempotency
+      const itemsForRpc = (stockResults || []).map((r: any) => ({
+        alternative_code_snapshot: r.code,
+        requested_quantity: r.requestedQuantity === 'Invalid' ? 0 : Number(r.requestedQuantity),
+        availability_status: statusMap[r.status] || r.status,
+        checked_at: checkedAt
+      }))
+
+      // Atomic creation via RPC with idempotency (cf8_capture_mapping populates group/prefix/mapping/product snapshots)
       const { data: rpcResult, error: rpcErr } = await supabaseAdmin.rpc('create_code_finder_enquiry', {
         p_user_id: cfUser.id,
         p_items: itemsForRpc,
@@ -247,7 +232,11 @@ serve(async (req: Request) => {
         enquiry_number: rpcResult.enquiry_number,
         duplicate: rpcResult.duplicate || false,
         checked_at: checkedAt,
-        items: itemsForRpc
+        items: itemsForRpc.map((item: any) => ({
+          alternative_code_snapshot: item.alternative_code_snapshot,
+          requested_quantity: item.requested_quantity,
+          availability_status: item.availability_status
+        }))
       }), {
         headers: { ...corsHeaders, ...noCacheHeaders, 'Content-Type': 'application/json' },
       })
