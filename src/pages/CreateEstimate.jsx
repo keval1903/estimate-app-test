@@ -10,6 +10,7 @@ import { useVoiceSearch } from '../hooks/useVoiceSearch.jsx'
 import { useAuth } from '../context/AuthContext'
 import { formatBillNumber } from '../lib/formatters'
 import { useHistory } from '../hooks/useHistory.js'
+import { assignEstimateItemIds } from '../lib/estimateItemIds.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function todayIST() {
@@ -1205,6 +1206,7 @@ export default function CreateEstimate() {
     if (items.length === 0) { showToast('Add at least one product', 'error'); return }
     setSaving(true)
     try {
+      const saveItems = assignEstimateItemIds(items)
       const t = calcTotals(items, parseFloat(gstPercent) || 0)
 
       // Resolve client_id
@@ -1242,10 +1244,9 @@ export default function CreateEstimate() {
         }).eq('id', id).eq('platform', activePlatform)
         if (estErr) throw estErr
 
-        // delete old items, reinsert preserving item id where available
-        await supabase.from('estimate_items').delete().eq('estimate_id', id)
-        const newItems = items.map((it, i) => ({
-          ...(it.id ? { id: it.id } : {}),
+        // Every row has an explicit UUID, including items added during editing.
+        const newItems = saveItems.map((it, i) => ({
+          id: it.id,
           estimate_id: id,
           serial_number: i + 1,
           product_id: it.product_id,
@@ -1267,6 +1268,8 @@ export default function CreateEstimate() {
           amount: it.amount,
           remark: it.remark ? it.remark.trim() : null
         }))
+        const { error: deleteErr } = await supabase.from('estimate_items').delete().eq('estimate_id', id)
+        if (deleteErr) throw deleteErr
         const { error: itemErr } = await supabase.from('estimate_items').insert(newItems)
         if (itemErr) throw itemErr
 
@@ -1464,7 +1467,8 @@ export default function CreateEstimate() {
         }).select().single()
         if (estErr) throw estErr
 
-        const newItems = items.map((it, i) => ({
+        const newItems = saveItems.map((it, i) => ({
+          id: it.id,
           estimate_id: est.id,
           serial_number: i + 1,
           product_id: it.product_id,
